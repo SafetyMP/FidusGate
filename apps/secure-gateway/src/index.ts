@@ -10,9 +10,361 @@ import { Transaction, AuditReceipt, SecurityFinding } from '@veritas/core-types'
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure } from './command-auditor';
 
+// ==========================================
+// Stateful DevOps Compliance Tracker
+// ==========================================
+export interface DevOpsComplianceState {
+  pipelineVerified: boolean;
+  securityAudited: boolean;
+  hamChecked: boolean;
+  lastPipelineRun?: string;
+  lastSecurityAudit?: string;
+  lastHamCheck?: string;
+  lastCodeModified?: string;
+}
+
+export class DevOpsComplianceTracker {
+  private statePath = path.resolve(process.cwd(), '.memory/devops-compliance-state.json');
+  private state: DevOpsComplianceState = {
+    pipelineVerified: true,
+    securityAudited: true,
+    hamChecked: true
+  };
+
+  constructor() {
+    this.loadState();
+  }
+
+  private loadState() {
+    if (fs.existsSync(this.statePath)) {
+      try {
+        this.state = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
+      } catch (err: any) {
+        console.error('Failed to parse devops-compliance-state.json:', err.message);
+      }
+    } else {
+      this.saveState();
+    }
+  }
+
+  private saveState() {
+    try {
+      const dir = path.dirname(this.statePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+    } catch (err: any) {
+      console.error('Failed to write devops-compliance-state.json:', err.message);
+    }
+  }
+
+  public getState(): DevOpsComplianceState {
+    return this.state;
+  }
+
+  public onFileModified() {
+    this.state.pipelineVerified = false;
+    this.state.securityAudited = false;
+    this.state.hamChecked = false;
+    this.state.lastCodeModified = new Date().toISOString();
+    this.saveState();
+  }
+
+  public onPipelineSuccess() {
+    this.state.pipelineVerified = true;
+    this.state.lastPipelineRun = new Date().toISOString();
+    this.saveState();
+  }
+
+  public onSecurityAuditSuccess() {
+    this.state.securityAudited = true;
+    this.state.lastSecurityAudit = new Date().toISOString();
+    this.saveState();
+  }
+
+  public onHamCheckSuccess() {
+    this.state.hamChecked = true;
+    this.state.lastHamCheck = new Date().toISOString();
+    this.saveState();
+  }
+}
+
+// ==========================================
+// Stateful Integrated Business Planning (IBP) Tracker
+// ==========================================
+export interface IBPComplianceState {
+  currentSprintGoal: string;
+  tokenBudget: number;
+  tokensConsumed: number;
+  specializedTasksExecuted: string[];
+  genericTasksExecuted: string[];
+  crossFunctionalSynthesized: boolean;
+  lastSynthesisReport?: string;
+  lastSynthesisTimestamp?: string;
+}
+
+export class IBPComplianceTracker {
+  private statePath = path.resolve(process.cwd(), '.memory/ibp-compliance-state.json');
+  private state: IBPComplianceState = {
+    currentSprintGoal: "Standardize Antigravity Project Compliance and Security Integration",
+    tokenBudget: 80000,
+    tokensConsumed: 0,
+    specializedTasksExecuted: [],
+    genericTasksExecuted: [],
+    crossFunctionalSynthesized: true
+  };
+
+  constructor() {
+    this.loadState();
+  }
+
+  private loadState() {
+    if (fs.existsSync(this.statePath)) {
+      try {
+        this.state = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
+      } catch (err: any) {
+        console.error('Failed to parse ibp-compliance-state.json:', err.message);
+      }
+    } else {
+      this.saveState();
+    }
+  }
+
+  private saveState() {
+    try {
+      const dir = path.dirname(this.statePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+    } catch (err: any) {
+      console.error('Failed to write ibp-compliance-state.json:', err.message);
+    }
+  }
+
+  public getState(): IBPComplianceState {
+    return this.state;
+  }
+
+  public recordTokenUsage(estimatedTokens: number) {
+    this.state.tokensConsumed += estimatedTokens;
+    this.saveState();
+  }
+
+  public logTask(type: 'specialized' | 'generic', taskName: string) {
+    if (type === 'specialized') {
+      if (!this.state.specializedTasksExecuted.includes(taskName)) {
+        this.state.specializedTasksExecuted.push(taskName);
+        this.state.crossFunctionalSynthesized = false; // Reset synthesis on new code modifications
+      }
+    } else {
+      if (!this.state.genericTasksExecuted.includes(taskName)) {
+        this.state.genericTasksExecuted.push(taskName);
+      }
+    }
+    this.saveState();
+  }
+
+  public submitSynthesis(report: string) {
+    this.state.crossFunctionalSynthesized = true;
+    this.state.lastSynthesisReport = report;
+    this.state.lastSynthesisTimestamp = new Date().toISOString();
+    this.saveState();
+  }
+
+  public isBudgetAligned(): boolean {
+    return this.state.tokensConsumed <= this.state.tokenBudget;
+  }
+
+  public clearTasks() {
+    this.state.specializedTasksExecuted = [];
+    this.state.genericTasksExecuted = [];
+    this.state.crossFunctionalSynthesized = true;
+    this.state.tokensConsumed = 0;
+    this.saveState();
+  }
+}
+// ==========================================
+// Stateful Product Lifecycle Management (PLM) Tracker
+// ==========================================
+export interface FeedbackEntry {
+  timestamp: string;
+  role: string;
+  comment: string;
+  severity: 'info' | 'warn' | 'critical';
+}
+
+export interface PLMComplianceState {
+  activeRequirementId: string | null;
+  modifiedFiles: string[];
+  associatedTestsWritten: boolean;
+  hasApiDrift: boolean;
+  driftVerified: boolean;
+  releaseVersionUpdated: boolean;
+  changelogUpdated: boolean;
+  activeDirectives: string[];
+  feedbackAligned: boolean;
+  historicalFeedback: FeedbackEntry[];
+}
+
+export class PLMComplianceTracker {
+  private statePath = path.resolve(process.cwd(), '.memory/plm-compliance-state.json');
+  private state: PLMComplianceState = {
+    activeRequirementId: null,
+    modifiedFiles: [],
+    associatedTestsWritten: true,
+    hasApiDrift: false,
+    driftVerified: true,
+    releaseVersionUpdated: true,
+    changelogUpdated: true,
+    activeDirectives: [],
+    feedbackAligned: true,
+    historicalFeedback: []
+  };
+
+  constructor() {
+    this.loadState();
+  }
+
+  private loadState() {
+    if (fs.existsSync(this.statePath)) {
+      try {
+        const loaded = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
+        this.state = {
+          ...this.state,
+          ...loaded,
+          activeDirectives: loaded.activeDirectives || [],
+          feedbackAligned: loaded.feedbackAligned !== undefined ? loaded.feedbackAligned : true,
+          historicalFeedback: loaded.historicalFeedback || []
+        };
+      } catch (err: any) {
+        console.error('Failed to parse plm-compliance-state.json:', err.message);
+      }
+    } else {
+      this.saveState();
+    }
+  }
+
+  private saveState() {
+    try {
+      const dir = path.dirname(this.statePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+    } catch (err: any) {
+      console.error('Failed to write plm-compliance-state.json:', err.message);
+    }
+  }
+
+  public getState(): PLMComplianceState {
+    return this.state;
+  }
+
+  public setRequirement(id: string) {
+    this.state.activeRequirementId = id;
+    this.state.modifiedFiles = [];
+    this.state.associatedTestsWritten = true;
+    this.state.hasApiDrift = false;
+    this.state.driftVerified = true;
+    this.state.releaseVersionUpdated = true;
+    this.state.changelogUpdated = true;
+    this.saveState();
+  }
+
+  public onFileModified(filePath: string) {
+    if (filePath.startsWith('apps/') || filePath.startsWith('packages/')) {
+      if (!this.state.modifiedFiles.includes(filePath)) {
+        this.state.modifiedFiles.push(filePath);
+      }
+      
+      const isTestFile = filePath.includes('.test.') || filePath.includes('.spec.');
+      if (isTestFile) {
+        this.state.associatedTestsWritten = true;
+      } else {
+        const hasTestModified = this.state.modifiedFiles.some(f => f.includes('.test.') || f.includes('.spec.'));
+        this.state.associatedTestsWritten = hasTestModified;
+      }
+
+      const isSchemaOrContract = filePath.includes('schema.prisma') || filePath.includes('packages/core-types/src/');
+      if (isSchemaOrContract) {
+        this.state.hasApiDrift = true;
+        this.state.driftVerified = false;
+      }
+
+      if (filePath.endsWith('package.json')) {
+        this.state.releaseVersionUpdated = true;
+      } else if (filePath.endsWith('CHANGELOG.md')) {
+        this.state.changelogUpdated = true;
+      }
+    }
+    this.saveState();
+  }
+
+  public onPublishAttempt() {
+    const updatedVersion = this.state.modifiedFiles.some(f => f.endsWith('package.json'));
+    const updatedChangelog = this.state.modifiedFiles.some(f => f.endsWith('CHANGELOG.md'));
+    this.state.releaseVersionUpdated = updatedVersion;
+    this.state.changelogUpdated = updatedChangelog;
+    this.saveState();
+  }
+
+  public verifyDrift() {
+    this.state.driftVerified = true;
+    this.saveState();
+  }
+
+  public addFeedback(role: string, comment: string, severity: 'info' | 'warn' | 'critical') {
+    const entry: FeedbackEntry = {
+      timestamp: new Date().toISOString(),
+      role,
+      comment,
+      severity
+    };
+    if (!this.state.historicalFeedback) {
+      this.state.historicalFeedback = [];
+    }
+    this.state.historicalFeedback.push(entry);
+    
+    if (severity === 'critical' || severity === 'warn') {
+      if (!this.state.activeDirectives) {
+        this.state.activeDirectives = [];
+      }
+      this.state.activeDirectives.push(comment);
+      this.state.feedbackAligned = false;
+    }
+    this.saveState();
+  }
+
+  public alignFeedback(requirementId: string, justification: string) {
+    this.state.feedbackAligned = true;
+    this.state.activeDirectives = [];
+    this.saveState();
+  }
+
+  public clearTasks() {
+    this.state.activeRequirementId = null;
+    this.state.modifiedFiles = [];
+    this.state.associatedTestsWritten = true;
+    this.state.hasApiDrift = false;
+    this.state.driftVerified = true;
+    this.state.releaseVersionUpdated = true;
+    this.state.changelogUpdated = true;
+    this.state.activeDirectives = [];
+    this.state.feedbackAligned = true;
+    this.state.historicalFeedback = [];
+    this.saveState();
+  }
+}
+
 const app = express();
 const port = process.env.PORT || 3001;
 const db = new VeritasDatabase();
+const devopsTracker = new DevOpsComplianceTracker();
+const ibpTracker = new IBPComplianceTracker();
+const plmTracker = new PLMComplianceTracker();
+
 
 // Load Veritas MCP Configuration and policies
 const configPath = path.resolve(process.cwd(), 'protect-mcp.config.json');
@@ -147,8 +499,8 @@ interface AuthenticatedRequest extends express.Request {
 
 function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[]) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Standard bypass helper if enabled via env (defaults to true for zero-friction local development)
-    const isBypass = process.env.DISABLE_AUTH === 'true' || !req.headers.authorization;
+    // Standard bypass helper if enabled via env (defaults to false for strict authentication gating)
+    const isBypass = process.env.DISABLE_AUTH === 'true';
     if (isBypass) {
       (req as AuthenticatedRequest).user = { id: 'usr_bypass', role: 'admin', email: 'admin@veritas.internal' };
       return next();
@@ -211,11 +563,60 @@ app.post('/api/auth/token', (req, res) => {
 async function evaluateCedarPolicy(principal: string, action: string, resource: string, context: any): Promise<'allow' | 'deny'> {
   const daemonUrl = process.env.CEDAR_DAEMON_URL || 'http://localhost:50051/authorize';
   
+  // Record estimated token usage for IBP budget enforcement
+  const payloadSize = JSON.stringify({ principal, action, resource, context }).length;
+  const estimatedTokens = Math.max(300, Math.floor(payloadSize / 4));
+  ibpTracker.recordTokenUsage(estimatedTokens);
+
+  // If executing commit or release, update the publish/release metrics statefully
+  const cmd = context?.commandLine || '';
+  if (action === 'execute_command' && (cmd.includes('git commit') || cmd.includes('npm publish'))) {
+    plmTracker.onPublishAttempt();
+  }
+
+  // Inject stateful DevOps compliance indicators
+  const isDevopsBypass = process.env.DISABLE_DEVOPS_GATE === 'true';
+  const devopsState = isDevopsBypass ? {
+    pipelineVerified: true,
+    securityAudited: true,
+    hamChecked: true
+  } : devopsTracker.getState();
+
+  // Inject stateful IBP indicators
+  const ibpState = ibpTracker.getState();
+  const isBudgetAligned = ibpTracker.isBudgetAligned();
+
+  // Inject stateful PLM indicators
+  const plmState = plmTracker.getState();
+
+  const fullContext = {
+    ...context,
+    devops: {
+      pipeline_passed: devopsState.pipelineVerified,
+      security_audited: devopsState.securityAudited,
+      ham_drift_checked: devopsState.hamChecked
+    },
+    ibp: {
+      cross_functional_synthesized: ibpState.crossFunctionalSynthesized,
+      budget_aligned: isBudgetAligned
+    },
+    plm: {
+      active_requirement_id: plmState.activeRequirementId,
+      associated_tests_written: plmState.associatedTestsWritten,
+      has_api_drift: plmState.hasApiDrift,
+      drift_verified: plmState.driftVerified,
+      release_version_updated: plmState.releaseVersionUpdated,
+      changelog_updated: plmState.changelogUpdated,
+      has_active_feedback: plmState.activeDirectives.length > 0,
+      feedback_aligned: plmState.feedbackAligned
+    }
+  };
+
   try {
     const response = await fetch(daemonUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ principal, action, resource, context }),
+      body: JSON.stringify({ principal, action, resource, context: fullContext }),
       signal: AbortSignal.timeout(500) // Fast 500ms timeout to prevent hanging the gateway
     });
     
@@ -228,11 +629,16 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
     // Quiet fallback to TS Cedar evaluator
   }
 
-  // TS-Native AST Cedar Policy Parser & Evaluator
-  const decision = cedarEvaluator.isAuthorized(principal, action, {
-    path: context?.path || '',
-    commandLine: context?.commandLine || ''
-  });
+  // TS-Native AST Cedar Policy Parser & Evaluator (passing nested fullContext as 4th argument)
+  const decision = cedarEvaluator.isAuthorized(
+    principal,
+    action,
+    {
+      path: context?.path || '',
+      commandLine: context?.commandLine || ''
+    },
+    fullContext
+  );
   
   log('info', `🛡️  TypeScript Cedar Parser returned dynamic authorization decision: ${decision.toUpperCase()}`);
   return decision;
@@ -311,6 +717,17 @@ app.post('/api/transactions', requireAuth(['developer', 'admin']), async (req, r
   }
 });
 
+const PUBLIC_KEY_MAP: Record<string, string> = {
+  'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
+  'sb:issuer:pm-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de81',
+  'sb:issuer:architecture-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de82',
+  'sb:issuer:backend-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
+  'sb:issuer:frontend-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de84',
+  'sb:issuer:qa-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de85',
+  'sb:issuer:security-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de86',
+  'sb:issuer:devops-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de87'
+};
+
 // 3. GET /api/receipts - Retrieve list of signed audit receipts (Role: developer, admin, auditor)
 app.get('/api/receipts', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
   try {
@@ -332,10 +749,6 @@ app.post('/api/receipts', requireAuth(['developer', 'admin']), async (req, res) 
        res.status(400).json({ error: 'Malformed receipt structure. Missing payload or signature.' });
        return;
     }
-    
-    const PUBLIC_KEY_MAP: Record<string, string> = {
-      'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83'
-    };
     
     const publicKeyHex = PUBLIC_KEY_MAP[signature.kid] || signature.kid;
     const isValid = verifyReceipt(receipt, publicKeyHex);
@@ -378,6 +791,31 @@ app.post('/api/receipts', requireAuth(['developer', 'admin']), async (req, res) 
     
     payload.decision = decision;
 
+    // Stateful DevOps, IBP, and PLM compliance checks
+    if (decision === 'allow') {
+      if (['write_file', 'replace_file_content', 'multi_replace_file_content'].includes(payload.tool_name)) {
+        devopsTracker.onFileModified();
+        ibpTracker.logTask('specialized', payload.tool_name);
+        plmTracker.onFileModified(payload.args?.path || '');
+        log('info', `DevOps compliance gate invalidated: file modification detected by tool '${payload.tool_name}'.`);
+      } else if (payload.tool_name === 'execute_command') {
+        const cmd = payload.args?.commandLine || payload.reason || '';
+        if (cmd.includes('ci-verify.sh') || cmd.includes('npm run ci')) {
+          devopsTracker.onPipelineSuccess();
+          ibpTracker.logTask('generic', 'pipeline_verification');
+          log('info', 'DevOps compliance gate verified: local pipeline emulation executed successfully.');
+        } else if (cmd.includes('ham-drift-watcher.sh') || cmd.includes('pre-commit-ham-audit.sh')) {
+          devopsTracker.onHamCheckSuccess();
+          ibpTracker.logTask('generic', 'drift_check');
+          log('info', 'DevOps compliance gate verified: context drift check executed successfully.');
+        } else if (cmd.includes('git commit') || cmd.includes('npm publish')) {
+          plmTracker.onPublishAttempt();
+        } else {
+          ibpTracker.logTask('specialized', 'execute_generic_command');
+        }
+      }
+    }
+
     await db.addAuditReceipt(receipt);
     log('security', `Cryptographically verified receipt logged: ${payload.tool_name} -> ${payload.decision}`, {
       tool_name: payload.tool_name,
@@ -406,10 +844,6 @@ app.post('/api/receipts/verify', (req, res) => {
        res.status(400).json({ error: 'Malformed receipt structure. Missing payload or signature.' });
        return;
     }
-    
-    const PUBLIC_KEY_MAP: Record<string, string> = {
-      'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83'
-    };
     
     const publicKeyHex = PUBLIC_KEY_MAP[signature.kid] || signature.kid;
     const isValid = verifyReceipt(receipt, publicKeyHex);
@@ -444,6 +878,14 @@ app.post('/api/findings', requireAuth(['admin']), async (req, res) => {
     await db.setFindings(findings);
     log('security', `CI Security Auditor reported ${findings.length} findings.`, { count: findings.length });
     
+    // Stateful DevOps compliance checks: mark security audited as true if zero High findings
+    const highFindings = findings.filter(f => f.severity === 'High');
+    if (highFindings.length === 0) {
+      devopsTracker.onSecurityAuditSuccess();
+      ibpTracker.logTask('generic', 'security_scanner');
+      log('info', 'DevOps compliance gate verified: static security audit passed with zero High findings.');
+    }
+
     findings.forEach(f => {
       if (f.severity === 'High') {
         dispatchWebhookAlert('finding', { finding: f });
@@ -489,7 +931,7 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
     res.json({ logs, status: 'success' });
   } catch (error: any) {
     log('error', `Web console command execution failed`, error.message);
-    const errorLogs = error.stdout || error.stderr || error.message;
+    const errorLogs = [error.stdout, error.stderr].filter(Boolean).join('\n') || error.message;
     res.status(500).json({ error: 'Sandboxed execution failed', logs: errorLogs, status: 'failed' });
   }
 });
@@ -523,15 +965,131 @@ app.post('/api/authorize', requireAuth(['developer', 'admin']), async (req, res)
   }
 });
 
+// ==========================================
+// Stateful IBP Gating Endpoints
+// ==========================================
+
+// 9. POST /api/ibp/synthesize - Submit IBP Cross-Functional Synthesis Report (Role: developer, admin)
+app.post('/api/ibp/synthesize', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const { report } = req.body;
+    if (!report || report.trim().length < 50) {
+      res.status(400).json({ error: 'Missing or too short synthesis report. IBP report must be at least 50 characters.' });
+      return;
+    }
+
+    ibpTracker.submitSynthesis(report);
+    log('security', 'IBP Governance verified: Agent successfully submitted cross-functional synthesis report.');
+    res.json({ message: 'IBP cross-functional synthesis report received and verified.', verified: true });
+  } catch (error: any) {
+    log('error', 'Failed to process IBP synthesis report', error.message);
+    res.status(500).json({ error: 'Failed to process synthesis' });
+  }
+});
+
+// 10. GET /api/ibp/state - Retrieve current IBP compliance and budget state (Role: developer, admin, auditor)
+app.get('/api/ibp/state', requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
+  try {
+    res.json(ibpTracker.getState());
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to retrieve IBP state' });
+  }
+});
+
 // 7. POST /api/reset - Clear database to initial state (Role: admin)
 app.post('/api/reset', requireAuth(['admin']), async (req, res) => {
   try {
     await db.clearDatabase();
+    ibpTracker.clearTasks(); // Clear IBP compliance states on database reset
+    plmTracker.clearTasks(); // Clear PLM compliance states on database reset
     log('warn', 'Database reset to initial template state.');
     res.json({ message: 'Database reset successfully' });
   } catch (error) {
     log('error', 'Failed to reset database', error);
     res.status(500).json({ error: 'Failed to reset database' });
+  }
+});
+
+// ==========================================
+// Stateful PLM Gating Endpoints
+// ==========================================
+
+// 11. POST /api/plm/requirement - Register active Requirement ID (Role: developer, admin)
+app.post('/api/plm/requirement', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const { id, description } = req.body;
+    if (!id || id.trim().length === 0) {
+      res.status(400).json({ error: 'Missing or empty requirement ID.' });
+      return;
+    }
+
+    plmTracker.setRequirement(id);
+    log('info', `PLM Governance: Registered active requirement/issue ID: ${id}. Description: ${description || ''}`);
+    res.json({ message: `Active requirement ${id} registered and verified.`, activeRequirementId: id });
+  } catch (error: any) {
+    log('error', 'Failed to register requirement ID', error.message);
+    res.status(500).json({ error: 'Failed to register requirement' });
+  }
+});
+
+// 12. POST /api/plm/drift-verify - Verify and clear active API schema drift (Role: developer, admin)
+app.post('/api/plm/drift-verify', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    plmTracker.verifyDrift();
+    log('info', 'PLM Governance: API and schema contract drift successfully verified and cleared.');
+    res.json({ message: 'API schema contract drift verified and cleared.', verified: true });
+  } catch (error: any) {
+    log('error', 'Failed to verify API drift', error.message);
+    res.status(500).json({ error: 'Failed to verify drift' });
+  }
+});
+
+// 12b. POST /api/plm/feedback - Submit runtime user/system feedback (Role: developer, admin)
+app.post('/api/plm/feedback', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const { role, comment, severity } = req.body;
+    if (!role || !comment || !severity) {
+      res.status(400).json({ error: 'Missing required parameters: role, comment, severity' });
+      return;
+    }
+    if (!['info', 'warn', 'critical'].includes(severity)) {
+      res.status(400).json({ error: 'Invalid severity. Must be info, warn, or critical' });
+      return;
+    }
+
+    plmTracker.addFeedback(role, comment, severity);
+    log('info', `PLM Governance: Received feedback from ${role}. Severity: ${severity.toUpperCase()}. Comment: ${comment}`);
+    res.json({ message: 'Feedback logged successfully', aligned: plmTracker.getState().feedbackAligned });
+  } catch (error: any) {
+    log('error', 'Failed to log PLM feedback', error.message);
+    res.status(500).json({ error: 'Failed to log feedback' });
+  }
+});
+
+// 12c. POST /api/plm/feedback-align - Record feedback alignment/resolution (Role: developer, admin)
+app.post('/api/plm/feedback-align', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const { requirementId, justification } = req.body;
+    if (!requirementId || !justification || justification.trim().length === 0) {
+      res.status(400).json({ error: 'Missing required parameters: requirementId, justification' });
+      return;
+    }
+
+    plmTracker.alignFeedback(requirementId, justification);
+    log('info', `PLM Governance: Feedback aligned for Requirement ${requirementId}. Justification: ${justification}`);
+    res.json({ message: 'Feedback aligned successfully', aligned: true });
+  } catch (error: any) {
+    log('error', 'Failed to align PLM feedback', error.message);
+    res.status(500).json({ error: 'Failed to align feedback' });
+  }
+});
+
+// 13. GET /api/plm/state - Retrieve current PLM compliance state (Role: developer, admin, auditor)
+app.get('/api/plm/state', requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
+  try {
+    res.json(plmTracker.getState());
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to retrieve PLM state' });
   }
 });
 

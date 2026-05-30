@@ -8,6 +8,14 @@ const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const RECEIPTS_FILE = path.join(DATA_DIR, 'receipts.json');
 const FINDINGS_FILE = path.join(DATA_DIR, 'findings.json');
 
+// POSIX-compliant atomic file writer helper to prevent JSON database file corruption
+function writeJsonAtomic(filePath: string, data: any) {
+  const dir = path.dirname(filePath);
+  const tempPath = path.join(dir, `${path.basename(filePath)}.${Math.random().toString(36).substring(2)}.tmp`);
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+  fs.renameSync(tempPath, filePath);
+}
+
 const INITIAL_TRANSACTIONS: Transaction[] = [
   {
     id: 'tx_817293',
@@ -135,15 +143,15 @@ export class VeritasDatabase {
     }
     
     if (!fs.existsSync(TX_FILE)) {
-      fs.writeFileSync(TX_FILE, JSON.stringify(INITIAL_TRANSACTIONS, null, 2), 'utf-8');
+      writeJsonAtomic(TX_FILE, INITIAL_TRANSACTIONS);
     }
     
     if (!fs.existsSync(RECEIPTS_FILE)) {
-      fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(INITIAL_RECEIPTS, null, 2), 'utf-8');
+      writeJsonAtomic(RECEIPTS_FILE, INITIAL_RECEIPTS);
     }
     
     if (!fs.existsSync(FINDINGS_FILE)) {
-      fs.writeFileSync(FINDINGS_FILE, JSON.stringify([], null, 2), 'utf-8');
+      writeJsonAtomic(FINDINGS_FILE, []);
     }
   }
 
@@ -206,7 +214,7 @@ export class VeritasDatabase {
     
     const list = this.getTransactionsJson();
     list.unshift(tx);
-    fs.writeFileSync(TX_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    writeJsonAtomic(TX_FILE, list);
   }
 
   // ==========================================
@@ -278,7 +286,7 @@ export class VeritasDatabase {
     
     const list = this.getAuditReceiptsJson();
     list.unshift(receipt);
-    fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    writeJsonAtomic(RECEIPTS_FILE, list);
   }
 
   // ==========================================
@@ -345,7 +353,7 @@ export class VeritasDatabase {
     }
     
     this.ensureInitialized();
-    fs.writeFileSync(FINDINGS_FILE, JSON.stringify(findings, null, 2), 'utf-8');
+    writeJsonAtomic(FINDINGS_FILE, findings);
   }
 
   public async addFinding(finding: SecurityFinding): Promise<void> {
@@ -373,7 +381,7 @@ export class VeritasDatabase {
     
     const list = this.getFindingsJson();
     list.push(finding);
-    fs.writeFileSync(FINDINGS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    writeJsonAtomic(FINDINGS_FILE, list);
   }
 
   public async clearDatabase(): Promise<void> {
@@ -391,8 +399,8 @@ export class VeritasDatabase {
     }
     
     this.ensureInitialized();
-    fs.writeFileSync(TX_FILE, JSON.stringify(INITIAL_TRANSACTIONS, null, 2), 'utf-8');
-    fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(INITIAL_RECEIPTS, null, 2), 'utf-8');
-    fs.writeFileSync(FINDINGS_FILE, JSON.stringify([], null, 2), 'utf-8');
+    writeJsonAtomic(TX_FILE, INITIAL_TRANSACTIONS);
+    writeJsonAtomic(RECEIPTS_FILE, INITIAL_RECEIPTS);
+    writeJsonAtomic(FINDINGS_FILE, []);
   }
 }

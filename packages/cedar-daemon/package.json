@@ -4,7 +4,10 @@
   "private": true,
   "description": "Integration stub for high-speed Rust-native Cedar daemon",
   "scripts": {
-    "build": "echo '📡 Rust compile task deferred (Rust compiler required for native performance, falling back to gateway shadow evaluation)'",
+    "build": "docker build -t veritas-cedar-daemon -f Dockerfile ../..",
+    "prestart": "docker rm -f veritas-cedar-daemon 2>/dev/null || true",
+    "start": "docker run -d --name veritas-cedar-daemon -p 50051:50051 veritas-cedar-daemon",
+    "stop": "docker rm -f veritas-cedar-daemon 2>/dev/null || true",
     "test": "echo '📡 Rust tests bypassed'",
     "lint": "echo '📡 Rust linter bypassed'"
   }

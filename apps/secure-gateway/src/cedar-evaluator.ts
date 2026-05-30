@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
 
-// AST Node definitions
 export type ASTNode =
   | { type: 'AND'; left: ASTNode; right: ASTNode }
   | { type: 'OR'; left: ASTNode; right: ASTNode }
@@ -9,7 +8,8 @@ export type ASTNode =
   | { type: 'IN'; path: string; values: string[] }
   | { type: 'LIKE'; path: string; pattern: string }
   | { type: 'CONTAINS'; path: string; substring: string }
-  | { type: 'EQUALS'; path: string; value: string };
+  | { type: 'EQUALS'; path: string; value: string }
+  | { type: 'BOOLEAN'; path: string };
 
 export interface ParsedRule {
   effect: 'permit' | 'forbid';
@@ -212,6 +212,11 @@ export class CedarEvaluator {
         return { type: 'CONTAINS', path: realPath, substring };
       }
 
+      // Support simple boolean attribute references (e.g. !context.devops.pipeline_passed)
+      if (!next || next === '&&' || next === '||' || next === ')') {
+        return { type: 'BOOLEAN', path };
+      }
+
       throw new Error(`Unexpected token sequence near '${path} ${next || ''}'`);
     }
 
@@ -221,13 +226,14 @@ export class CedarEvaluator {
   /**
    * Evaluates the parsed Cedar policy rules against the incoming request attributes.
    */
-  public isAuthorized(principal: string, toolName: string, args: Record<string, any>): 'allow' | 'deny' {
+  public isAuthorized(principal: string, toolName: string, args: Record<string, any>, contextObj?: Record<string, any>): 'allow' | 'deny' {
     const evalContext = {
       principal,
       resource: {
         tool_name: toolName,
         args: args || {}
-      }
+      },
+      context: contextObj || {}
     };
 
     let permitted = false;
@@ -301,6 +307,10 @@ export class CedarEvaluator {
       case 'CONTAINS': {
         const val = getPathValue(context, node.path);
         return typeof val === 'string' && val.includes(node.substring);
+      }
+      case 'BOOLEAN': {
+        const val = getPathValue(context, node.path);
+        return val === true;
       }
       default:
         return false;

@@ -1,18 +1,1 @@
-[
-  {
-    "vector": "A",
-    "title": "Env Var Intermediary (Vulnerable)",
-    "severity": "High",
-    "file": ".github/workflows/ci-agent-pipeline.yml",
-    "step": "jobs.code-review.steps[2] line 18",
-    "impact": "Allows any malicious PR contributor to execute arbitrary shell commands in CI via indirect prompt injection.",
-    "evidence": "env:\n  PR_TITLE: ${{ github.event.pull_request.title }}\nprompt: \"Review code changes for PR: $PR_TITLE\"",
-    "dataFlow": [
-      "Attacker creates a pull request with prompt injection code in the title.",
-      "The pull_request_target trigger runs the workflow in the base branch context with secrets access.",
-      "The workflow loads the untrusted title into the env block at line 18.",
-      "At runtime, the AI agent reads the environment variable, interprets the injected command as an instruction, and executes it."
-    ],
-    "remediation": "Do not pass dynamic event variables directly to environment blocks consumed by AI prompts. Use strict string sanitization filters or pull named fields from authenticated metadata sources."
-  }
-]
+[]

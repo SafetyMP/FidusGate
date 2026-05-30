@@ -176,7 +176,8 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
     const allowedNodeScripts = [
       'packages/crypto-utils/dist/index.js',
       'packages/crypto-utils/src/index.ts',
-      'packages/crypto-utils/dist/index.ts'
+      'packages/crypto-utils/dist/index.ts',
+      'scripts/workflow-scanner.js'
     ];
 
     const isAllowed = allowedNodeScripts.some(allowed => scriptPath.endsWith(allowed));

@@ -177,7 +177,7 @@ fn handle_authorize(
 
 fn main() {
     let port = 50051;
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("0.0.0.0:{}", port);
     
     let server = match Server::http(&addr) {
         Ok(s) => s,

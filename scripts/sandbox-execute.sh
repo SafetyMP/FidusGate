@@ -27,21 +27,24 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
 fi
 
 # Determine the optimal Docker image based on the command content
-IMAGE="node:20-alpine"
-RUN_USER="node"
+# Check if veritas-sandbox-node exists, compile if not
+if ! docker image inspect veritas-sandbox-node:latest >/dev/null 2>&1; then
+    echo "🐳 Compiling standardized veritas-sandbox-node:latest environment..."
+    docker build -t veritas-sandbox-node:latest -f scripts/sandbox/Dockerfile scripts/sandbox >/dev/null
+fi
+
+IMAGE="veritas-sandbox-node:latest"
+RUN_USER=""
 
 # Convert command to lowercase for matching
 LOWER_CMD=$(echo "$COMMAND" | tr '[:upper:]' '[:lower:]')
 
 if [[ "$LOWER_CMD" == *"pytest"* ]] || [[ "$LOWER_CMD" == *"python"* ]]; then
     IMAGE="python:3.13-alpine"
-    RUN_USER=""
 elif [[ "$LOWER_CMD" == *"go test"* ]] || [[ "$LOWER_CMD" == *"go "* ]]; then
     IMAGE="golang:alpine"
-    RUN_USER=""
 elif [[ "$LOWER_CMD" == *"cargo "* ]]; then
     IMAGE="rust:alpine"
-    RUN_USER=""
 fi
 
 echo "🐳 Selected Docker sandbox image: $IMAGE"
