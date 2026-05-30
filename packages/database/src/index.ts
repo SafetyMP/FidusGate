@@ -3,10 +3,22 @@ import * as path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { Transaction, AuditReceipt, SecurityFinding } from '@veritas/core-types';
 
+export interface CommandLogEntry {
+  id: string;
+  timestamp: string;
+  command: string;
+  user: string;
+  role: string;
+  status: 'success' | 'failed';
+  exitCode: number;
+  cedarDecision: 'allow' | 'deny';
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const RECEIPTS_FILE = path.join(DATA_DIR, 'receipts.json');
 const FINDINGS_FILE = path.join(DATA_DIR, 'findings.json');
+const COMMAND_LOGS_FILE = path.join(DATA_DIR, 'command-logs.json');
 
 // POSIX-compliant atomic file writer helper to prevent JSON database file corruption
 function writeJsonAtomic(filePath: string, data: any) {
@@ -152,6 +164,10 @@ export class VeritasDatabase {
     
     if (!fs.existsSync(FINDINGS_FILE)) {
       writeJsonAtomic(FINDINGS_FILE, []);
+    }
+
+    if (!fs.existsSync(COMMAND_LOGS_FILE)) {
+      writeJsonAtomic(COMMAND_LOGS_FILE, []);
     }
   }
 
@@ -384,6 +400,29 @@ export class VeritasDatabase {
     writeJsonAtomic(FINDINGS_FILE, list);
   }
 
+  // ==========================================
+  // Command Audit Logs Management
+  // ==========================================
+  private getCommandLogsJson(): CommandLogEntry[] {
+    this.ensureInitialized();
+    try {
+      const data = fs.readFileSync(COMMAND_LOGS_FILE, 'utf-8');
+      return JSON.parse(data);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  public async getCommandLogs(): Promise<CommandLogEntry[]> {
+    return this.getCommandLogsJson();
+  }
+
+  public async addCommandLog(logEntry: CommandLogEntry): Promise<void> {
+    const list = this.getCommandLogsJson();
+    list.unshift(logEntry);
+    writeJsonAtomic(COMMAND_LOGS_FILE, list);
+  }
+
   public async clearDatabase(): Promise<void> {
     if (this.usePostgres && this.prisma) {
       try {
@@ -402,5 +441,6 @@ export class VeritasDatabase {
     writeJsonAtomic(TX_FILE, INITIAL_TRANSACTIONS);
     writeJsonAtomic(RECEIPTS_FILE, INITIAL_RECEIPTS);
     writeJsonAtomic(FINDINGS_FILE, []);
+    writeJsonAtomic(COMMAND_LOGS_FILE, []);
   }
 }

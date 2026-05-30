@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { VeritasDatabase } from '@veritas/database';
+import { VeritasDatabase, CommandLogEntry } from '@veritas/database';
 import { verifyReceipt } from '@veritas/crypto-utils';
 import { Transaction, AuditReceipt, SecurityFinding } from '@veritas/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
@@ -365,6 +365,10 @@ const devopsTracker = new DevOpsComplianceTracker();
 const ibpTracker = new IBPComplianceTracker();
 const plmTracker = new PLMComplianceTracker();
 
+// SRE Telemetry Counters
+let veritasPolicyEvaluationsAllow = 0;
+let veritasPolicyEvaluationsDeny = 0;
+
 
 // Load Veritas MCP Configuration and policies
 const configPath = path.resolve(process.cwd(), 'protect-mcp.config.json');
@@ -612,35 +616,45 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
     }
   };
 
-  try {
-    const response = await fetch(daemonUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ principal, action, resource, context: fullContext }),
-      signal: AbortSignal.timeout(500) // Fast 500ms timeout to prevent hanging the gateway
-    });
-    
-    if (response.ok) {
-      const result = await response.json() as any;
-      log('info', `📡 Cedar Rust Daemon returned formal authorization decision: ${result.decision.toUpperCase()}`);
-      return result.decision as 'allow' | 'deny';
+  const decision = await (async () => {
+    try {
+      const response = await fetch(daemonUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ principal, action, resource, context: fullContext }),
+        signal: AbortSignal.timeout(500) // Fast 500ms timeout to prevent hanging the gateway
+      });
+      
+      if (response.ok) {
+        const result = await response.json() as any;
+        log('info', `📡 Cedar Rust Daemon returned formal authorization decision: ${result.decision.toUpperCase()}`);
+        return result.decision as 'allow' | 'deny';
+      }
+    } catch (err: any) {
+      // Quiet fallback to TS Cedar evaluator
     }
-  } catch (err: any) {
-    // Quiet fallback to TS Cedar evaluator
+
+    // TS-Native AST Cedar Policy Parser & Evaluator (passing nested fullContext as 4th argument)
+    const tsDecision = cedarEvaluator.isAuthorized(
+      principal,
+      action,
+      {
+        path: context?.path || '',
+        commandLine: context?.commandLine || ''
+      },
+      fullContext
+    );
+    
+    log('info', `🛡️  TypeScript Cedar Parser returned dynamic authorization decision: ${tsDecision.toUpperCase()}`);
+    return tsDecision;
+  })();
+
+  if (decision === 'allow') {
+    veritasPolicyEvaluationsAllow++;
+  } else {
+    veritasPolicyEvaluationsDeny++;
   }
 
-  // TS-Native AST Cedar Policy Parser & Evaluator (passing nested fullContext as 4th argument)
-  const decision = cedarEvaluator.isAuthorized(
-    principal,
-    action,
-    {
-      path: context?.path || '',
-      commandLine: context?.commandLine || ''
-    },
-    fullContext
-  );
-  
-  log('info', `🛡️  TypeScript Cedar Parser returned dynamic authorization decision: ${decision.toUpperCase()}`);
   return decision;
 }
 
@@ -910,10 +924,26 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
        return;
     }
 
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@veritas.internal';
+    const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
+
     // Input command tokenized audit (Defense-in-Depth against bypasses)
     const auditResult = isCommandLineSecure(command);
     if (!auditResult.secure) {
       log('security', `BLOCKED WEB CONSOLE COMMAND: Forbidden command execution attempted. Reason: ${auditResult.reason}`, { command });
+      
+      // Persist forensic log for blocked/audit-violated command
+      await db.addCommandLog({
+        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        timestamp: new Date().toISOString(),
+        command,
+        user: userEmail,
+        role: userRole,
+        status: 'failed',
+        exitCode: 1,
+        cedarDecision: 'deny'
+      });
+
       res.status(403).json({ 
         error: `Command execution forbidden. Reason: ${auditResult.reason}` 
       });
@@ -926,13 +956,43 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
     const workspacePath = path.resolve(__dirname, '..', '..', '..');
     const sandboxCmd = `bash scripts/sandbox-execute.sh "${command}" "${workspacePath}"`;
     
-    const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
-    
-    res.json({ logs, status: 'success' });
+    try {
+      const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+      
+      // Persist forensic log for successful run
+      await db.addCommandLog({
+        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        timestamp: new Date().toISOString(),
+        command,
+        user: userEmail,
+        role: userRole,
+        status: 'success',
+        exitCode: 0,
+        cedarDecision: 'allow'
+      });
+
+      res.json({ logs, status: 'success' });
+    } catch (error: any) {
+      log('error', `Web console command execution failed`, error.message);
+      const exitCode = error.status || 1;
+      const errorLogs = [error.stdout, error.stderr].filter(Boolean).join('\n') || error.message;
+
+      // Persist forensic log for failed run
+      await db.addCommandLog({
+        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        timestamp: new Date().toISOString(),
+        command,
+        user: userEmail,
+        role: userRole,
+        status: 'failed',
+        exitCode,
+        cedarDecision: 'allow'
+      });
+
+      res.status(500).json({ error: 'Sandboxed execution failed', logs: errorLogs, status: 'failed' });
+    }
   } catch (error: any) {
-    log('error', `Web console command execution failed`, error.message);
-    const errorLogs = [error.stdout, error.stderr].filter(Boolean).join('\n') || error.message;
-    res.status(500).json({ error: 'Sandboxed execution failed', logs: errorLogs, status: 'failed' });
+    res.status(500).json({ error: 'Sandbox execution exception occurred', message: error.message });
   }
 });
 
@@ -1090,6 +1150,52 @@ app.get('/api/plm/state', requireAuth(['developer', 'admin', 'auditor']), (req, 
     res.json(plmTracker.getState());
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to retrieve PLM state' });
+  }
+});
+
+// 13b. GET /api/logs/commands - Retrieve list of forensic command audit logs (Role: developer, admin, auditor)
+app.get('/api/logs/commands', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
+  try {
+    const logs = await db.getCommandLogs();
+    res.json(logs);
+  } catch (error: any) {
+    log('error', 'Failed to retrieve command logs', error.message);
+    res.status(500).json({ error: 'Failed to retrieve command logs' });
+  }
+});
+
+// 14. GET /api/metrics - Live SRE Prometheus Telemetry metrics (Anonymous/Public)
+app.get('/api/metrics', (req, res) => {
+  try {
+    const devopsState = devopsTracker.getState();
+    const ibpState = ibpTracker.getState();
+    const plmState = plmTracker.getState();
+
+    const output = [
+      `# HELP veritas_gateway_policy_evaluations_total Total count of Cedar policy evaluations.`,
+      `# TYPE veritas_gateway_policy_evaluations_total counter`,
+      `veritas_gateway_policy_evaluations_total{decision="allow"} ${veritasPolicyEvaluationsAllow}`,
+      `veritas_gateway_policy_evaluations_total{decision="deny"} ${veritasPolicyEvaluationsDeny}`,
+      ``,
+      `# HELP veritas_ibp_tokens_burned_total Running sum of estimated tokens burned in this session.`,
+      `# TYPE veritas_ibp_tokens_burned_total counter`,
+      `veritas_ibp_tokens_burned_total ${ibpState.tokensConsumed}`,
+      ``,
+      `# HELP veritas_plm_active_directives Current count of unaligned active directives.`,
+      `# TYPE veritas_plm_active_directives gauge`,
+      `veritas_plm_active_directives ${plmState.activeDirectives ? plmState.activeDirectives.length : 0}`,
+      ``,
+      `# HELP veritas_devops_compliance_status DevOps compliance status by gate (1=OK, 0=Failed).`,
+      `# TYPE veritas_devops_compliance_status gauge`,
+      `veritas_devops_compliance_status{gate="pipeline"} ${devopsState.pipelineVerified ? 1 : 0}`,
+      `veritas_devops_compliance_status{gate="security"} ${devopsState.securityAudited ? 1 : 0}`,
+      `veritas_devops_compliance_status{gate="drift"} ${devopsState.hamChecked ? 1 : 0}`
+    ].join('\n');
+
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(output);
+  } catch (error: any) {
+    res.status(500).send('Internal Server Error while generating metrics');
   }
 });
 

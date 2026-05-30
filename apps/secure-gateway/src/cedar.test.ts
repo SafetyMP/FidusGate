@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure, parseShellCommand } from './command-auditor';
+import { VeritasDatabase } from '@veritas/database';
 
 test('Veritas Cedar Policy & Command Auditor Integration Tests', async (t) => {
   // Load standard policy.cedar from repo root
@@ -554,5 +555,33 @@ test('Veritas Cedar Policy & Command Auditor Integration Tests', async (t) => {
       'deny',
       'qa-sme principal must be blocked from modifying policy files'
     );
+  });
+
+  // ==========================================
+  // Combined Observability & Forensic Audit Logs Tests
+  // ==========================================
+  await t.test('Forensic Logs - Database persistence and retrieval', async () => {
+    const db = new VeritasDatabase();
+    await db.clearDatabase();
+
+    const logEntry = {
+      id: 'cmd_test123',
+      timestamp: new Date().toISOString(),
+      command: 'npm run test',
+      user: 'admin@veritas.internal',
+      role: 'admin',
+      status: 'success' as const,
+      exitCode: 0,
+      cedarDecision: 'allow' as const
+    };
+
+    await db.addCommandLog(logEntry);
+    const logs = await db.getCommandLogs();
+    
+    assert.strictEqual(logs.length, 1, 'Should have exactly 1 command log in the database');
+    assert.strictEqual(logs[0].id, 'cmd_test123', 'The retrieved log ID should match');
+    assert.strictEqual(logs[0].command, 'npm run test', 'The retrieved command should match');
+    assert.strictEqual(logs[0].status, 'success', 'The retrieved status should match');
+    assert.strictEqual(logs[0].cedarDecision, 'allow', 'The retrieved cedarDecision should match');
   });
 });

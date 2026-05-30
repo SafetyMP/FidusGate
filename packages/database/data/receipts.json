@@ -5,7 +5,7 @@
       "tool_name": "read_file",
       "decision": "allow",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-05-29T01:06:01.035Z",
+      "issued_at": "2026-05-30T18:19:51.984Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 1 low-risk file read auto-approved",
       "claimed_issuer_tier": 1
@@ -22,7 +22,7 @@
       "tool_name": "write_file",
       "decision": "allow",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-05-29T01:36:01.035Z",
+      "issued_at": "2026-05-30T18:49:51.984Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 2 file modification in approved src/ directory allowed",
       "claimed_issuer_tier": 2
@@ -39,7 +39,7 @@
       "tool_name": "execute_command",
       "decision": "deny",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-05-29T01:51:01.035Z",
+      "issued_at": "2026-05-30T19:04:51.984Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 3 command execution blocked: skill-creator requires explicit manual verification",
       "claimed_issuer_tier": 3

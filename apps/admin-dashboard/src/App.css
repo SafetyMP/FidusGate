@@ -858,3 +858,193 @@ select.form-control {
   border-color: rgba(255, 255, 255, 0.05) !important;
   box-shadow: none !important;
 }
+
+/* ==========================================
+ * Phase 1: PLM Adaptive Governance Panel Styles
+ * ========================================== */
+.plm-governance-panel {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, hsla(var(--bg-secondary), 0.7) 0%, hsla(var(--bg-secondary), 0.4) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.plm-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid hsl(var(--border-color));
+}
+
+.plm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.plm-icon-container {
+  color: hsl(var(--primary));
+  filter: drop-shadow(0 0 8px hsla(var(--primary), 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plm-shield-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.plm-shield {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  letter-spacing: 0.05em;
+}
+
+.shield-locked {
+  background: rgba(255, 107, 107, 0.08);
+  color: hsl(var(--danger));
+  border-color: rgba(255, 107, 107, 0.25);
+  box-shadow: 0 0 15px rgba(255, 107, 107, 0.1);
+}
+
+.shield-released {
+  background: rgba(0, 255, 102, 0.08);
+  color: #00ff66;
+  border-color: rgba(0, 255, 102, 0.25);
+  box-shadow: 0 0 15px rgba(0, 255, 102, 0.15);
+}
+
+.shield-inactive {
+  background: rgba(255, 255, 255, 0.04);
+  color: hsl(var(--text-muted));
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Animations for shield states */
+.animate-pulse-red {
+  animation: pulseRed 2s infinite alternate ease-in-out;
+}
+
+.animate-glow-green {
+  animation: glowGreen 2s infinite alternate ease-in-out;
+}
+
+@keyframes pulseRed {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 107, 107, 0.08);
+    border-color: rgba(255, 107, 107, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.25);
+    border-color: hsl(var(--danger));
+  }
+}
+
+@keyframes glowGreen {
+  0% {
+    box-shadow: 0 0 10px rgba(0, 255, 102, 0.1);
+    border-color: rgba(0, 255, 102, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(0, 255, 102, 0.35);
+    border-color: #00ff66;
+  }
+}
+
+.plm-panel-content {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1100px) {
+  .plm-panel-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plm-status-card, .plm-action-card {
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.plm-meta-data {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  color: hsl(var(--text-secondary));
+}
+
+.plm-meta-data strong {
+  color: #fff;
+}
+
+.plm-directives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  overflow-y: auto;
+  max-height: 180px;
+  flex-grow: 1;
+  padding-right: 0.3rem;
+}
+
+.directive-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  color: hsl(var(--text-secondary));
+  line-height: 1.4;
+}
+
+.directive-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--danger));
+  box-shadow: 0 0 8px hsl(var(--danger));
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.plm-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 2.2rem 1rem;
+  color: hsl(var(--success));
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.45;
+  flex-grow: 1;
+}
+
+.plm-empty-state span {
+  color: hsl(var(--text-secondary));
+}

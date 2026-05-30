@@ -10,6 +10,15 @@ export default function App() {
   const [receipts, setReceipts] = useState<AuditReceipt[]>([]);
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   
+  // PLM Feedback & Gate Alignment States
+  const [plmState, setPlmState] = useState<any>(null);
+  const [feedbackRole, setFeedbackRole] = useState('Auditor');
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackSeverity, setFeedbackSeverity] = useState<'info' | 'warn' | 'critical'>('warn');
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [alignJustification, setAlignJustification] = useState('');
+  const [alignLoading, setAlignLoading] = useState(false);
+  
   // OIDC/JWT Authentication States
   const [authToken, setAuthToken] = useState<string | null>(localStorage.getItem('veritas_jwt') || null);
   const [authRole, setAuthRole] = useState<'developer' | 'admin' | 'auditor' | 'unauthenticated'>(
@@ -62,15 +71,17 @@ export default function App() {
   // Fetch all data from backend
   const fetchData = useCallback(async () => {
     try {
-      const [txRes, receiptsRes, findingsRes] = await Promise.all([
+      const [txRes, receiptsRes, findingsRes, plmRes] = await Promise.all([
         fetch(`${API_BASE}/transactions`, { headers: getHeaders() }),
         fetch(`${API_BASE}/receipts`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/findings`, { headers: getHeaders() })
+        fetch(`${API_BASE}/findings`, { headers: getHeaders() }),
+        fetch(`${API_BASE}/plm/state`, { headers: getHeaders() })
       ]);
 
       if (txRes.ok) setTransactions(await txRes.json());
       if (receiptsRes.ok) setReceipts(await receiptsRes.json());
       if (findingsRes.ok) setFindings(await findingsRes.json());
+      if (plmRes.ok) setPlmState(await plmRes.json());
     } catch (e) {
       console.error('Failed to fetch data from security gateway', e);
     }
@@ -128,6 +139,7 @@ export default function App() {
     setTransactions([]);
     setReceipts([]);
     setFindings([]);
+    setPlmState(null);
     
     setConsoleLines(prev => [
       ...prev,
@@ -191,6 +203,81 @@ export default function App() {
       alert('Failed to register transaction. Secure Gateway may be offline.');
     } finally {
       setTxLoading(false);
+    }
+  };
+
+  // Submit Feedback
+  const handleLogFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackComment.trim()) return;
+
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/plm/feedback`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          role: feedbackRole,
+          comment: feedbackComment,
+          severity: feedbackSeverity
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const loggedComment = feedbackComment;
+        setFeedbackComment('');
+        fetchData();
+        setConsoleLines(prev => [
+          ...prev,
+          `⚠️ [PLM] Active Feedback Logged: [${feedbackSeverity.toUpperCase()}] from ${feedbackRole}: "${loggedComment}"`,
+          data.aligned ? `✅ [GATE] Gate remains aligned (Info severity).` : `🚨 [GATE] GATE LOCKED! Code commits are forbidden until aligned.`
+        ]);
+      } else {
+        const err = await res.json();
+        alert(`Failed to log feedback: ${err.error}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Failed to connect to Secure Gateway.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  // Align Feedback / Release Gate
+  const handleAlignFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alignJustification.trim()) return;
+
+    setAlignLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/plm/feedback-align`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          requirementId: plmState?.activeRequirementId || 'REQ-101',
+          justification: alignJustification
+        })
+      });
+
+      if (res.ok) {
+        setAlignJustification('');
+        fetchData();
+        setConsoleLines(prev => [
+          ...prev,
+          `✅ [PLM] Alignment report submitted successfully for Requirement: ${plmState?.activeRequirementId || 'REQ-101'}`,
+          `🛡️ [GATE] GATE RELEASED! Code commits are now authorized.`
+        ]);
+      } else {
+        const err = await res.json();
+        alert(`Failed to align feedback: ${err.error}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Failed to connect to Secure Gateway.');
+    } finally {
+      setAlignLoading(false);
     }
   };
 
@@ -742,6 +829,177 @@ export default function App() {
               </button>
             </>
           )}
+        </div>
+      </section>
+
+      {/* Phase 1: Visual PLM Adaptive Governance Panel */}
+      <section className="glass-panel plm-governance-panel" style={{ marginTop: '2rem' }}>
+        <div className="plm-panel-header">
+          <div className="plm-header-left">
+            <div className="plm-icon-container">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                PLM Adaptive Governance Panel
+              </h3>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
+                Stateful gatekeeping for AI agents. Formulate scenario trade-offs and align runtime directives.
+              </p>
+            </div>
+          </div>
+
+          {/* Gating Shield Indicator Widget */}
+          <div className="plm-shield-wrapper">
+            {plmState ? (
+              plmState.activeDirectives && plmState.activeDirectives.length > 0 && !plmState.feedbackAligned ? (
+                <div className="plm-shield shield-locked animate-pulse-red">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>GATE LOCKED</span>
+                </div>
+              ) : (
+                <div className="plm-shield shield-released animate-glow-green">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="m9 11 2 2 4-4"/>
+                  </svg>
+                  <span>GATE RELEASED</span>
+                </div>
+              )
+            ) : (
+              <div className="plm-shield shield-inactive">
+                <span>CONNECTING GATEWAY</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="plm-panel-content">
+          {/* Active Directives Checklist & State Display */}
+          <div className="plm-status-card">
+            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+              Active PLM Directives
+            </h4>
+            <div className="plm-meta-data">
+              <span>Active Requirement ID: <strong>{plmState?.activeRequirementId || 'None'}</strong></span>
+              <span>Total Directives: <strong>{plmState?.activeDirectives?.length || 0} Unaligned</strong></span>
+            </div>
+
+            <div className="plm-directives-list">
+              {plmState?.activeDirectives && plmState.activeDirectives.length > 0 ? (
+                plmState.activeDirectives.map((d: string, idx: number) => (
+                  <div className="directive-item" key={idx}>
+                    <div className="directive-bullet animate-pulse-red"></div>
+                    <span className="directive-text">{d}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="plm-empty-state">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="m9 11 2 2 4-4"/>
+                  </svg>
+                  <span>Zero active compliance warnings. Commit pipeline fully unlocked.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Form 1: Log User Feedback */}
+          <div className="plm-action-card">
+            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+              Log System / Stakeholder Feedback
+            </h4>
+            <form onSubmit={handleLogFeedback}>
+              <div className="form-row" style={{ gap: '0.8rem', marginBottom: '0.8rem' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label htmlFor="fbRole">Role Source</label>
+                  <select 
+                    id="fbRole" 
+                    className="form-control"
+                    value={feedbackRole}
+                    onChange={e => setFeedbackRole(e.target.value)}
+                  >
+                    <option value="Auditor">Auditor (Security)</option>
+                    <option value="SRE/DevOps">SRE/DevOps</option>
+                    <option value="Product Owner">Product Owner</option>
+                    <option value="Lead Architect">Lead Architect</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label htmlFor="fbSeverity">Severity Level</label>
+                  <select 
+                    id="fbSeverity" 
+                    className="form-control"
+                    value={feedbackSeverity}
+                    onChange={e => setFeedbackSeverity(e.target.value as any)}
+                  >
+                    <option value="info">Info (Non-Blocking)</option>
+                    <option value="warn">Warning (Gating)</option>
+                    <option value="critical">Critical (Gating)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '0.8rem' }}>
+                <label htmlFor="fbComment">Directives & Performance Comments</label>
+                <input 
+                  type="text" 
+                  id="fbComment" 
+                  className="form-control" 
+                  placeholder="e.g. Optimize prisma queries due to memory overhead"
+                  value={feedbackComment}
+                  onChange={e => setFeedbackComment(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-secondary" style={{ width: '100%' }} disabled={feedbackLoading || authRole === 'unauthenticated'}>
+                {feedbackLoading ? 'Logging Directives...' : 'Submit Feedback to Secure Gateway'}
+              </button>
+            </form>
+          </div>
+
+          {/* Form 2: Align Gate / Resolve Trade-offs */}
+          <div className="plm-action-card">
+            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+              Resolve Scenario Trade-offs & Align Gate
+            </h4>
+            <form onSubmit={handleAlignFeedback}>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label>Requirement ID Target</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={plmState?.activeRequirementId || 'REQ-101'} 
+                  disabled 
+                  style={{ opacity: 0.6 }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '0.8rem' }}>
+                <label htmlFor="alignJust">Alignment Justification & Options Selection</label>
+                <textarea 
+                  id="alignJust" 
+                  className="form-control" 
+                  placeholder="e.g. Aligned Option A (relational normalization) to minimize query latency..."
+                  value={alignJustification}
+                  onChange={e => setAlignJustification(e.target.value)}
+                  required
+                  style={{ height: '3.6rem', resize: 'none' }}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={alignLoading || authRole === 'unauthenticated'}>
+                {alignLoading ? 'Aligning Gate...' : 'Release Gate / Confirm Alignment'}
+              </button>
+            </form>
+          </div>
         </div>
       </section>
 
