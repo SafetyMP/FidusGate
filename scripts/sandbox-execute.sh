@@ -56,6 +56,15 @@ fi
 TEMP_PATCH="/tmp/agent-diff-$(date +%s).patch"
 CONTAINER_NAME="agent-sandbox-$(date +%s)"
 
+# Recommendation #4: MicroVM Sandbox Isolation (gVisor runsc detection)
+RUNTIME_FLAG=""
+if docker info 2>/dev/null | grep -qi "runsc"; then
+    echo "🛡️  gVisor (runsc) secure runtime detected! Enforcing microVM guest-kernel isolation."
+    RUNTIME_FLAG="--runtime runsc"
+else
+    echo "⚠️  gVisor (runsc) runtime not registered with Docker. Falling back to standard container namespaces."
+fi
+
 # Run compilation/tests inside isolated container
 # Mounts the target directory read-write, isolates network unless needed
 USER_FLAG=""
@@ -64,6 +73,7 @@ if [ -n "$RUN_USER" ]; then
 fi
 
 docker run --name "$CONTAINER_NAME" \
+  $RUNTIME_FLAG \
   -v "$MOUNT_DIR:/workspace" \
   -w /workspace \
   --network none \

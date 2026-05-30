@@ -9,9 +9,11 @@
     "dev": "tsc -w"
   },
   "dependencies": {
+    "@prisma/client": "^5.20.0",
     "@veritas/core-types": "1.0.0"
   },
   "devDependencies": {
+    "prisma": "^5.20.0",
     "typescript": "^5.4.5"
   }
 }

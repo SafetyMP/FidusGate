@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { PrismaClient } from '@prisma/client';
 import { Transaction, AuditReceipt, SecurityFinding } from '@veritas/core-types';
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -105,8 +106,27 @@ const INITIAL_RECEIPTS: AuditReceipt[] = [
 ];
 
 export class VeritasDatabase {
+  private prisma: PrismaClient | null = null;
+  private usePostgres = false;
+
   constructor() {
     this.ensureInitialized();
+    this.initPrisma();
+  }
+
+  private initPrisma() {
+    if (process.env.DATABASE_URL) {
+      try {
+        this.prisma = new PrismaClient();
+        this.usePostgres = true;
+        console.log('📡 VeritasDatabase: Relational PostgreSQL mode enabled via Prisma ORM.');
+      } catch (e: any) {
+        console.warn('⚠️  VeritasDatabase: Failed to initialize Prisma client, falling back to JSON mock files:', e.message);
+        this.usePostgres = false;
+      }
+    } else {
+      console.log('💾 VeritasDatabase: Running in zero-dependency local JSON file store mode.');
+    }
   }
 
   private ensureInitialized() {
@@ -127,7 +147,10 @@ export class VeritasDatabase {
     }
   }
 
-  public getTransactions(): Transaction[] {
+  // ==========================================
+  // Transactions Management
+  // ==========================================
+  private getTransactionsJson(): Transaction[] {
     this.ensureInitialized();
     try {
       const data = fs.readFileSync(TX_FILE, 'utf-8');
@@ -137,14 +160,59 @@ export class VeritasDatabase {
     }
   }
 
-  public addTransaction(tx: Transaction): void {
-    this.ensureInitialized();
-    const list = this.getTransactions();
-    list.unshift(tx); // Add new at the beginning
+  public async getTransactions(): Promise<Transaction[]> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const txs = await this.prisma.transaction.findMany({
+          orderBy: { timestamp: 'desc' }
+        });
+        return txs.map(t => ({
+          id: t.id,
+          timestamp: t.timestamp.toISOString(),
+          sender: t.sender,
+          recipient: t.recipient,
+          amount: t.amount,
+          currency: t.currency,
+          status: t.status as any,
+          maskedPii: t.maskedPii
+        }));
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Transaction query failed, falling back to JSON storage:', err.message);
+      }
+    }
+    return this.getTransactionsJson();
+  }
+
+  public async addTransaction(tx: Transaction): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.transaction.create({
+          data: {
+            id: tx.id,
+            timestamp: new Date(tx.timestamp),
+            sender: tx.sender,
+            recipient: tx.recipient,
+            amount: tx.amount,
+            currency: tx.currency,
+            status: tx.status,
+            maskedPii: tx.maskedPii
+          }
+        });
+        return;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Transaction insertion failed, falling back to JSON storage:', err.message);
+      }
+    }
+    
+    const list = this.getTransactionsJson();
+    list.unshift(tx);
     fs.writeFileSync(TX_FILE, JSON.stringify(list, null, 2), 'utf-8');
   }
 
-  public getAuditReceipts(): AuditReceipt[] {
+  // ==========================================
+  // Signed Receipts Management
+  // ==========================================
+  private getAuditReceiptsJson(): AuditReceipt[] {
     this.ensureInitialized();
     try {
       const data = fs.readFileSync(RECEIPTS_FILE, 'utf-8');
@@ -154,14 +222,69 @@ export class VeritasDatabase {
     }
   }
 
-  public addAuditReceipt(receipt: AuditReceipt): void {
-    this.ensureInitialized();
-    const list = this.getAuditReceipts();
+  public async getAuditReceipts(): Promise<AuditReceipt[]> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const receipts = await this.prisma.auditReceipt.findMany({
+          orderBy: { issued_at: 'desc' }
+        });
+        return receipts.map(r => ({
+          payload: {
+            type: r.type,
+            tool_name: r.tool_name,
+            decision: r.decision as any,
+            policy_digest: r.policy_digest,
+            issued_at: r.issued_at.toISOString(),
+            issuer_id: r.issuer_id,
+            reason: r.reason || undefined,
+            claimed_issuer_tier: r.claimed_issuer_tier || undefined
+          },
+          signature: {
+            alg: r.signature_alg as any,
+            kid: r.issuer_id,
+            sig: r.signature_sig
+          }
+        }));
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Receipt query failed, falling back to JSON storage:', err.message);
+      }
+    }
+    return this.getAuditReceiptsJson();
+  }
+
+  public async addAuditReceipt(receipt: AuditReceipt): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.auditReceipt.create({
+          data: {
+            id: `rc_${Math.floor(100000 + Math.random() * 900000)}`,
+            type: receipt.payload.type,
+            tool_name: receipt.payload.tool_name,
+            decision: receipt.payload.decision,
+            policy_digest: receipt.payload.policy_digest,
+            issued_at: new Date(receipt.payload.issued_at),
+            issuer_id: receipt.payload.issuer_id,
+            reason: receipt.payload.reason || null,
+            claimed_issuer_tier: receipt.payload.claimed_issuer_tier || null,
+            signature_alg: receipt.signature.alg,
+            signature_sig: receipt.signature.sig
+          }
+        });
+        return;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Receipt insertion failed, falling back to JSON storage:', err.message);
+      }
+    }
+    
+    const list = this.getAuditReceiptsJson();
     list.unshift(receipt);
     fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
   }
 
-  public getFindings(): SecurityFinding[] {
+  // ==========================================
+  // Security Findings Management
+  // ==========================================
+  private getFindingsJson(): SecurityFinding[] {
     this.ensureInitialized();
     try {
       const data = fs.readFileSync(FINDINGS_FILE, 'utf-8');
@@ -171,19 +294,102 @@ export class VeritasDatabase {
     }
   }
 
-  public setFindings(findings: SecurityFinding[]): void {
+  public async getFindings(): Promise<SecurityFinding[]> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const findings = await this.prisma.securityFinding.findMany();
+        return findings.map(f => ({
+          vector: f.vector,
+          title: f.title,
+          severity: f.severity as any,
+          file: f.file,
+          step: f.step,
+          impact: f.impact,
+          evidence: f.evidence,
+          dataFlow: f.dataFlow,
+          remediation: f.remediation,
+          amplifiedBy: f.amplifiedBy
+        }));
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Findings query failed, falling back to JSON storage:', err.message);
+      }
+    }
+    return this.getFindingsJson();
+  }
+
+  public async setFindings(findings: SecurityFinding[]): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        // Transactions batch clear and insert
+        await this.prisma.$transaction([
+          this.prisma.securityFinding.deleteMany(),
+          ...findings.map(f => this.prisma!.securityFinding.create({
+            data: {
+              vector: f.vector,
+              title: f.title,
+              severity: f.severity,
+              file: f.file,
+              step: f.step,
+              impact: f.impact,
+              evidence: f.evidence,
+              dataFlow: f.dataFlow,
+              remediation: f.remediation,
+              amplifiedBy: f.amplifiedBy
+            }
+          }))
+        ]);
+        return;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Findings batch set failed, falling back to JSON storage:', err.message);
+      }
+    }
+    
     this.ensureInitialized();
     fs.writeFileSync(FINDINGS_FILE, JSON.stringify(findings, null, 2), 'utf-8');
   }
 
-  public addFinding(finding: SecurityFinding): void {
-    this.ensureInitialized();
-    const list = this.getFindings();
+  public async addFinding(finding: SecurityFinding): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.securityFinding.create({
+          data: {
+            vector: finding.vector,
+            title: finding.title,
+            severity: finding.severity,
+            file: finding.file,
+            step: finding.step,
+            impact: finding.impact,
+            evidence: finding.evidence,
+            dataFlow: finding.dataFlow,
+            remediation: finding.remediation,
+            amplifiedBy: finding.amplifiedBy
+          }
+        });
+        return;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Finding insertion failed, falling back to JSON storage:', err.message);
+      }
+    }
+    
+    const list = this.getFindingsJson();
     list.push(finding);
     fs.writeFileSync(FINDINGS_FILE, JSON.stringify(list, null, 2), 'utf-8');
   }
 
-  public clearDatabase(): void {
+  public async clearDatabase(): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.$transaction([
+          this.prisma.transaction.deleteMany(),
+          this.prisma.auditReceipt.deleteMany(),
+          this.prisma.securityFinding.deleteMany(),
+          this.prisma.logEntry.deleteMany()
+        ]);
+      } catch (err: any) {
+        console.warn('⚠️  Prisma Database clear failed, falling back to JSON storage:', err.message);
+      }
+    }
+    
     this.ensureInitialized();
     fs.writeFileSync(TX_FILE, JSON.stringify(INITIAL_TRANSACTIONS, null, 2), 'utf-8');
     fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(INITIAL_RECEIPTS, null, 2), 'utf-8');

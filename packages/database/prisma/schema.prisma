@@ -1,0 +1,54 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Transaction {
+  id        String   @id
+  timestamp DateTime @default(now())
+  sender    String
+  recipient String
+  amount    Float
+  currency  String
+  status    String   // 'pending' | 'completed' | 'failed' | 'flagged'
+  maskedPii Boolean  @default(false)
+}
+
+model AuditReceipt {
+  id                  String   @id
+  type                String   @default("protectmcp:decision")
+  tool_name           String
+  decision            String   // 'allow' | 'deny'
+  policy_digest       String
+  issued_at           DateTime @default(now())
+  issuer_id           String
+  reason              String?
+  claimed_issuer_tier Int?
+  signature_alg       String   @default("EdDSA")
+  signature_sig       String
+}
+
+model SecurityFinding {
+  vector      String   @id
+  title       String
+  severity    String   // 'High' | 'Medium' | 'Low' | 'Info'
+  file        String
+  step        String
+  impact      String
+  evidence    String
+  dataFlow    String[]
+  remediation String
+  amplifiedBy String[]
+}
+
+model LogEntry {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  level     String   // 'info' | 'warn' | 'error' | 'security'
+  message   String
+  metadata  Json?
+}

@@ -17,10 +17,108 @@ function log(level: 'info' | 'warn' | 'error' | 'security', message: string, met
   console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, meta ? JSON.stringify(meta) : '');
 }
 
-// 1. GET /api/transactions - Retrieve list of transactions
-app.get('/api/transactions', (req, res) => {
+// ==========================================
+// Recommendation #5: Real-time Incident Alerting
+// ==========================================
+async function dispatchWebhookAlert(type: 'blocked_action' | 'finding', data: any) {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url) return;
+  
   try {
-    const list = db.getTransactions();
+    let payload = {};
+    
+    if (type === 'blocked_action') {
+      const { receipt } = data;
+      payload = {
+        text: `🚨 *VeritasAudit Security Alert: Blocked AI Agent Action!*`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `🚨 *VeritasAudit Security Alert: Blocked AI Agent Action!*\nAn autonomous coding agent attempted to execute a high-risk tool call that was programmatically blocked by Cedar policy controls.`
+            }
+          },
+          {
+            type: "divider"
+          },
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*🔧 Tool Attempted:*\n\`${receipt.payload.tool_name}\`` },
+              { type: "mrkdwn", text: `*🛡️ Decision:*\n\`${receipt.payload.decision.toUpperCase()}\`` },
+              { type: "mrkdwn", text: `*🎖️ Risk Tier:*\n\`Tier ${receipt.payload.claimed_issuer_tier}\`` },
+              { type: "mrkdwn", text: `*✍️ Signed Issuer:*\n\`${receipt.payload.issuer_id}\`` }
+            ]
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*📋 Audit Reason:* ${receipt.payload.reason}`
+            }
+          }
+        ]
+      };
+    } else if (type === 'finding') {
+      const { finding } = data;
+      payload = {
+        text: `⚠️ *VeritasAudit Security Finding: CI Pipeline Vulnerability!*`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `⚠️ *VeritasAudit Security Finding: Pipeline Vulnerability Scanned!*\nThe static CI/CD workflow security auditor has detected a potential prompt injection vulnerability in your GitHub Actions configurations.`
+            }
+          },
+          {
+            type: "divider"
+          },
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*🎯 Vector ID:*\n\`${finding.vector}\`` },
+              { type: "mrkdwn", text: `*🔴 Severity:*\n*${finding.severity.toUpperCase()}*` },
+              { type: "mrkdwn", text: `*📂 Target File:*\n\`${finding.file}\`` },
+              { type: "mrkdwn", text: `*⚙️ Workflow Step:*\n\`${finding.step}\`` }
+            ]
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*💥 Critical Impact:* ${finding.impact}\n\n*🛡️ Recommended Remediation:* ${finding.remediation}`
+            }
+          }
+        ]
+      };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      log('info', `Security notification successfully dispatched to Slack webhook.`);
+    } else {
+      log('warn', `Slack webhook returned non-200 status: ${response.status}`);
+    }
+  } catch (err: any) {
+    log('error', `Failed to dispatch Slack webhook notification alert:`, err.message);
+  }
+}
+
+// ==========================================
+// REST API Routes
+// ==========================================
+
+// 1. GET /api/transactions - Retrieve list of transactions
+app.get('/api/transactions', async (req, res) => {
+  try {
+    const list = await db.getTransactions();
     res.json(list);
   } catch (error) {
     log('error', 'Failed to retrieve transactions', error);
@@ -30,7 +128,6 @@ app.get('/api/transactions', (req, res) => {
 
 // Helper to mask sensitive information (PII)
 function maskPII(text: string): string {
-  // Simple regex for email masking
   if (text.includes('@')) {
     const parts = text.split('@');
     const name = parts[0];
@@ -38,7 +135,6 @@ function maskPII(text: string): string {
     return `${name.substring(0, 1)}***@${domain.substring(0, 1)}***`;
   }
   
-  // Simple regex for names
   const words = text.split(' ');
   if (words.length > 1) {
     return words.map(w => `${w.substring(0, 1)}***`).join(' ');
@@ -48,7 +144,7 @@ function maskPII(text: string): string {
 }
 
 // 2. POST /api/transactions - Create a new transaction with automatic PII filtering
-app.post('/api/transactions', (req, res) => {
+app.post('/api/transactions', async (req, res) => {
   try {
     const { sender, recipient, amount, currency } = req.body;
     
@@ -57,7 +153,6 @@ app.post('/api/transactions', (req, res) => {
        return;
     }
     
-    // Automatic PII detection: Check if sender or recipient look like personal names or emails
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isSenderPii = emailRegex.test(sender) || sender.toLowerCase().includes(' wallet') || sender.split(' ').length > 2;
     const isRecipientPii = emailRegex.test(recipient) || recipient.toLowerCase().includes(' wallet') || recipient.split(' ').length > 2;
@@ -66,7 +161,6 @@ app.post('/api/transactions', (req, res) => {
     const processedSender = requiresMasking ? maskPII(sender) : sender;
     const processedRecipient = requiresMasking ? maskPII(recipient) : recipient;
     
-    // Detect potentially suspicious Tor IPs or names and flag them automatically
     const isSuspicious = sender.toLowerCase().includes('tor') || recipient.toLowerCase().includes('tor') || amount > 1000000;
     const status = isSuspicious ? 'flagged' : 'completed';
     
@@ -81,7 +175,7 @@ app.post('/api/transactions', (req, res) => {
       maskedPii: requiresMasking
     };
     
-    db.addTransaction(newTx);
+    await db.addTransaction(newTx);
     log('info', `Transaction registered successfully: ${newTx.id}`, { id: newTx.id, status });
     res.status(201).json(newTx);
   } catch (error) {
@@ -91,9 +185,9 @@ app.post('/api/transactions', (req, res) => {
 });
 
 // 3. GET /api/receipts - Retrieve list of signed audit receipts
-app.get('/api/receipts', (req, res) => {
+app.get('/api/receipts', async (req, res) => {
   try {
-    const receipts = db.getAuditReceipts();
+    const receipts = await db.getAuditReceipts();
     res.json(receipts);
   } catch (error) {
     log('error', 'Failed to retrieve audit receipts', error);
@@ -102,7 +196,7 @@ app.get('/api/receipts', (req, res) => {
 });
 
 // 4. POST /api/receipts - Verify and record an Ed25519 signed receipt
-app.post('/api/receipts', (req, res) => {
+app.post('/api/receipts', async (req, res) => {
   try {
     const receipt: AuditReceipt = req.body;
     const { payload, signature } = receipt;
@@ -112,19 +206,11 @@ app.post('/api/receipts', (req, res) => {
        return;
     }
     
-    // In our local governance system, protect-mcp uses the known signature keys configured in the system.
-    // The gateway validates the signature cryptographically to ensure it hasn't been tampered with.
-    // For local validation, we lookup the public key from the system config (or simulate it based on the kid).
-    // Let's retrieve the public key associated with the kid.
-    // We'll support two public keys: our main developer gateway key, and a general test key.
-    // Default test key is used if no public key is explicitly passed.
     const PUBLIC_KEY_MAP: Record<string, string> = {
       'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83'
     };
     
-    // Fallback: If not found, use signature.kid directly if it resembles a hex public key
     const publicKeyHex = PUBLIC_KEY_MAP[signature.kid] || signature.kid;
-    
     const isValid = verifyReceipt(receipt, publicKeyHex);
     
     if (!isValid) {
@@ -139,12 +225,17 @@ app.post('/api/receipts', (req, res) => {
        return;
     }
     
-    db.addAuditReceipt(receipt);
+    await db.addAuditReceipt(receipt);
     log('security', `Cryptographically verified receipt logged: ${payload.tool_name} -> ${payload.decision}`, {
       tool_name: payload.tool_name,
       decision: payload.decision,
       kid: signature.kid
     });
+    
+    // Slack Alert on Blocked Action
+    if (payload.decision === 'deny') {
+      dispatchWebhookAlert('blocked_action', { receipt });
+    }
     
     res.status(201).json({ message: 'Receipt verified and logged successfully', verified: true });
   } catch (error) {
@@ -179,9 +270,9 @@ app.post('/api/receipts/verify', (req, res) => {
 });
 
 // 5. GET /api/findings - Retrieve static analysis security findings
-app.get('/api/findings', (req, res) => {
+app.get('/api/findings', async (req, res) => {
   try {
-    const list = db.getFindings();
+    const list = await db.getFindings();
     res.json(list);
   } catch (error) {
     log('error', 'Failed to retrieve findings', error);
@@ -190,7 +281,7 @@ app.get('/api/findings', (req, res) => {
 });
 
 // 6. POST /api/findings - Push a set of static analysis findings (called by the auditor CI job)
-app.post('/api/findings', (req, res) => {
+app.post('/api/findings', async (req, res) => {
   try {
     const findings: SecurityFinding[] = req.body;
     if (!Array.isArray(findings)) {
@@ -198,8 +289,16 @@ app.post('/api/findings', (req, res) => {
        return;
     }
     
-    db.setFindings(findings);
+    await db.setFindings(findings);
     log('security', `CI Security Auditor reported ${findings.length} findings.`, { count: findings.length });
+    
+    // Slack Alert on Scanned Findings
+    findings.forEach(f => {
+      if (f.severity === 'High') {
+        dispatchWebhookAlert('finding', { finding: f });
+      }
+    });
+    
     res.json({ message: 'Findings updated successfully', count: findings.length });
   } catch (error) {
     log('error', 'Failed to update findings', error);
@@ -208,9 +307,9 @@ app.post('/api/findings', (req, res) => {
 });
 
 // 7. POST /api/reset - Clear database to initial state
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', async (req, res) => {
   try {
-    db.clearDatabase();
+    await db.clearDatabase();
     log('warn', 'Database reset to initial template state.');
     res.json({ message: 'Database reset successfully' });
   } catch (error) {
@@ -220,5 +319,5 @@ app.post('/api/reset', (req, res) => {
 });
 
 app.listen(port, () => {
-  log('info', `VeritasAudit Security Gateway API listening on port ${port}`);
+  log('info', `VeritasAudit Security Gateway API listening on Port ${port}`);
 });
