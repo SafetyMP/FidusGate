@@ -53,8 +53,8 @@ fi
 if [ $# -eq 0 ]; then
     # Default behavior is a dry-run check of the syntax and execution graph
     echo "ℹ️  No specific arguments provided. Performing a dry-run syntax check..."
-    echo "🚀 Executing: act --dry-run"
-    act --dry-run "${ARGS[@]}"
+    echo "🚀 Executing: act -n"
+    act -n "${ARGS[@]}"
 else
     echo "🚀 Executing: act $*"
     act "$@" "${ARGS[@]}"
