@@ -10,6 +10,14 @@ export default function App() {
   const [receipts, setReceipts] = useState<AuditReceipt[]>([]);
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   
+  // OIDC/JWT Authentication States
+  const [authToken, setAuthToken] = useState<string | null>(localStorage.getItem('veritas_jwt') || null);
+  const [authRole, setAuthRole] = useState<'developer' | 'admin' | 'auditor' | 'unauthenticated'>(
+    (localStorage.getItem('veritas_role') as any) || 'unauthenticated'
+  );
+  const [authEmail, setAuthEmail] = useState(localStorage.getItem('veritas_email') || 'admin@veritas.internal');
+  const [authLoading, setAuthLoading] = useState(false);
+
   // Form states
   const [txSender, setTxSender] = useState('');
   const [txRecipient, setTxRecipient] = useState('');
@@ -26,22 +34,31 @@ export default function App() {
     payload?: any;
   }>({ status: 'idle', message: '' });
 
-  // Simulated Console state
+  // Terminal Console state
   const [consoleLines, setConsoleLines] = useState<string[]>([
-    '🚀 VeritasAudit Unified Security Shell v1.0.0 initialized.',
+    '🚀 VeritasAudit Unified Security Shell v1.2.0 initialized.',
     '⚙️  Local environment verified. Docker daemon detected (Active).',
-    '🛡️  Cedar policy governance gateway online (Shadow Mode).',
-    '📡 Standing by for interactive commands. Type "help" to list workflows.'
+    '🛡️  Cedar policy governance gateway online (Dual-Mode active).',
+    '📡 Standing by for live sandbox command execution. Type "help" to list workflows.'
   ]);
   const [consoleInput, setConsoleInput] = useState('');
+
+  // Dynamically resolve request headers with JWT Bearer Token
+  const getHeaders = useCallback(() => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    return headers;
+  }, [authToken]);
 
   // Fetch all data from backend
   const fetchData = useCallback(async () => {
     try {
       const [txRes, receiptsRes, findingsRes] = await Promise.all([
-        fetch(`${API_BASE}/transactions`),
-        fetch(`${API_BASE}/receipts`),
-        fetch(`${API_BASE}/findings`)
+        fetch(`${API_BASE}/transactions`, { headers: getHeaders() }),
+        fetch(`${API_BASE}/receipts`, { headers: getHeaders() }),
+        fetch(`${API_BASE}/findings`, { headers: getHeaders() })
       ]);
 
       if (txRes.ok) setTransactions(await txRes.json());
@@ -50,13 +67,61 @@ export default function App() {
     } catch (e) {
       console.error('Failed to fetch data from security gateway', e);
     }
-  }, []);
+  }, [getHeaders]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 4000); // Poll every 4s
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // OIDC Federated Identity Login Handler
+  const handleOidcLogin = async (selectedRole: 'developer' | 'admin' | 'auditor') => {
+    setAuthLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: selectedRole, email: authEmail })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setAuthToken(data.token);
+        setAuthRole(data.role);
+        localStorage.setItem('veritas_jwt', data.token);
+        localStorage.setItem('veritas_role', data.role);
+        localStorage.setItem('veritas_email', data.email);
+        
+        setConsoleLines(prev => [
+          ...prev,
+          `🔑 [OIDC] Successfully authenticated via federated identity provider.`,
+          `🧑‍💻 User: ${data.email} | Active Role: ${data.role.toUpperCase()}`,
+          `🎫 JWT bearer token mounted to request headers. Security gateways unlocked.`
+        ]);
+      } else {
+        alert('Authentication failed. OIDC provider rejected transaction.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to connect to authentication server.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleOidcLogout = () => {
+    setAuthToken(null);
+    setAuthRole('unauthenticated');
+    localStorage.removeItem('veritas_jwt');
+    localStorage.removeItem('veritas_role');
+    localStorage.removeItem('veritas_email');
+    
+    setConsoleLines(prev => [
+      ...prev,
+      `🔓 [OIDC] Session disconnected. Authorization headers flushed.`
+    ]);
+  };
 
   // Form submission: Create Transaction
   const handleCreateTransaction = async (e: React.FormEvent) => {
@@ -69,7 +134,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/transactions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           sender: txSender,
           recipient: txRecipient,
@@ -107,7 +172,7 @@ export default function App() {
         setTxAmount('');
       } else {
         const err = await res.json();
-        alert(`Error: ${err.error}`);
+        alert(`Authentication/Privilege Error: ${err.error}`);
       }
     } catch (error) {
       console.error(error);
@@ -117,7 +182,7 @@ export default function App() {
     }
   };
 
-  // Standalone Verifier tool (Delegates to Gateway API)
+  // Standalone Verifier tool
   const handleVerifyReceipt = async () => {
     setVerificationResult({ status: 'idle', message: '' });
     if (!receiptInput.trim()) {
@@ -139,7 +204,7 @@ export default function App() {
 
       const res = await fetch(`${API_BASE}/receipts/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(receipt)
       });
 
@@ -148,7 +213,7 @@ export default function App() {
         if (data.verified) {
           setVerificationResult({
             status: 'valid',
-            message: '✓ VALID SIGNATURE: Cryptographic integrity confirmed. The audit receipt has NOT been altered since its issuance by protect-mcp.',
+            message: '✓ VALID SIGNATURE: Cryptographic integrity confirmed. The audit receipt has NOT been altered since its issuance.',
             payload
           });
         } else {
@@ -178,26 +243,72 @@ export default function App() {
   const handleResetDatabase = async () => {
     if (!confirm('Are you sure you want to reset all transactions, receipts, and findings to the original template status?')) return;
     try {
-      const res = await fetch(`${API_BASE}/reset`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/reset`, { 
+        method: 'POST',
+        headers: getHeaders()
+      });
+      
       if (res.ok) {
         fetchData();
         setConsoleLines(prev => [
           ...prev,
           '⚠️  [DATABASE] Security Gateway database reset to initial seed data.'
         ]);
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  // Simulated Console Submit
+  // Live Unprivileged Sandbox Command Execution API Caller
+  const executeSandboxCommand = async (fullCmd: string) => {
+    setConsoleLines(prev => [
+      ...prev,
+      `🛡️ [SANDBOX] Spawning unprivileged Docker/gVisor microVM sandbox container...`
+    ]);
+    
+    try {
+      const res = await fetch(`${API_BASE}/sandbox/execute`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ command: fullCmd })
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        const logLines = data.logs.split('\n');
+        setConsoleLines(prev => [
+          ...prev,
+          ...logLines,
+          `✅ [SANDBOX] Command completed successfully with exit code: 0.`
+        ]);
+      } else {
+        const logLines = (data.logs || data.error || 'Execution failed').split('\n');
+        setConsoleLines(prev => [
+          ...prev,
+          ...logLines,
+          `❌ [SANDBOX] Sandboxed command execution failed.`
+        ]);
+      }
+    } catch (err: any) {
+      setConsoleLines(prev => [
+        ...prev,
+        `❌ [SANDBOX] Network error connecting to execution API: ${err.message}`
+      ]);
+    }
+  };
+
+  // Live Console Submit Handler
   const handleConsoleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consoleInput.trim()) return;
 
-    const cmd = consoleInput.trim().toLowerCase();
-    setConsoleLines(prev => [...prev, `$ ${consoleInput}`]);
+    const fullCmd = consoleInput.trim();
+    const cmd = fullCmd.toLowerCase().trim();
+    setConsoleLines(prev => [...prev, `veritas-sandbox $ ${fullCmd}`]);
     setConsoleInput('');
 
     if (cmd === 'help') {
@@ -206,9 +317,11 @@ export default function App() {
         'Available commands:',
         '  help              - List available console commands',
         '  clear             - Clear the command line logs',
-        '  npm run audit     - Simulate running the agentic-actions-auditor scanning tool',
-        '  bash ci-verify.sh - Simulate offline local CI/CD workflow execution using act',
-        '  sys-status        - Print hardware and sandbox status details'
+        '  sys-status        - Print hardware and sandbox status details',
+        '  npm run build     - Compile and bundle all monorepo workspaces in container',
+        '  npm run test      - Verify workspaces compile checks via Turborepo',
+        '  bash scripts/bootstrap.sh - Bootstrap repositories git-hooks and toolchains',
+        '  bash scripts/ham-drift-watcher.sh - Run active context drift watchdog'
       ]);
     } else if (cmd === 'clear') {
       setConsoleLines([]);
@@ -216,73 +329,32 @@ export default function App() {
       setConsoleLines(prev => [
         ...prev,
         '⚙️  [SYSTEM] Status: ONLINE',
-        '📦 Package Manager: pnpm workspaces (active)',
+        '📦 Package Manager: npm workspaces (active)',
         '🐳 Sandbox Engine: Docker Desktop (Running)',
-        '🔒 Governance Engine: Cedar protect-mcp (Active, Shadow Mode)',
-        '🔑 Active Signature Key ID: sb:issuer:de073ae64e43'
+        '🔒 Governance Engine: Cedar protect-mcp (Active, Dual-Mode active)',
+        `🧑‍💻 Session Role: ${authRole.toUpperCase()}`,
+        `🎫 Authorized JWT: ${authToken ? 'ACTIVE (OIDC Mounted)' : 'NONE (Guest Mode)'}`
       ]);
-    } else if (cmd === 'npm run audit') {
-      setConsoleLines(prev => [...prev, '🔍 Initiating static scan on GitHub workflow files...', '📡 Parsing workspace workflows...']);
-      
-      setTimeout(async () => {
-        // Trigger simulated scan by making a mock push of findings if not already populated
-        try {
-          const mockFindings: SecurityFinding[] = [
-            {
-              vector: 'A',
-              title: 'Env Var Intermediary (Vulnerable)',
-              severity: 'High',
-              file: '.github/workflows/ci-agent-pipeline.yml',
-              step: 'jobs.code-review.steps[2] line 18',
-              impact: 'Allows any malicious PR contributor to execute arbitrary shell commands in CI via indirect prompt injection.',
-              evidence: 'env:\n  PR_TITLE: ${{ github.event.pull_request.title }}\nprompt: "Review code changes for PR: $PR_TITLE"',
-              dataFlow: [
-                'Attacker creates a pull request with prompt injection code in the title.',
-                'The pull_request_target trigger runs the workflow in the base branch context with secrets access.',
-                'The workflow loads the untrusted title into the env block at line 18.',
-                'At runtime, the AI agent reads the environment variable, interprets the injected command as an instruction, and executes it.'
-              ],
-              remediation: 'Do not pass dynamic event variables directly to environment blocks consumed by AI prompts. Use strict string sanitization filters or pull named fields from authenticated metadata sources.'
-            }
-          ];
-          
-          await fetch(`${API_BASE}/findings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mockFindings)
-          });
-          fetchData();
-          
-          setConsoleLines(prev => [
-            ...prev,
-            '⚠️  [AUDIT ALERT] Static analysis finished. Found 1 HIGH vulnerability in pipeline workflows!',
-            '⚠️  [AUDIT] Injected vector: Vector A (Env Var Intermediary) detected in ci-agent-pipeline.yml.',
-            'ℹ️  Remediation instructions forwarded to the security dashboard.'
-          ]);
-        } catch (e) {
-          console.error(e);
-        }
-      }, 1000);
-    } else if (cmd === 'bash ci-verify.sh') {
-      setConsoleLines(prev => [
-        ...prev,
-        '🐳 [DOCKER] Launching local act CI runner...',
-        '🐳 [DOCKER] Emulating trigger pull_request_target on branch main...',
-        '🐳 [DOCKER] Job [security-audit] started...'
-      ]);
-
-      setTimeout(() => {
+    } else if (
+      cmd.startsWith('npm run build') || 
+      cmd.startsWith('npm run test') || 
+      cmd.startsWith('bash scripts/bootstrap.sh') ||
+      cmd.startsWith('bash scripts/ham-drift-watcher.sh') ||
+      cmd.startsWith('node packages/crypto-utils')
+    ) {
+      if (authRole !== 'admin') {
         setConsoleLines(prev => [
           ...prev,
-          '🐳 [DOCKER] Job [security-audit] completed successfully. Status: GREEN.',
-          '🐳 [DOCKER] Sandbox execute returned exit code: 0.',
-          '✅ Offline local verification completed.'
+          `❌ SECURITY ERROR: Administrative credentials required to spawn isolated shell runtimes!`,
+          `👉 Recommendation: Please authenticate as 'Administrator' using the top OIDC controller widget.`
         ]);
-      }, 1500);
+        return;
+      }
+      await executeSandboxCommand(fullCmd);
     } else {
       setConsoleLines(prev => [
         ...prev,
-        `❌ Command not recognized: "${cmd}". Type "help" for a list of commands.`
+        `❌ Command not permitted in sandbox: "${fullCmd}". Type "help" to view allowed workspace playbooks.`
       ]);
     }
   };
@@ -303,6 +375,51 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* OIDC Session Controller */}
+      <section className="glass-panel" style={{ marginBottom: '1.5rem', background: 'rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '0.2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            <span style={{ fontSize: '1.2rem' }}>🔑</span>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>OIDC Federated Identity Provider (JWT Simulator)</h3>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
+                Select a corporate identity role to obtain a signed JWT token and mount bearer auth gates.
+              </p>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+            {authRole === 'unauthenticated' ? (
+              <>
+                <input 
+                  type="email" 
+                  className="form-control" 
+                  style={{ width: '200px', height: '34px', fontSize: '0.8rem', background: '#000', border: '1px solid #333' }}
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder="admin@veritas.internal"
+                />
+                <button className="btn btn-secondary" onClick={() => handleOidcLogin('developer')} disabled={authLoading}>
+                  Login as Developer
+                </button>
+                <button className="btn btn-primary" onClick={() => handleOidcLogin('admin')} disabled={authLoading}>
+                  Login as Administrator
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>
+                  Active Session: <strong style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))' }}>{authRole.toUpperCase()}</strong> | User: <strong>{authEmail}</strong>
+                </span>
+                <button className="btn btn-secondary" onClick={handleOidcLogout}>
+                  Disconnect Session
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Main Grid Layout */}
       <div className="dashboard-grid">
@@ -432,7 +549,7 @@ export default function App() {
                     {transactions.length === 0 && (
                       <tr>
                         <td colSpan={5} style={{ textAlign: 'center', color: 'hsl(var(--text-secondary))', padding: '2rem' }}>
-                          No transaction records registered. Submit a transaction above!
+                          No transaction records registered or access unauthorized. Please log in!
                         </td>
                       </tr>
                     )}
@@ -472,7 +589,7 @@ export default function App() {
                 ))}
                 {receipts.length === 0 && (
                   <p style={{ color: 'hsl(var(--text-secondary))', textAlign: 'center', padding: '2rem' }}>
-                    No policy receipts logged.
+                    No policy receipts logged or access unauthorized.
                   </p>
                 )}
               </div>
@@ -544,7 +661,7 @@ export default function App() {
                   <div style={{ textAlign: 'center', padding: '2rem' }}>
                     <p style={{ color: 'hsl(var(--success))', fontWeight: 'bold' }}>✓ Pipeline Secure</p>
                     <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', marginTop: '0.3rem' }}>
-                      No workflow vulnerabilities detected. Type "npm run audit" in the secure console below to trigger a static analysis check!
+                      No workflow vulnerabilities detected or access unauthorized.
                     </p>
                   </div>
                 )}
@@ -555,30 +672,31 @@ export default function App() {
         </div>
       </div>
 
-      {/* Embedded Secure Console Shell Simulation */}
+      {/* Embedded Secure Console Shell */}
       <section className="glass-panel" style={{ marginTop: '1.5rem' }}>
         <div className="card-header">
-          <h2 className="card-title" style={{ color: '#00ff00' }}>💻 VeritasAudit Security Shell Console</h2>
+          <h2 className="card-title" style={{ color: '#00ff00' }}>💻 VeritasAudit Secure Sandbox Terminal</h2>
           <span className="status-badge" style={{ background: 'rgba(0,255,0,0.05)', color: '#00ff00', border: '1px solid rgba(0,255,0,0.1)' }}>
-            LOCAL DOCKER ACTIVE
+            LIVE VM RUNNER ACTIVE
           </span>
         </div>
         <div className="card-body">
-          <div className="console-box">
+          <div className="console-box" style={{ background: '#050505', border: '1px solid #111' }}>
             {consoleLines.map((line, idx) => (
-              <div className="console-line" key={idx}>
+              <div className="console-line" key={idx} style={{ color: line.startsWith('❌') ? 'hsl(var(--destructive))' : line.startsWith(' veritas-sandbox $') ? '#ffaa00' : '#ccc' }}>
                 {line}
               </div>
             ))}
           </div>
           <form onSubmit={handleConsoleSubmit} className="console-input">
-            <span className="console-prompt">veritas-sandbox $</span>
+            <span className="console-prompt" style={{ color: '#00ff00' }}>veritas-sandbox $</span>
             <input 
               type="text" 
               className="console-field" 
-              placeholder='Type "help" to list available commands...'
+              placeholder='Type "help" to view allowed workspace playbooks...'
               value={consoleInput}
               onChange={e => setConsoleInput(e.target.value)}
+              style={{ color: '#fff' }}
             />
           </form>
         </div>

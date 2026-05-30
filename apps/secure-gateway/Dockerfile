@@ -28,6 +28,7 @@ COPY packages/crypto-utils/tsconfig.json ./packages/crypto-utils/
 COPY packages/database/src ./packages/database/src
 COPY packages/database/tsconfig.json ./packages/database/
 COPY packages/database/data ./packages/database/data
+COPY packages/database/prisma ./packages/database/prisma
 
 COPY apps/secure-gateway/src ./apps/secure-gateway/src
 COPY apps/secure-gateway/tsconfig.json ./apps/secure-gateway/
