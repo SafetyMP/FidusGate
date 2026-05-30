@@ -1,5 +1,15 @@
 [
   {
+    "id": "tx_756700",
+    "timestamp": "2026-05-30T02:17:00.843Z",
+    "sender": "s***@a***",
+    "recipient": "M*** I*** N*** 0***",
+    "amount": 7500,
+    "currency": "USD",
+    "status": "completed",
+    "maskedPii": true
+  },
+  {
     "id": "tx_757612",
     "timestamp": "2026-05-29T02:07:18.952Z",
     "sender": "s***@a***",

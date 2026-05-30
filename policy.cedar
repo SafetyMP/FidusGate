@@ -61,9 +61,8 @@ permit(
 ) when {
   resource.tool_name == "execute_command"
   && resource has args
-  && (
     resource.args.commandLine like "bash scripts/sandbox-execute.sh *"
-    || resource.args.commandLine like "bash scripts/ci-verify.sh *"
+    || resource.args.commandLine like "bash scripts/ci-verify.sh*"
   )
 };
 

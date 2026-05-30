@@ -1,6 +1,6 @@
 {
   "policy": "policy.cedar",
-  "mode": "shadow",
+  "mode": "enforce",
   "issuer": {
     "id": "sb:issuer:de073ae64e43",
     "publicKey": "302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83",

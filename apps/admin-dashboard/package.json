@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "echo \"No dashboard tests defined.\""
   },
   "dependencies": {
     "@veritas/core-types": "1.0.0",

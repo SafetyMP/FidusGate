@@ -3,13 +3,31 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { VeritasDatabase } from '@veritas/database';
 import { verifyReceipt } from '@veritas/crypto-utils';
 import { Transaction, AuditReceipt, SecurityFinding } from '@veritas/core-types';
+import { CedarEvaluator } from './cedar-evaluator';
+import { isCommandLineSecure } from './command-auditor';
 
 const app = express();
 const port = process.env.PORT || 3001;
 const db = new VeritasDatabase();
+
+// Load Veritas MCP Configuration and policies
+const configPath = path.resolve(process.cwd(), 'protect-mcp.config.json');
+let config: any = { mode: 'enforce' }; // default
+if (fs.existsSync(configPath)) {
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (e: any) {
+    console.error('Failed to parse protect-mcp.config.json:', e.message);
+  }
+}
+
+const policyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
+const cedarEvaluator = new CedarEvaluator(policyPath);
+log('info', `Loaded TS Cedar Policy Parser with ${cedarEvaluator.getRulesCount()} rules. Enforcing mode: ${config.mode.toUpperCase()}`);
 
 app.use(cors());
 app.use(express.json());
@@ -207,27 +225,17 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
       return result.decision as 'allow' | 'deny';
     }
   } catch (err: any) {
-    // Quiet fallback to JS local shadow evaluation
+    // Quiet fallback to TS Cedar evaluator
   }
 
-  // Fallback Local Shadow-Mode Evaluator
-  if (action.includes('read_file') || action.includes('list_directory') || action.includes('view_file')) {
-    return 'allow';
-  }
+  // TS-Native AST Cedar Policy Parser & Evaluator
+  const decision = cedarEvaluator.isAuthorized(principal, action, {
+    path: context?.path || '',
+    commandLine: context?.commandLine || ''
+  });
   
-  if (action.includes('write_file') || action.includes('replace_file_content')) {
-    if (context?.path && (context.path.includes('apps/') || context.path.includes('packages/'))) {
-      return 'allow';
-    }
-  }
-  
-  if (action.includes('execute_command')) {
-    if (context?.commandLine && (context.commandLine.includes('sandbox-execute.sh') || context.commandLine.includes('ci-verify.sh'))) {
-      return 'allow';
-    }
-  }
-
-  return 'deny';
+  log('info', `🛡️  TypeScript Cedar Parser returned dynamic authorization decision: ${decision.toUpperCase()}`);
+  return decision;
 }
 
 // ==========================================
@@ -344,8 +352,30 @@ app.post('/api/receipts', requireAuth(['developer', 'admin']), async (req, res) 
        return;
     }
     
-    // Evaluate decision using high-speed remote Rust Cedar daemon
-    const decision = await evaluateCedarPolicy(payload.issuer_id, payload.tool_name, 'file_system', { path: payload.reason });
+    // Evaluate decision using dual Cedar evaluation system (Rust + TS)
+    const decision = await evaluateCedarPolicy(
+      payload.issuer_id, 
+      payload.tool_name, 
+      'file_system', 
+      { 
+        path: payload.args?.path || (payload.tool_name !== 'execute_command' ? payload.reason : ''),
+        commandLine: payload.args?.commandLine || (payload.tool_name === 'execute_command' ? payload.reason : '')
+      }
+    );
+    
+    // In enforce mode, if the receipt claims ALLOW but the policy evaluates to DENY, reject receipt submission!
+    if (config.mode === 'enforce' && decision === 'deny' && payload.decision === 'allow') {
+      log('security', `CRITICAL POLICY VIOLATION: Agent submitted ALLOW receipt but policy evaluates to DENY!`, {
+        tool_name: payload.tool_name,
+        issuer_id: payload.issuer_id
+      });
+      res.status(403).json({
+        error: `Access Denied: Policy evaluation returned DENY for this action. Receipt submission rejected under zero-trust enforcement.`,
+        verified: false
+      });
+      return;
+    }
+    
     payload.decision = decision;
 
     await db.addAuditReceipt(receipt);
@@ -438,26 +468,12 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
        return;
     }
 
-    // Input command sanitation
-    const lowercaseCommand = command.toLowerCase().trim();
-    const allowedCommands = [
-      'npm run build',
-      'npm run dev',
-      'npm run test',
-      'npm run lint',
-      'npm run bootstrap',
-      'bash scripts/bootstrap.sh',
-      'bash scripts/ham-drift-watcher.sh',
-      'bash scripts/ci-verify.sh',
-      'bash scripts/setup-git-hooks.sh',
-      'node packages/crypto-utils/dist/index.js --generate-keys'
-    ];
-
-    const isAllowed = allowedCommands.some(cmd => lowercaseCommand.startsWith(cmd));
-    if (!isAllowed) {
-      log('security', `BLOCKED WEB CONSOLE COMMAND: Forbidden command structure attempted.`, { command });
+    // Input command tokenized audit (Defense-in-Depth against bypasses)
+    const auditResult = isCommandLineSecure(command);
+    if (!auditResult.secure) {
+      log('security', `BLOCKED WEB CONSOLE COMMAND: Forbidden command execution attempted. Reason: ${auditResult.reason}`, { command });
       res.status(403).json({ 
-        error: 'Command execution forbidden. Only standard workspace bootstrap, lint, compile, and keygen scripts are permitted for container execution.' 
+        error: `Command execution forbidden. Reason: ${auditResult.reason}` 
       });
       return;
     }
@@ -475,6 +491,35 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
     log('error', `Web console command execution failed`, error.message);
     const errorLogs = error.stdout || error.stderr || error.message;
     res.status(500).json({ error: 'Sandboxed execution failed', logs: errorLogs, status: 'failed' });
+  }
+});
+
+// 8. POST /api/authorize - Real-time pre-execution tool validation (Role: developer, admin)
+app.post('/api/authorize', requireAuth(['developer', 'admin']), async (req, res) => {
+  try {
+    const { principal, tool_name, args } = req.body;
+    
+    if (!principal || !tool_name) {
+      res.status(400).json({ error: 'Missing required parameters: principal, tool_name' });
+      return;
+    }
+
+    // Evaluate decision using dual Cedar evaluation system (Rust + TS)
+    const decision = await evaluateCedarPolicy(
+      principal,
+      tool_name,
+      'file_system',
+      {
+        path: args?.path || '',
+        commandLine: args?.commandLine || ''
+      }
+    );
+
+    log('info', `Real-time tool authorization evaluated: ${principal} -> ${tool_name} -> ${decision.toUpperCase()}`);
+    res.json({ decision });
+  } catch (error: any) {
+    log('error', 'Failed to perform real-time tool authorization', error.message);
+    res.status(500).json({ error: 'Authorization evaluation failed' });
   }
 });
 

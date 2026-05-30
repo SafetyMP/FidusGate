@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc -w"
+    "dev": "tsc -w",
+    "test": "npm run build && node --test dist/crypto.test.js"
   },
   "dependencies": {
     "@veritas/core-types": "1.0.0"

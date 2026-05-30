@@ -18,6 +18,7 @@ export interface AuditReceiptPayload {
   issuer_id: string;
   reason?: string;
   claimed_issuer_tier?: number;
+  args?: Record<string, any>;
 }
 
 export interface AuditReceiptSignature {
