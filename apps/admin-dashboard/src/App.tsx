@@ -75,6 +75,7 @@ export default function App() {
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const [showArchPanel, setShowArchPanel] = useState(false);
   const [selectedArchComp, setSelectedArchComp] = useState<string | null>('gateway');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'compliance' | 'policy' | 'forensics' | 'sandbox'>('ledger');
 
   // Auto-scroll terminal console to bottom on every log change
   useEffect(() => {
@@ -929,852 +930,682 @@ export default function App() {
     await executePlaybook(cmd);
   };
 
-  return (
-    <div className="app-container animate-fade-in">
-      {/* Header */}
-      <header className="app-header">
-        <div className="brand-section">
-          <h1>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))', filter: 'drop-shadow(0 0 8px hsla(var(--primary), 0.45))' }}>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            FidusGate Security Portal
-          </h1>
-          <p>Secure, Governed, and Self-Refactoring AI-Agentic SDLC Console</p>
-        </div>
-        <div className="system-status">
-          <div className="status-indicator"></div>
-          <span className="status-label">SECURITY ONLINE</span>
-
-          <button className="btn btn-secondary" onClick={handleResetDatabase} style={{ marginLeft: '0.8rem', padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-            </svg>
-            Reset DB
-          </button>
-        </div>
-      </header>
-
-      {/* OIDC Session Controller Drawer */}
-      <section className="glass-panel oidc-panel">
-        <div className="oidc-header">
-          <div className="oidc-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-            </svg>
-          </div>
-          <div className="oidc-title">
-            <h3>OIDC Federated Identity Provider (JWT Simulator)</h3>
-            <p>Select a corporate identity role to obtain a signed JWT token and mount bearer auth gates.</p>
-          </div>
-        </div>
-        
-        <div className="oidc-controls">
-          {authRole === 'unauthenticated' ? (
-            <>
-              <input 
-                type="email" 
-                className="form-control oidc-input" 
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-                placeholder="admin@fidusgate.internal"
-              />
-              <button className="btn btn-secondary" onClick={() => handleOidcLogin('developer')} disabled={authLoading}>
-                Login as Developer
-              </button>
-              <button className="btn btn-primary" onClick={() => handleOidcLogin('admin')} disabled={authLoading}>
-                Login as Administrator
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="oidc-session-info">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))' }}>
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <circle cx="12" cy="11" r="2" />
-                  <path d="M12 13v3" />
-                </svg>
-                Active Session: <strong style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))', marginLeft: '0.2rem' }}>{authRole.toUpperCase()}</strong> <span style={{ color: 'hsl(var(--text-muted))', margin: '0 0.2rem' }}>|</span> User: <strong style={{ color: '#fff' }}>{authEmail}</strong>
-              </span>
-              <button className="btn btn-secondary" onClick={handleOidcLogout}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-                </svg>
-                Disconnect Session
-              </button>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* Enterprise SecOps Attestation & Token Budget Dashboard */}
-      <section className="glass-panel secops-dashboard-panel animate-fade-in" style={{ marginTop: '2rem' }}>
-        <div className="secops-panel-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ color: 'hsl(var(--info))', filter: 'drop-shadow(0 0 8px hsla(var(--info), 0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  const renderLedgerTab = () => {
+    return (
+      <div className="dashboard-grid animate-fade-in">
+        {/* Transaction Creator Form */}
+        <section className="glass-panel">
+          <div className="card-header">
+            <h2 className="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="m9 11 2 2 4-4"/>
               </svg>
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
-                Enterprise SecOps Attestation & Token Budget Console
-              </h3>
-              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                Verified cryptographic signatures, real-time autonomous token utilization, and active policy gates.
-              </p>
-            </div>
+              Secure Transaction Gateway
+            </h2>
+            <span className="status-badge status-completed">PII Auto-Filtering Active</span>
           </div>
           
-          <div className="status-badge status-completed animate-glow-green">
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00ff66', display: 'inline-block' }}></span>
-            Dual-Mode Governance Engine Active
-          </div>
-        </div>
-
-        <div className="secops-panel-content">
-          {/* Card 1: Cryptographic SME Role Keys & Attestation Graph */}
-          <div className="secops-card">
-            <div>
-              <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                Cryptographic SME Role Keys
-              </h4>
-              <div className="sme-keys-grid">
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">Backend SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x7f3a9e2db0a1b2c3</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">DevOps SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x9e5b8d2cf1b3c4d5</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">QA SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x8c4b9e2da0c4d5e6</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">Security SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0xd15c8f2ba1d5e6f7</span>
-                </div>
-              </div>
-
-              {/* Live Workload Attestation Graph */}
-              {attestedClaims && attestedClaims.attested ? (
-                <div style={{ marginTop: '1rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem' }}>
-                  <h5 style={{ margin: '0 0 0.6rem 0', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                    Live Attestation Graph
-                  </h5>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
-                    {/* Agent Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workload</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--primary), 0.3)', background: 'hsla(var(--primary), 0.1)', color: 'hsl(var(--primary))' }}>
-                        {attestedClaims?.role?.toUpperCase() || 'AGENT'}
-                      </span>
-                    </div>
-                    
-                    {/* Animated Glowing Connection Line */}
-                    <div style={{ flexGrow: 1, height: '2px', background: 'linear-gradient(90deg, hsl(var(--primary)) 0%, #00ff66 100%)', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
-                      <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66', animation: 'pulseGlow 2s infinite alternate ease-in-out' }}></span>
-                    </div>
-
-                    {/* Platform Gate Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>OIDC Gating</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}>
-                        VERIFIED
-                      </span>
-                    </div>
-
-                    {/* Animated Glowing Connection Line */}
-                    <div style={{ flexGrow: 1, height: '2px', background: '#00ff66', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
-                      <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66' }}></span>
-                    </div>
-
-                    {/* Host Workspace Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workspace</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--info), 0.3)', background: 'hsla(var(--info), 0.1)', color: 'hsl(var(--info))' }}>
-                        SECURE
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', fontFamily: 'monospace', wordBreak: 'break-all', textAlign: 'center' }}>
-                    ID: {attestedClaims?.workloadId || 'spiffe://fidusgate.internal/ns/sandbox/sa'}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            
-            <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', textAlign: 'center', marginTop: '0.5rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem' }}>
-              🔑 Hardware security modules (HSM) verified.
-            </div>
-          </div>
-
-          {/* Card 2: IBP Token Budget Gauge & Drift Heatmap */}
-          <div className="secops-card">
-            <div>
-              <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                IBP Autonomous Token Budget
-              </h4>
-              
-              {ibpState ? (
-                <div className="budget-gauge-wrapper">
-                  <div className="budget-stats">
-                    <span style={{ color: 'hsl(var(--text-secondary))' }}>Sprint Limit:</span>
-                    <strong style={{ color: '#fff' }}>{(ibpState.tokenBudget || 80000).toLocaleString()}</strong>
-                  </div>
-                  
-                  <div className="budget-stats" style={{ marginTop: '-0.3rem' }}>
-                    <span style={{ color: 'hsl(var(--text-secondary))' }}>Consumed:</span>
-                    <strong style={{ 
-                      color: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
-                             (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66'
-                    }}>
-                      {(ibpState.tokensConsumed || 0).toLocaleString()} ({(Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))).toFixed(1)}%)
-                    </strong>
-                  </div>
-
-                  <div className="budget-progress-track" style={{ marginTop: '0.5rem' }}>
-                    <div 
-                      className="budget-progress-bar"
-                      style={{ 
-                        width: `${Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))}%`,
-                        backgroundColor: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
-                                         (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66',
-                        boxShadow: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? '0 0 10px hsla(var(--danger), 0.5)' :
-                                   (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? '0 0 10px hsla(var(--warning), 0.5)' : '0 0 10px rgba(0, 255, 102, 0.5)'
-                      }}
-                    ></div>
-                  </div>
-                  
-                  <div style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', marginTop: '0.5rem', fontStyle: 'italic', lineHeight: 1.4 }}>
-                    "{ibpState.currentSprintGoal || 'Standardize Antigravity Project Compliance'}"
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: 'hsl(var(--text-muted))', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
-                  Loading budget specifications...
-                </div>
-              )}
-
-              {/* Dynamic Codebase Memory Drift Heatmap */}
-              <div style={{ marginTop: '1rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h5 style={{ margin: 0, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                    Memory Drift Heatmap (CLAUDE.md)
-                  </h5>
-                  <button 
-                    className="playbook-run-button" 
-                    onClick={handleDriftSync}
-                    disabled={driftSyncLoading}
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                  >
-                    {driftSyncLoading ? 'Syncing...' : 'Sync Memory'}
-                  </button>
-                </div>
-                
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {driftState && driftState.length > 0 ? (
-                    driftState.map((d: any, idx: number) => {
-                      const isStale = d.status === 'stale';
-                      const bg = isStale ? 'rgba(255, 107, 107, 0.08)' : 'rgba(0, 255, 102, 0.08)';
-                      const border = isStale ? '1px solid rgba(255, 107, 107, 0.2)' : '1px solid rgba(0, 255, 102, 0.2)';
-                      const color = isStale ? 'hsl(var(--danger))' : '#00ff66';
-                      return (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: bg, border, borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color, boxShadow: `0 0 6px ${color}` }}></span>
-                          <span style={{ color: '#fff', fontWeight: 600 }}>{d.name.split('/').pop()}</span>
-                          {isStale ? <span style={{ color, fontSize: '0.66rem' }}>({d.driftSeconds}s)</span> : null}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>Scanning codebase drift...</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
-              📊 Sync rate: Real-time via agent memory
-            </div>
-          </div>
-
-          {/* Card 3: Cedar Evaluation Gates Status */}
-          <div className="secops-card">
-            <div>
-              <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                Cedar Evaluation Gates
-              </h4>
-
-              <div className="gate-status-grid">
-                {/* DevOps Gate */}
-                <div className="gate-status-node">
-                  <div className="gate-node-info">
-                    <span className="gate-node-name">DevOps Gate</span>
-                    <span className="gate-node-desc">CI Pipelines & Security Scans</span>
-                  </div>
-                  {findings.length === 0 ? (
-                    <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                      Secure
-                    </div>
-                  ) : (
-                    <div className="gate-node-light gate-light-locked animate-pulse-red">
-                      <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
-                      Violated
-                    </div>
-                  )}
-                </div>
-
-                {/* IBP Gate */}
-                <div className="gate-status-node">
-                  <div className="gate-node-info">
-                    <span className="gate-node-name">IBP Gate</span>
-                    <span className="gate-node-desc">Token Alignment & Reports</span>
-                  </div>
-                  {ibpState?.crossFunctionalSynthesized ? (
-                    <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                      Aligned
-                    </div>
-                  ) : (
-                    <div className="gate-node-light gate-light-locked animate-pulse-red">
-                      <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
-                      Pending
-                    </div>
-                  )}
-                </div>
-
-                {/* PLM Gate */}
-                <div className="gate-status-node">
-                  <div className="gate-node-info">
-                    <span className="gate-node-name">PLM Gate</span>
-                    <span className="gate-node-desc">API Schema Drift & Releases</span>
-                  </div>
-                  {plmState?.feedbackAligned ? (
-                    <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                      Released
-                    </div>
-                  ) : (
-                    <div className="gate-node-light gate-light-locked animate-pulse-red">
-                      <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
-                      Locked
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
-              🔒 Cryptographically enforced by Cedar Daemon
-            </div>
-          </div>
-
-          {/* Full-width Card 4: Interactive Diff-Apply Patch review terminal */}
-          {pendingPatch && pendingPatch.exists ? (
-            <div className="secops-card animate-fade-in" style={{ gridColumn: 'span 3', borderStyle: 'dashed', borderColor: 'hsla(var(--primary), 0.5)', background: 'rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                  <span style={{ color: 'hsl(var(--warning))', display: 'flex', alignItems: 'center' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                  </span>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#fff' }}>
-                    Attestation Required: Ephemeral Sandbox Pending Diff Patch
-                  </h4>
-                </div>
-                
-                <button 
-                  className="btn btn-primary" 
-                  onClick={handleApplyPatch} 
-                  disabled={patchApplyLoading}
-                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsla(var(--primary), 0.7) 100%)', padding: '0.45rem 1rem', fontSize: '0.8rem', marginLeft: 'auto' }}
-                >
-                  {patchApplyLoading ? (
-                    <span>Processing merge...</span>
-                  ) : (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m12 14 4-4-4-4"/>
-                        <path d="M4 20V8a2 2 0 0 1 2-2h4"/>
-                      </svg>
-                      Attest & Merge Workspace Changes
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Colored Unified Diff View */}
-              <div className="finding-evidence" style={{ maxHeight: '200px', width: '100%', overflowY: 'auto' }}>
-                {pendingPatch.patch.split('\n').map((line: string, idx: number) => {
-                  const isAddition = line.startsWith('+') && !line.startsWith('+++');
-                  const isDeletion = line.startsWith('-') && !line.startsWith('---');
-                  const color = isAddition ? '#00ff66' : isDeletion ? 'hsl(var(--danger))' : '#c9d1d9';
-                  const bg = isAddition ? 'rgba(0, 255, 102, 0.08)' : isDeletion ? 'rgba(255, 107, 107, 0.08)' : 'transparent';
-                  return (
-                    <div key={idx} style={{ color, backgroundColor: bg, fontFamily: 'monospace', fontSize: '0.76rem', padding: '0.1rem 0.4rem', whiteSpace: 'pre-wrap' }}>
-                      {line}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      {/* Phase 1: Visual PLM Adaptive Governance Panel */}
-      <section className="glass-panel plm-governance-panel" style={{ marginTop: '2rem' }}>
-        <div className="plm-panel-header">
-          <div className="plm-header-left">
-            <div className="plm-icon-container">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-              </svg>
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
-                PLM Adaptive Governance Panel
-              </h3>
-              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                Stateful gatekeeping for AI agents. Formulate scenario trade-offs and align runtime directives.
-              </p>
-            </div>
-          </div>
-
-          {/* Gating Shield Indicator Widget */}
-          <div className="plm-shield-wrapper">
-            {plmState ? (
-              plmState.activeDirectives && plmState.activeDirectives.length > 0 && !plmState.feedbackAligned ? (
-                <div className="plm-shield shield-locked animate-pulse-red">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span>GATE LOCKED</span>
-                </div>
-              ) : (
-                <div className="plm-shield shield-released animate-glow-green">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    <path d="m9 11 2 2 4-4"/>
-                  </svg>
-                  <span>GATE RELEASED</span>
-                </div>
-              )
-            ) : (
-              <div className="plm-shield shield-inactive">
-                <span>CONNECTING GATEWAY</span>
+          <div className="card-body">
+            {txNotification && (
+              <div 
+                className="verification-result animate-fade-in" 
+                style={{ 
+                  marginBottom: '1.25rem', 
+                  background: txNotification.type === 'warn' ? 'hsla(var(--warning), 0.06)' : 'hsla(var(--success), 0.06)',
+                  border: txNotification.type === 'warn' ? '1px solid hsla(var(--warning), 0.2)' : '1px solid hsla(var(--success), 0.2)',
+                  color: txNotification.type === 'warn' ? 'hsl(var(--warning))' : 'hsl(var(--success))',
+                  boxShadow: txNotification.type === 'warn' ? '0 0 10px hsla(var(--warning), 0.04)' : '0 0 10px hsla(var(--success), 0.04)'
+                }}
+              >
+                {txNotification.message}
               </div>
             )}
-          </div>
-        </div>
 
-        <div className="plm-panel-content">
-          {/* Active Directives Checklist & State Display */}
-          <div className="plm-status-card">
-            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-              Active PLM Directives
-            </h4>
-            <div className="plm-meta-data">
-              <span>Active Requirement ID: <strong>{plmState?.activeRequirementId || 'None'}</strong></span>
-              <span>Total Directives: <strong>{plmState?.activeDirectives?.length || 0} Unaligned</strong></span>
-            </div>
-
-            <div className="plm-directives-list">
-              {plmState?.activeDirectives && plmState.activeDirectives.length > 0 ? (
-                plmState.activeDirectives.map((d: string, idx: number) => (
-                  <div className="directive-item" key={idx}>
-                    <div className="directive-bullet animate-pulse-red"></div>
-                    <span className="directive-text">{d}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="plm-empty-state">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    <path d="m9 11 2 2 4-4"/>
-                  </svg>
-                  <span>Zero active compliance warnings. Commit pipeline fully unlocked.</span>
+            <form onSubmit={handleCreateTransaction}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="sender">Sender (Corporate Account or Email Address)</label>
+                  <input 
+                    type="text" 
+                    id="sender" 
+                    className="form-control" 
+                    placeholder="e.g. sagehart@antigravity.io"
+                    value={txSender} 
+                    onChange={e => setTxSender(e.target.value)}
+                    required 
+                  />
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Form 1: Log User Feedback */}
-          <div className="plm-action-card">
-            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-              Log System / Stakeholder Feedback
-            </h4>
-            <form onSubmit={handleLogFeedback}>
-              <div className="form-row" style={{ gap: '0.8rem', marginBottom: '0.8rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label htmlFor="fbRole">Role Source</label>
-                  <select 
-                    id="fbRole" 
-                    className="form-control"
-                    value={feedbackRole}
-                    onChange={e => setFeedbackRole(e.target.value)}
-                  >
-                    <option value="Auditor">Auditor (Security)</option>
-                    <option value="SRE/DevOps">SRE/DevOps</option>
-                    <option value="Product Owner">Product Owner</option>
-                    <option value="Lead Architect">Lead Architect</option>
-                  </select>
+                <div className="form-group">
+                  <label htmlFor="recipient">Recipient (Vendor Name or Wallet Address)</label>
+                  <input 
+                    type="text" 
+                    id="recipient" 
+                    className="form-control" 
+                    placeholder="e.g. ModelAPI Inference"
+                    value={txRecipient} 
+                    onChange={e => setTxRecipient(e.target.value)}
+                    required 
+                  />
                 </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label htmlFor="fbSeverity">Severity Level</label>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="amount">Amount</label>
+                  <input 
+                    type="number" 
+                    id="amount" 
+                    className="form-control" 
+                    placeholder="e.g. 500.00"
+                    value={txAmount} 
+                    onChange={e => setTxAmount(e.target.value)}
+                    required 
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="currency">Currency</label>
                   <select 
-                    id="fbSeverity" 
+                    id="currency" 
                     className="form-control"
-                    value={feedbackSeverity}
-                    onChange={e => setFeedbackSeverity(e.target.value as any)}
+                    value={txCurrency}
+                    onChange={e => setTxCurrency(e.target.value)}
                   >
-                    <option value="info">Info (Non-Blocking)</option>
-                    <option value="warn">Warning (Gating)</option>
-                    <option value="critical">Critical (Gating)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
                   </select>
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '0.8rem' }}>
-                <label htmlFor="fbComment">Directives & Performance Comments</label>
-                <input 
-                  type="text" 
-                  id="fbComment" 
-                  className="form-control" 
-                  placeholder="e.g. Optimize prisma queries due to memory overhead"
-                  value={feedbackComment}
-                  onChange={e => setFeedbackComment(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button type="submit" className="btn btn-secondary" style={{ width: '100%' }} disabled={feedbackLoading || authRole === 'unauthenticated'}>
-                {feedbackLoading ? 'Logging Directives...' : 'Submit Feedback to Secure Gateway'}
-              </button>
-            </form>
-          </div>
-
-          {/* Form 2: Align Gate / Resolve Trade-offs */}
-          <div className="plm-action-card">
-            <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-              Resolve Scenario Trade-offs & Align Gate
-            </h4>
-            <form onSubmit={handleAlignFeedback}>
-              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label>Requirement ID Target</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={plmState?.activeRequirementId || 'REQ-101'} 
-                  disabled 
-                  style={{ opacity: 0.6 }}
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '0.8rem' }}>
-                <label htmlFor="alignJust">Alignment Justification & Options Selection</label>
-                <textarea 
-                  id="alignJust" 
-                  className="form-control" 
-                  placeholder="e.g. Aligned Option A (relational normalization) to minimize query latency..."
-                  value={alignJustification}
-                  onChange={e => setAlignJustification(e.target.value)}
-                  required
-                  style={{ height: '3.6rem', resize: 'none' }}
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={alignLoading || authRole === 'unauthenticated'}>
-                {alignLoading ? 'Aligning Gate...' : 'Release Gate / Confirm Alignment'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* Main Grid Layout */}
-      <div className="dashboard-grid">
-        
-        {/* Left Hand Column: Transactions & Receipts */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
-          {/* Transaction Creator Form */}
-          <section className="glass-panel">
-            <div className="card-header">
-              <h2 className="card-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.6rem' }} disabled={txLoading}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <path d="m9 11 2 2 4-4"/>
+                  <path d="M12 8v8M9 13h6"/>
                 </svg>
-                Secure Transaction Gateway
-              </h2>
-              <span className="status-badge status-completed">PII Auto-Filtering Active</span>
-            </div>
-            
-            <div className="card-body">
-              {txNotification && (
-                <div 
-                  className="verification-result animate-fade-in" 
-                  style={{ 
-                    marginBottom: '1.25rem', 
-                    background: txNotification.type === 'warn' ? 'hsla(var(--warning), 0.06)' : 'hsla(var(--success), 0.06)',
-                    border: txNotification.type === 'warn' ? '1px solid hsla(var(--warning), 0.2)' : '1px solid hsla(var(--success), 0.2)',
-                    color: txNotification.type === 'warn' ? 'hsl(var(--warning))' : 'hsl(var(--success))',
-                    boxShadow: txNotification.type === 'warn' ? '0 0 10px hsla(var(--warning), 0.04)' : '0 0 10px hsla(var(--success), 0.04)'
-                  }}
-                >
-                  {txNotification.message}
-                </div>
-              )}
+                {txLoading ? 'Registering Security Block...' : 'Submit Transaction to Secure Gateway'}
+              </button>
+            </form>
+          </div>
+        </section>
 
-              <form onSubmit={handleCreateTransaction}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="sender">Sender (Corporate Account or Email Address)</label>
-                    <input 
-                      type="text" 
-                      id="sender" 
-                      className="form-control" 
-                      placeholder="e.g. sagehart@antigravity.io"
-                      value={txSender} 
-                      onChange={e => setTxSender(e.target.value)}
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="recipient">Recipient (Vendor Name or Wallet Address)</label>
-                    <input 
-                      type="text" 
-                      id="recipient" 
-                      className="form-control" 
-                      placeholder="e.g. ModelAPI Inference"
-                      value={txRecipient} 
-                      onChange={e => setTxRecipient(e.target.value)}
-                      required 
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="amount">Amount</label>
-                    <input 
-                      type="number" 
-                      id="amount" 
-                      className="form-control" 
-                      placeholder="e.g. 500.00"
-                      value={txAmount} 
-                      onChange={e => setTxAmount(e.target.value)}
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="currency">Currency</label>
-                    <select 
-                      id="currency" 
-                      className="form-control"
-                      value={txCurrency}
-                      onChange={e => setTxCurrency(e.target.value)}
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="GBP">GBP (£)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.6rem' }} disabled={txLoading}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    <path d="M12 8v8M9 13h6"/>
-                  </svg>
-                  {txLoading ? 'Registering Security Block...' : 'Submit Transaction to Secure Gateway'}
-                </button>
-              </form>
-            </div>
-          </section>
-
-          {/* Ledger Table */}
-          <section className="glass-panel">
-            <div className="card-header">
-              <h2 className="card-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))' }}>
-                  <path d="M12 2H2v10h10V2zM12 12H2v10h10V12zM22 2h-10v10h10V2zM22 12h-10v10h10V12z"/>
-                </svg>
-                Transactional Stream Ledger
-              </h2>
-              <span className="status-badge status-pending">{transactions.length} Records</span>
-            </div>
-            
-            <div className="card-body" style={{ padding: 0 }}>
-              <div className="table-container">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Sender</th>
-                      <th>Recipient</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map(tx => (
-                      <tr key={tx.id}>
-                        <td style={{ fontFamily: 'monospace', fontWeight: '700', color: '#fff' }}>{tx.id}</td>
-                        <td>
-                          {tx.sender}
-                          {tx.maskedPii && (
-                            <span style={{ marginLeft: '0.5rem', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', background: 'hsla(var(--warning), 0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'hsl(var(--warning))', border: '1px solid hsla(var(--warning), 0.15)' }}>
-                              masked
-                            </span>
-                          )}
-                        </td>
-                        <td>{tx.recipient}</td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: '700', color: '#fff' }}>
-                          {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tx.currency}
-                        </td>
-                        <td>
-                          <span className={`status-badge status-${tx.status}`}>{tx.status}</span>
-                        </td>
-                      </tr>
-                    ))}
-                    {transactions.length === 0 && (
-                      <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', color: 'hsl(var(--text-secondary))', padding: '3rem' }}>
-                          No transaction records registered or access unauthorized. Please log in!
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* Right Hand Column: Cedar Receipts & Security Findings */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Ledger Table */}
+        <section className="glass-panel">
+          <div className="card-header">
+            <h2 className="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))' }}>
+                <path d="M12 2H2v10h10V2zM12 12H2v10h10V12zM22 2h-10v10h10V2zM22 12h-10v10h10V12z"/>
+              </svg>
+              Transactional Stream Ledger
+            </h2>
+            <span className="status-badge status-pending">{transactions.length} Records</span>
+          </div>
           
-          {/* Cedar Receipts */}
-          <section className="glass-panel">
-            <div className="card-header">
-              <h2 className="card-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--info))' }}>
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Verifiable Cedar Policy Receipts
-              </h2>
-              <span className="status-badge status-completed">Tamper-Proof Ledger</span>
+          <div className="card-body" style={{ padding: 0 }}>
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Sender</th>
+                    <th>Recipient</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map(tx => (
+                    <tr key={tx.id}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: '700', color: '#fff' }}>{tx.id}</td>
+                      <td>
+                        {tx.sender}
+                        {tx.maskedPii && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', background: 'hsla(var(--warning), 0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'hsl(var(--warning))', border: '1px solid hsla(var(--warning), 0.15)' }}>
+                            masked
+                          </span>
+                        )}
+                      </td>
+                      <td>{tx.recipient}</td>
+                      <td style={{ fontFamily: 'monospace', fontWeight: '700', color: '#fff' }}>
+                        {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tx.currency}
+                      </td>
+                      <td>
+                        <span className={`status-badge status-${tx.status}`}>{tx.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {transactions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'hsl(var(--text-secondary))', padding: '3rem' }}>
+                        No transaction records registered or access unauthorized. Please log in!
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
+          </div>
+        </section>
+      </div>
+    );
+  };
 
-            <div className="card-body">
-              <div className="receipt-list">
-                {receipts.map((rc, idx) => (
-                  <div className="receipt-card" key={idx}>
-                    <div className="receipt-meta">
-                      <span className="receipt-tool">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--info))' }}>
-                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        </svg>
-                        Tool: {rc.payload.tool_name}
-                      </span>
-                      <span className={`status-badge ${rc.payload.decision === 'allow' ? 'status-completed' : 'status-failed'}`}>
-                        {rc.payload.decision}
-                      </span>
+  const renderComplianceTab = () => {
+    return (
+      <div className="tab-compliance-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Enterprise SecOps Attestation & Token Budget Dashboard */}
+        <section className="glass-panel secops-dashboard-panel" style={{ marginTop: 0 }}>
+          <div className="secops-panel-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ color: 'hsl(var(--info))', filter: 'drop-shadow(0 0 8px hsla(var(--info), 0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                  Enterprise SecOps Attestation & Token Budget Console
+                </h3>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
+                  Verified cryptographic signatures, real-time autonomous token utilization, and active policy gates.
+                </p>
+              </div>
+            </div>
+            
+            <div className="status-badge status-completed animate-glow-green">
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00ff66', display: 'inline-block' }}></span>
+              Dual-Mode Governance Engine Active
+            </div>
+          </div>
+
+          <div className="secops-panel-content">
+            {/* Card 1: Cryptographic SME Role Keys & Attestation Graph */}
+            <div className="secops-card">
+              <div>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  Cryptographic SME Role Keys
+                </h4>
+                <div className="sme-keys-grid">
+                  <div className="sme-key-card">
+                    <div className="sme-key-header">
+                      <span className="sme-key-role">Backend SME</span>
+                      <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
                     </div>
-                    <div className="receipt-reason">{rc.payload.reason}</div>
-                    <div className="receipt-signature-block">
-                      <span className="receipt-digest">policy: {rc.payload.policy_digest.substring(0, 15)}</span>
-                      <span className="signature-verified">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                        ✓ ED25519 VERIFIED
-                      </span>
+                    <span className="sme-key-hash">0x7f3a9e2db0a1b2c3</span>
+                  </div>
+
+                  <div className="sme-key-card">
+                    <div className="sme-key-header">
+                      <span className="sme-key-role">DevOps SME</span>
+                      <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                    </div>
+                    <span className="sme-key-hash">0x9e5b8d2cf1b3c4d5</span>
+                  </div>
+
+                  <div className="sme-key-card">
+                    <div className="sme-key-header">
+                      <span className="sme-key-role">QA SME</span>
+                      <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                    </div>
+                    <span className="sme-key-hash">0x8c4b9e2da0c4d5e6</span>
+                  </div>
+
+                  <div className="sme-key-card">
+                    <div className="sme-key-header">
+                      <span className="sme-key-role">Security SME</span>
+                      <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                    </div>
+                    <span className="sme-key-hash">0xd15c8f2ba1d5e6f7</span>
+                  </div>
+                </div>
+
+                {/* Live Workload Attestation Graph */}
+                {attestedClaims && attestedClaims.attested ? (
+                  <div style={{ marginTop: '1rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem' }}>
+                    <h5 style={{ margin: '0 0 0.6rem 0', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                      Live Attestation Graph
+                    </h5>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
+                      {/* Agent Node */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                        <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workload</span>
+                        <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--primary), 0.3)', background: 'hsla(var(--primary), 0.1)', color: 'hsl(var(--primary))' }}>
+                          {attestedClaims?.role?.toUpperCase() || 'AGENT'}
+                        </span>
+                      </div>
+                      
+                      {/* Animated Glowing Connection Line */}
+                      <div style={{ flexGrow: 1, height: '2px', background: 'linear-gradient(90deg, hsl(var(--primary)) 0%, #00ff66 100%)', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
+                        <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66', animation: 'pulseGlow 2s infinite alternate ease-in-out' }}></span>
+                      </div>
+
+                      {/* Platform Gate Node */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                        <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>OIDC Gating</span>
+                        <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}>
+                          VERIFIED
+                        </span>
+                      </div>
+
+                      {/* Animated Glowing Connection Line */}
+                      <div style={{ flexGrow: 1, height: '2px', background: '#00ff66', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
+                        <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66' }}></span>
+                      </div>
+
+                      {/* Host Workspace Node */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                        <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workspace</span>
+                        <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--info), 0.3)', background: 'hsla(var(--info), 0.1)', color: 'hsl(var(--info))' }}>
+                          SECURE
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', fontFamily: 'monospace', wordBreak: 'break-all', textAlign: 'center' }}>
+                      ID: {attestedClaims?.workloadId || 'spiffe://fidusgate.internal/ns/sandbox/sa'}
                     </div>
                   </div>
-                ))}
-                {receipts.length === 0 && (
-                  <p style={{ color: 'hsl(var(--text-secondary))', textAlign: 'center', padding: '3rem' }}>
-                    No policy receipts logged or access unauthorized.
-                  </p>
+                ) : null}
+              </div>
+              
+              <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', textAlign: 'center', marginTop: '0.5rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem' }}>
+                🔑 Hardware security modules (HSM) verified.
+              </div>
+            </div>
+
+            {/* Card 2: IBP Token Budget Gauge & Drift Heatmap */}
+            <div className="secops-card">
+              <div>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  IBP Autonomous Token Budget
+                </h4>
+                
+                {ibpState ? (
+                  <div className="budget-gauge-wrapper">
+                    <div className="budget-stats">
+                      <span style={{ color: 'hsl(var(--text-secondary))' }}>Sprint Limit:</span>
+                      <strong style={{ color: '#fff' }}>{(ibpState.tokenBudget || 80000).toLocaleString()}</strong>
+                    </div>
+                    
+                    <div className="budget-stats" style={{ marginTop: '-0.3rem' }}>
+                      <span style={{ color: 'hsl(var(--text-secondary))' }}>Consumed:</span>
+                      <strong style={{ 
+                        color: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
+                               (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66'
+                      }}>
+                        {(ibpState.tokensConsumed || 0).toLocaleString()} ({(Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))).toFixed(1)}%)
+                      </strong>
+                    </div>
+
+                    <div className="budget-progress-track" style={{ marginTop: '0.5rem' }}>
+                      <div 
+                        className="budget-progress-bar"
+                        style={{ 
+                          width: `${Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))}%`,
+                          backgroundColor: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
+                                           (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66',
+                          boxShadow: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? '0 0 10px hsla(var(--danger), 0.5)' :
+                                     (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? '0 0 10px hsla(var(--warning), 0.5)' : '0 0 10px rgba(0, 255, 102, 0.5)'
+                        }}
+                      ></div>
+                    </div>
+                    
+                    <div style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', marginTop: '0.5rem', fontStyle: 'italic', lineHeight: 1.4 }}>
+                      "{ibpState.currentSprintGoal || 'Standardize Antigravity Project Compliance'}"
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: 'hsl(var(--text-muted))', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                    Loading budget specifications...
+                  </div>
                 )}
+
+                {/* Dynamic Codebase Memory Drift Heatmap */}
+                <div style={{ marginTop: '1rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h5 style={{ margin: 0, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                      Memory Drift Heatmap (CLAUDE.md)
+                    </h5>
+                    <button 
+                      className="playbook-run-button" 
+                      onClick={handleDriftSync}
+                      disabled={driftSyncLoading}
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                    >
+                      {driftSyncLoading ? 'Syncing...' : 'Sync Memory'}
+                    </button>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {driftState && driftState.length > 0 ? (
+                      driftState.map((d: any, idx: number) => {
+                        const isStale = d.status === 'stale';
+                        const bg = isStale ? 'rgba(255, 107, 107, 0.08)' : 'rgba(0, 255, 102, 0.08)';
+                        const border = isStale ? '1px solid rgba(255, 107, 107, 0.2)' : '1px solid rgba(0, 255, 102, 0.2)';
+                        const color = isStale ? 'hsl(var(--danger))' : '#00ff66';
+                        return (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: bg, border, borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color, boxShadow: `0 0 6px ${color}` }}></span>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>{d.name.split('/').pop()}</span>
+                            {isStale ? <span style={{ color, fontSize: '0.66rem' }}>({d.driftSeconds}s)</span> : null}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>Scanning codebase drift...</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Offline Verifier paste box */}
-              <div className="verifier-box">
-                <h3 className="card-title" style={{ fontSize: '0.92rem' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))' }}>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
+                📊 Sync rate: Real-time via agent memory
+              </div>
+            </div>
+
+            {/* Card 3: Cedar Evaluation Gates Status */}
+            <div className="secops-card">
+              <div>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  Cedar Evaluation Gates
+                </h4>
+
+                <div className="gate-status-grid">
+                  {/* DevOps Gate */}
+                  <div className="gate-status-node">
+                    <div className="gate-node-info">
+                      <span className="gate-node-name">DevOps Gate</span>
+                      <span className="gate-node-desc">CI Pipelines & Security Scans</span>
+                    </div>
+                    {findings.length === 0 ? (
+                      <div className="gate-node-light gate-light-active">
+                        <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                        Secure
+                      </div>
+                    ) : (
+                      <div className="gate-node-light gate-light-locked animate-pulse-red">
+                        <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
+                        Violated
+                      </div>
+                    )}
+                  </div>
+
+                  {/* IBP Gate */}
+                  <div className="gate-status-node">
+                    <div className="gate-node-info">
+                      <span className="gate-node-name">IBP Gate</span>
+                      <span className="gate-node-desc">Token Alignment & Reports</span>
+                    </div>
+                    {ibpState?.crossFunctionalSynthesized ? (
+                      <div className="gate-node-light gate-light-active">
+                        <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                        Aligned
+                      </div>
+                    ) : (
+                      <div className="gate-node-light gate-light-locked animate-pulse-red">
+                        <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
+                        Pending
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PLM Gate */}
+                  <div className="gate-status-node">
+                    <div className="gate-node-info">
+                      <span className="gate-node-name">PLM Gate</span>
+                      <span className="gate-node-desc">API Schema Drift & Releases</span>
+                    </div>
+                    {plmState?.feedbackAligned ? (
+                      <div className="gate-node-light gate-light-active">
+                        <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                        Released
+                      </div>
+                    ) : (
+                      <div className="gate-node-light gate-light-locked animate-pulse-red">
+                        <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
+                        Locked
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
+                🔒 Cryptographically enforced by Cedar Daemon
+              </div>
+            </div>
+
+            {/* Full-width Card 4: Interactive Diff-Apply Patch review terminal */}
+            {pendingPatch && pendingPatch.exists ? (
+              <div className="secops-card animate-fade-in" style={{ gridColumn: 'span 3', borderStyle: 'dashed', borderColor: 'hsla(var(--primary), 0.5)', background: 'rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                    <span style={{ color: 'hsl(var(--warning))', display: 'flex', alignItems: 'center' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </span>
+                    <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#fff' }}>
+                      Attestation Required: Ephemeral Sandbox Pending Diff Patch
+                    </h4>
+                  </div>
+                  
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={handleApplyPatch} 
+                    disabled={patchApplyLoading}
+                    style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsla(var(--primary), 0.7) 100%)', padding: '0.45rem 1rem', fontSize: '0.8rem', marginLeft: 'auto' }}
+                  >
+                    {patchApplyLoading ? (
+                      <span>Processing merge...</span>
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m12 14 4-4-4-4"/>
+                          <path d="M4 20V8a2 2 0 0 1 2-2h4"/>
+                        </svg>
+                        Attest & Merge Workspace Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Colored Unified Diff View */}
+                <div className="finding-evidence" style={{ maxHeight: '200px', width: '100%', overflowY: 'auto' }}>
+                  {pendingPatch.patch.split('\n').map((line: string, idx: number) => {
+                    const isAddition = line.startsWith('+') && !line.startsWith('+++');
+                    const isDeletion = line.startsWith('-') && !line.startsWith('---');
+                    const color = isAddition ? '#00ff66' : isDeletion ? 'hsl(var(--danger))' : '#c9d1d9';
+                    const bg = isAddition ? 'rgba(0, 255, 102, 0.08)' : isDeletion ? 'rgba(255, 107, 107, 0.08)' : 'transparent';
+                    return (
+                      <div key={idx} style={{ color, backgroundColor: bg, fontFamily: 'monospace', fontSize: '0.76rem', padding: '0.1rem 0.4rem', whiteSpace: 'pre-wrap' }}>
+                        {line}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {/* Split Grid for PLM Governance & Static Scanner */}
+        <div className="dashboard-grid">
+          {/* Left Column: Visual PLM Adaptive Governance Panel */}
+          <section className="glass-panel plm-governance-panel" style={{ marginTop: 0 }}>
+            <div className="plm-panel-header">
+              <div className="plm-header-left">
+                <div className="plm-icon-container">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                   </svg>
-                  Offline Cryptographic Receipt Verifier
-                </h3>
-                <textarea 
-                  className="form-control" 
-                  placeholder='Paste signed JSON receipt here e.g. {"payload": {...}, "signature": {...}}'
-                  value={receiptInput}
-                  onChange={e => setReceiptInput(e.target.value)}
-                />
-                <button className="btn btn-secondary" onClick={handleVerifyReceipt} style={{ width: '100%' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 11.08V12a8 8 0 1 1-4.8-7.32M22 4 12 14.01l-3-3"/>
-                  </svg>
-                  Verify Receipt Authenticity
-                </button>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                    PLM Adaptive Governance Panel
+                  </h3>
+                  <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
+                    Stateful gatekeeping for AI agents. Formulate scenario trade-offs and align runtime directives.
+                  </p>
+                </div>
+              </div>
 
-                {verificationResult.status !== 'idle' && (
-                  <div className={`verification-result result-${verificationResult.status === 'valid' ? 'valid' : 'invalid'}`}>
-                    <strong style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      {verificationResult.status === 'valid' ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      )}
-                      {verificationResult.message}
-                    </strong>
-                    {verificationResult.payload && (
-                      <span style={{ fontSize: '0.75rem', marginTop: '0.3rem', fontFamily: 'monospace', color: 'hsl(var(--text-secondary))' }}>
-                        Issuer: {verificationResult.payload.issuer_id} <span style={{ color: 'hsl(var(--text-muted))' }}>|</span> Issued: {new Date(verificationResult.payload.issued_at).toLocaleString()}
-                      </span>
-                    )}
+              {/* Gating Shield Indicator Widget */}
+              <div className="plm-shield-wrapper">
+                {plmState ? (
+                  plmState.activeDirectives && plmState.activeDirectives.length > 0 && !plmState.feedbackAligned ? (
+                    <div className="plm-shield shield-locked animate-pulse-red">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>GATE LOCKED</span>
+                    </div>
+                  ) : (
+                    <div className="plm-shield shield-released animate-glow-green">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="m9 11 2 2 4-4"/>
+                      </svg>
+                      <span>GATE RELEASED</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="plm-shield shield-inactive">
+                    <span>CONNECTING GATEWAY</span>
                   </div>
                 )}
               </div>
             </div>
+
+            <div className="plm-panel-content">
+              {/* Active Directives Checklist & State Display */}
+              <div className="plm-status-card">
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  Active PLM Directives
+                </h4>
+                <div className="plm-meta-data">
+                  <span>Active Requirement ID: <strong>{plmState?.activeRequirementId || 'None'}</strong></span>
+                  <span>Total Directives: <strong>{plmState?.activeDirectives?.length || 0} Unaligned</strong></span>
+                </div>
+
+                <div className="plm-directives-list">
+                  {plmState?.activeDirectives && plmState.activeDirectives.length > 0 ? (
+                    plmState.activeDirectives.map((d: string, idx: number) => (
+                      <div className="directive-item" key={idx}>
+                        <div className="directive-bullet animate-pulse-red"></div>
+                        <span className="directive-text">{d}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="plm-empty-state">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="m9 11 2 2 4-4"/>
+                      </svg>
+                      <span>Zero active compliance warnings. Commit pipeline fully unlocked.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Form 1: Log User Feedback */}
+              <div className="plm-action-card">
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  Log System / Stakeholder Feedback
+                </h4>
+                <form onSubmit={handleLogFeedback}>
+                  <div className="form-row" style={{ gap: '0.8rem', marginBottom: '0.8rem' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label htmlFor="fbRole">Role Source</label>
+                      <select 
+                        id="fbRole" 
+                        className="form-control"
+                        value={feedbackRole}
+                        onChange={e => setFeedbackRole(e.target.value)}
+                      >
+                        <option value="Auditor">Auditor (Security)</option>
+                        <option value="SRE/DevOps">SRE/DevOps</option>
+                        <option value="Product Owner">Product Owner</option>
+                        <option value="Lead Architect">Lead Architect</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label htmlFor="fbSeverity">Severity Level</label>
+                      <select 
+                        id="fbSeverity" 
+                        className="form-control"
+                        value={feedbackSeverity}
+                        onChange={e => setFeedbackSeverity(e.target.value as any)}
+                      >
+                        <option value="info">Info (Non-Blocking)</option>
+                        <option value="warn">Warning (Gating)</option>
+                        <option value="critical">Critical (Gating)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '0.8rem' }}>
+                    <label htmlFor="fbComment">Directives & Performance Comments</label>
+                    <input 
+                      type="text" 
+                      id="fbComment" 
+                      className="form-control" 
+                      placeholder="e.g. Optimize prisma queries due to memory overhead"
+                      value={feedbackComment}
+                      onChange={e => setFeedbackComment(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-secondary" style={{ width: '100%' }} disabled={feedbackLoading || authRole === 'unauthenticated'}>
+                    {feedbackLoading ? 'Logging Directives...' : 'Submit Feedback to Secure Gateway'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Form 2: Align Gate / Resolve Trade-offs */}
+              <div className="plm-action-card">
+                <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
+                  Resolve Scenario Trade-offs & Align Gate
+                </h4>
+                <form onSubmit={handleAlignFeedback}>
+                  <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                    <label>Requirement ID Target</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={plmState?.activeRequirementId || 'REQ-101'} 
+                      disabled 
+                      style={{ opacity: 0.6 }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '0.8rem' }}>
+                    <label htmlFor="alignJust">Alignment Justification & Options Selection</label>
+                    <textarea 
+                      id="alignJust" 
+                      className="form-control" 
+                      placeholder="e.g. Aligned Option A (relational normalization) to minimize query latency..."
+                      value={alignJustification}
+                      onChange={e => setAlignJustification(e.target.value)}
+                      required
+                      style={{ height: '3.6rem', resize: 'none' }}
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={alignLoading || authRole === 'unauthenticated'}>
+                    {alignLoading ? 'Aligning Gate...' : 'Release Gate / Confirm Alignment'}
+                  </button>
+                </form>
+              </div>
+            </div>
           </section>
 
-          {/* Static Scan Findings */}
-          <section className="glass-panel">
+          {/* Right Column: CI/CD Pipeline Static Security Scanner */}
+          <section className="glass-panel" style={{ marginTop: 0 }}>
             <div className="card-header">
               <h2 className="card-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--danger))' }}>
@@ -1832,14 +1663,15 @@ export default function App() {
               </div>
             </div>
           </section>
-
         </div>
       </div>
+    );
+  };
 
-      {/* Visual Live + Draft Policy Simulator & Forensic Compliance Timeline Section */}
-      <div className="dashboard-grid" style={{ marginTop: '2rem' }}>
-        
-        {/* Live + Draft Policy Simulator Panel */}
+  const renderPolicyTab = () => {
+    return (
+      <div className="dashboard-grid animate-fade-in">
+        {/* Left Column: Live + Draft Cedar Policy Simulator */}
         <section className="glass-panel">
           <div className="card-header">
             <h2 className="card-title">
@@ -1873,7 +1705,7 @@ export default function App() {
                   <label>Draft Policy Overlay Editor (policy.cedar)</label>
                   <textarea 
                     className="form-control" 
-                    style={{ height: '220px', fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', background: 'rgba(0,0,0,0.5)', border: '1px solid hsla(var(--primary), 0.3)' }}
+                    style={{ height: '260px', fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', background: 'rgba(0,0,0,0.5)', border: '1px solid hsla(var(--primary), 0.3)' }}
                     value={simDraftPolicy}
                     onChange={e => setSimDraftPolicy(e.target.value)}
                     placeholder="Enter Cedar policies here..."
@@ -1883,15 +1715,6 @@ export default function App() {
                   </span>
                 </div>
               )}
-
-              <details style={{ marginTop: '0.8rem', marginBottom: '1.25rem', background: 'rgba(0,0,0,0.15)', border: '1px solid hsl(var(--border-color))', borderRadius: '6px', padding: '0.5rem' }}>
-                <summary style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', cursor: 'pointer', fontWeight: 600 }}>
-                  View Active Production Policy Code (ReadOnly)
-                </summary>
-                <pre style={{ margin: '0.5rem 0 0 0', padding: '0.65rem 0.85rem', background: '#05070f', border: '1px solid hsl(var(--border-color))', borderRadius: '6px', fontSize: '0.72rem', color: '#00ff66', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '180px', overflowY: 'auto' }}>
-                  {activePolicyCode || 'No active policy loaded.'}
-                </pre>
-              </details>
 
               <div className="form-row">
                 <div className="form-group">
@@ -2007,7 +1830,136 @@ export default function App() {
           </div>
         </section>
 
-        {/* Forensic Command Timeline Panel */}
+        {/* Right Column: Active Production Policy Code */}
+        <section className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="card-header">
+            <h2 className="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              Active Production Policy Code (ReadOnly)
+            </h2>
+            <span className="status-badge status-completed">Live from policy.cedar</span>
+          </div>
+          <div className="card-body" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', padding: 0 }}>
+            <pre style={{ margin: 0, padding: '1.5rem', background: '#020306', color: '#00ff66', fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: '1.55', whiteSpace: 'pre-wrap', flexGrow: 1, overflowY: 'auto', border: 'none', borderRadius: '0 0 16px 16px', minHeight: '400px' }}>
+              {activePolicyCode || 'No active policy loaded.'}
+            </pre>
+          </div>
+        </section>
+      </div>
+    );
+  };
+
+  const renderForensicsTab = () => {
+    return (
+      <div className="dashboard-grid animate-fade-in">
+        {/* Left Column: Receipts List & Offline Verifier */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* Verifiable Cedar Policy Receipts */}
+          <section className="glass-panel">
+            <div className="card-header">
+              <h2 className="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--info))' }}>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Verifiable Cedar Policy Receipts
+              </h2>
+              <span className="status-badge status-completed">Tamper-Proof Ledger</span>
+            </div>
+
+            <div className="card-body">
+              <div className="receipt-list">
+                {receipts.map((rc, idx) => (
+                  <div className="receipt-card" key={idx}>
+                    <div className="receipt-meta">
+                      <span className="receipt-tool">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--info))' }}>
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                        Tool: {rc.payload.tool_name}
+                      </span>
+                      <span className={`status-badge ${rc.payload.decision === 'allow' ? 'status-completed' : 'status-failed'}`}>
+                        {rc.payload.decision}
+                      </span>
+                    </div>
+                    <div className="receipt-reason">{rc.payload.reason}</div>
+                    <div className="receipt-signature-block">
+                      <span className="receipt-digest">policy: {rc.payload.policy_digest.substring(0, 15)}</span>
+                      <span className="signature-verified">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        ✓ ED25519 VERIFIED
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {receipts.length === 0 && (
+                  <p style={{ color: 'hsl(var(--text-secondary))', textAlign: 'center', padding: '3rem' }}>
+                    No policy receipts logged or access unauthorized.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Offline Cryptographic Receipt Verifier */}
+          <section className="glass-panel">
+            <div className="card-body" style={{ padding: '1.4rem' }}>
+              <div className="verifier-box" style={{ background: 'transparent', border: 'none', padding: 0 }}>
+                <h3 className="card-title" style={{ fontSize: '0.92rem', marginBottom: '0.8rem' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))' }}>
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                  </svg>
+                  Offline Cryptographic Receipt Verifier
+                </h3>
+                <textarea 
+                  className="form-control" 
+                  placeholder='Paste signed JSON receipt here e.g. {"payload": {...}, "signature": {...}}'
+                  value={receiptInput}
+                  onChange={e => setReceiptInput(e.target.value)}
+                  style={{ marginBottom: '0.8rem' }}
+                />
+                <button className="btn btn-secondary" onClick={handleVerifyReceipt} style={{ width: '100%', marginBottom: '0.8rem' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 11.08V12a8 8 0 1 1-4.8-7.32M22 4 12 14.01l-3-3"/>
+                  </svg>
+                  Verify Receipt Authenticity
+                </button>
+
+                {verificationResult.status !== 'idle' && (
+                  <div className={`verification-result result-${verificationResult.status === 'valid' ? 'valid' : 'invalid'}`} style={{ animation: 'none' }}>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {verificationResult.status === 'valid' ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      )}
+                      {verificationResult.message}
+                    </strong>
+                    {verificationResult.payload && (
+                      <span style={{ fontSize: '0.75rem', marginTop: '0.3rem', fontFamily: 'monospace', color: 'hsl(var(--text-secondary))' }}>
+                        Issuer: {verificationResult.payload.issuer_id} <span style={{ color: 'hsl(var(--text-muted))' }}>|</span> Issued: {new Date(verificationResult.payload.issued_at).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Right Column: Forensic Command Timeline */}
         <section className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="card-header">
             <h2 className="card-title">
@@ -2107,343 +2059,257 @@ export default function App() {
           </div>
         </section>
       </div>
+    );
+  };
 
-      {/* Interactive Sandbox & Playbooks Grid Section */}
-      <div className="terminal-grid-section" style={{ marginTop: '2rem' }}>
-        
-        {/* Visual Security Playbooks Sidebar */}
-        <section className="glass-panel playbooks-panel">
-          <div className="card-header">
-            <h2 className="card-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                <circle cx="12" cy="11" r="3"/>
-              </svg>
-              Interactive Security Playbooks
-            </h2>
-            <span className="status-badge status-completed">Shield Active</span>
-          </div>
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.84rem', lineHeight: '1.45', margin: 0 }}>
-              Test complex system safeguards in real time with zero coding. Click any card below to launch an automated simulation directly inside our sandbox terminal.
-            </p>
-            
-            <div className="playbook-list">
-              
-              {/* Playbook 1 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-pii' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-pii')}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-pii"></div>
-                    <span className="playbook-card-title">PII Filtering & Tor Anomaly Shield</span>
-                  </div>
-                  <span className="playbook-tag tag-pii">Privacy Engine</span>
-                </div>
-                <p className="playbook-card-desc">
-                  Dispatches an anomalous transaction containing Tor credentials and values &gt;$1M. Verifies automated PII email masking and database risk flagging.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-pii</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Playbook 2 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-sandbox' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-sandbox')}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-sandbox"></div>
-                    <span className="playbook-card-title">Sandbox Container Jail Lockout</span>
-                  </div>
-                  <span className="playbook-tag tag-sandbox">MicroVM Jail</span>
-                </div>
-                <p className="playbook-card-desc">
-                  Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our gVisor environment to verify total containment blocks.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-sandbox</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Playbook 3 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-receipt' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-receipt')}
-                title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-receipt"></div>
-                    <span className="playbook-card-title">Cryptographic Receipt Tamper Guard</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    <span className="playbook-tag tag-receipt">Ed25519 Cryptography</span>
-                    {authRole !== 'admin' && (
-                      <span className="lock-badge">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <p className="playbook-card-desc">
-                  Launches a Docker VM to execute cryptographic signing checks and simulates receipt modifying to trigger instant offline verification alerts.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-receipt</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Playbook 4 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-scanner' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-scanner')}
-                title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-scanner"></div>
-                    <span className="playbook-card-title">CI/CD AST Pipeline Scan Gate</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    <span className="playbook-tag tag-scanner">Static Threat Scan</span>
-                    {authRole !== 'admin' && (
-                      <span className="lock-badge">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <p className="playbook-card-desc">
-                  Audits our live Actions pipeline YAML files. Instantly parses the Abstract Syntax Tree (AST) to detect and report dynamic prompt-injection vulnerability models.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-scanner</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Playbook 5 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-cedar' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-cedar')}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-pii" style={{ background: 'hsl(var(--primary))', boxShadow: '0 0 8px hsl(var(--primary))' }}></div>
-                    <span className="playbook-card-title">Cedar Zero-Trust Rule Evaluator</span>
-                  </div>
-                  <span className="playbook-tag tag-pii" style={{ background: 'hsla(var(--primary), 0.06)', color: 'hsl(var(--primary))', borderColor: 'hsla(var(--primary), 0.15)' }}>Dynamic Cedar AST</span>
-                </div>
-                <p className="playbook-card-desc">
-                  Queries the live access policy engine against simulated agent commands (overwriting files or host shell escapes), evaluating active rules in policy.cedar.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-cedar</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Playbook 6 */}
-              <div 
-                className={`playbook-card ${activePlaybook === 'test-alerts' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-alerts')}
-                title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
-              >
-                <div className="playbook-card-header">
-                  <div className="playbook-title-block">
-                    <div className="playbook-bullet bullet-sandbox" style={{ background: 'hsl(var(--info))', boxShadow: '0 0 8px hsl(var(--info))' }}></div>
-                    <span className="playbook-card-title">Incident Alerting & Webhook Gateway</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    <span className="playbook-tag tag-sandbox" style={{ background: 'hsla(var(--info), 0.06)', color: 'hsl(var(--info))', borderColor: 'hsla(var(--info), 0.15)' }}>Slack Webhooks</span>
-                    {authRole !== 'admin' && (
-                      <span className="lock-badge">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <p className="playbook-card-desc">
-                  Simulates dynamic tool call violations to generate a security event, validating that Slack operational alert dispatches format rich visual details properly.
-                </p>
-                <div className="playbook-card-action">
-                  <span className="playbook-cmd-preview">fidusgate-sandbox $ test-alerts</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
-                    <span>Trigger</span>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5 3 19 12 5 21" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
-        {/* Architecture Guide — Collapsible Inline Section */}
-        <section className={`glass-panel arch-inline-section ${showArchPanel ? 'expanded' : ''}`}>
-          <div className="arch-inline-header" onClick={() => setShowArchPanel(!showArchPanel)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-              <div className="arch-inline-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  const renderSandboxTab = () => {
+    return (
+      <div className="terminal-grid-section animate-fade-in" style={{ marginTop: 0 }}>
+        {/* Left Column: Playbooks & Architecture Guide */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* Visual Security Playbooks Sidebar */}
+          <section className="glass-panel playbooks-panel">
+            <div className="card-header">
+              <h2 className="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--success))' }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <circle cx="12" cy="11" r="3"/>
                 </svg>
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>
-                  FidusGate Server Architecture Guide
-                </h3>
-                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
-                  Explore each workspace component — its purpose, how it runs, and key capabilities.
-                </p>
-              </div>
+                Interactive Security Playbooks
+              </h2>
+              <span className="status-badge status-completed">Shield Active</span>
             </div>
-            <div className="arch-inline-toggle">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={showArchPanel ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
-              </svg>
-            </div>
-          </div>
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.84rem', lineHeight: '1.45', margin: 0 }}>
+                Test complex system safeguards in real time with zero coding. Click any card below to launch an automated simulation directly inside our sandbox terminal.
+              </p>
+              
+              <div className="playbook-list">
+                {/* Playbook 1 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-pii' ? 'playbook-card-active' : ''}`}
+                  onClick={() => handlePlaybookClick('test-pii')}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-pii"></div>
+                      <span className="playbook-card-title">PII Filtering & Tor Anomaly Shield</span>
+                    </div>
+                    <span className="playbook-tag tag-pii">Privacy Engine</span>
+                  </div>
+                  <p className="playbook-card-desc">
+                    Dispatches an anomalous transaction containing Tor credentials and values &gt;$1M. Verifies automated PII email masking and database risk flagging.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-pii</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
 
-          {showArchPanel && (
-            <div className="arch-inline-body">
-              <div className="arch-components-list">
-                <p style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', marginBottom: '0.5rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Select a workspace component:
-                </p>
-                {[
-                  {
-                    id: 'gateway',
-                    name: 'Secure Gateway Backend',
-                    path: 'apps/secure-gateway',
-                    package: '@fidusgate/secure-gateway',
-                    icon: '🛡️',
-                    value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues tamper-proof cryptographic receipts.',
-                    howItRuns: 'Concurrently in development using "npm run dev" (Port 3001), or as a multi-stage Alpine Docker container in production.',
-                    functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, OIDC auth attestation, and MS Teams / Slack webhook alerting.'
-                  },
-                  {
-                    id: 'dashboard',
-                    name: 'Operations Dashboard',
-                    path: 'apps/admin-dashboard',
-                    package: '@fidusgate/admin-dashboard',
-                    icon: '🎨',
-                    value: 'Provides real-time visibility, live transaction auditing, dynamic Cedar policy simulator dry-runs, and client-side Ed25519 receipt verification.',
-                    howItRuns: 'Served via Vite at Port 3000 in development, compiled into optimized static HTML/CSS/JS bundles for production deployment.',
-                    functions: 'OIDC token simulation, unified sandbox execution timeline, live policy simulator overrides, and SVG telemetry charts.'
-                  },
-                  {
-                    id: 'daemon',
-                    name: 'Rust Cedar Policy Daemon',
-                    path: 'packages/cedar-daemon',
-                    package: '@fidusgate/cedar-daemon',
-                    icon: '🦀',
-                    value: 'Executes microsecond-level Cedar authorization queries using a Rust-native tiny-http server and guarantees typological schema safety.',
-                    howItRuns: 'Runs inside a lightweight Alpine Docker container on Port 50051. Secure Gateway forwards validation requests to it.',
-                    functions: 'Schema validation (policy.cedarschema), high-speed context matching, and multi-tier permission decisions.'
-                  },
-                  {
-                    id: 'crypto',
-                    name: 'Cryptographic Utilities',
-                    path: 'packages/crypto-utils',
-                    package: '@fidusgate/crypto-utils',
-                    icon: '🔑',
-                    value: 'Provides the cryptographic engine for FidusGate, establishing zero-trust non-repudiation using Ed25519 public-key signature blocks.',
-                    howItRuns: 'Imported as a monorepo library. Also includes an offline CLI utility for regulators to verify receipts.',
-                    functions: 'Ed25519 key pair generation, payload signature signing, HSM/KMS provider routing (HashiCorp Vault Transit / Google Cloud KMS).'
-                  },
-                  {
-                    id: 'database',
-                    name: 'Core Database Client',
-                    path: 'packages/database',
-                    package: '@fidusgate/database',
-                    icon: '💾',
-                    value: 'Manages thread-safe persistence using either lightweight local JSON databases or a production-ready Postgres database structure.',
-                    howItRuns: 'Operates in local flat file mode by default. Connects to Postgres using the Prisma ORM by supplying the DATABASE_URL variable.',
-                    functions: 'JSON database operations, schema-guided Prisma clients, database seeding, and log truncation.'
-                  },
-                  {
-                    id: 'types',
-                    name: 'Unified Core Types',
-                    path: 'packages/core-types',
-                    package: '@fidusgate/core-types',
-                    icon: '📝',
-                    value: 'Enforces compile-time type boundaries across all applications and shared libraries, ensuring absolute data structure consistency.',
-                    howItRuns: 'Imported globally as the foundation of the npm Workspaces dependency graph. Compiled using tsc.',
-                    functions: 'Log log-entry schemas, Transaction types, AuditReceipt specifications, and SecurityFinding structures.'
-                  },
-                  {
-                    id: 'sandbox',
-                    name: 'Execution Sandbox',
-                    path: 'scripts/*',
-                    package: 'N/A',
-                    icon: '🐳',
-                    value: 'Wraps agent terminal execution within gVisor microVMs and copy-on-write Docker containers, preventing host environment pollution.',
-                    howItRuns: 'Triggered automatically via shell scripts (sandbox-execute.sh, ci-verify.sh) whenever scripts are spawned by the gateway.',
-                    functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
-                  }
-                ].map(comp => (
-                  <div 
-                    key={comp.id} 
-                    className={`arch-component-card ${selectedArchComp === comp.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedArchComp(comp.id)}
-                  >
-                    <div className="arch-card-icon">{comp.icon}</div>
-                    <div className="arch-card-meta">
-                      <div className="arch-card-title">{comp.name}</div>
-                      <div className="arch-card-sub">{comp.path}</div>
+                {/* Playbook 2 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-sandbox' ? 'playbook-card-active' : ''}`}
+                  onClick={() => handlePlaybookClick('test-sandbox')}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-sandbox"></div>
+                      <span className="playbook-card-title">Sandbox Container Jail Lockout</span>
+                    </div>
+                    <span className="playbook-tag tag-sandbox">MicroVM Jail</span>
+                  </div>
+                  <p className="playbook-card-desc">
+                    Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our gVisor environment to verify total containment blocks.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-sandbox</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Playbook 3 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-receipt' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
+                  onClick={() => authRole === 'admin' && handlePlaybookClick('test-receipt')}
+                  title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-receipt"></div>
+                      <span className="playbook-card-title">Cryptographic Receipt Tamper Guard</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <span className="playbook-tag tag-receipt">Ed25519 Cryptography</span>
+                      {authRole !== 'admin' && (
+                        <span className="lock-badge">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
+                  <p className="playbook-card-desc">
+                    Launches a Docker VM to execute cryptographic signing checks and simulates receipt modifying to trigger instant offline verification alerts.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-receipt</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Playbook 4 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-scanner' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
+                  onClick={() => authRole === 'admin' && handlePlaybookClick('test-scanner')}
+                  title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-scanner"></div>
+                      <span className="playbook-card-title">CI/CD AST Pipeline Scan Gate</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <span className="playbook-tag tag-scanner">Static Threat Scan</span>
+                      {authRole !== 'admin' && (
+                        <span className="lock-badge">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="playbook-card-desc">
+                    Audits our live Actions pipeline YAML files. Instantly parses the Abstract Syntax Tree (AST) to detect and report dynamic prompt-injection vulnerability models.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-scanner</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Playbook 5 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-cedar' ? 'playbook-card-active' : ''}`}
+                  onClick={() => handlePlaybookClick('test-cedar')}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-pii" style={{ background: 'hsl(var(--primary))', boxShadow: '0 0 8px hsl(var(--primary))' }}></div>
+                      <span className="playbook-card-title">Cedar Zero-Trust Rule Evaluator</span>
+                    </div>
+                    <span className="playbook-tag tag-pii" style={{ background: 'hsla(var(--primary), 0.06)', color: 'hsl(var(--primary))', borderColor: 'hsla(var(--primary), 0.15)' }}>Dynamic Cedar AST</span>
+                  </div>
+                  <p className="playbook-card-desc">
+                    Queries the live access policy engine against simulated agent commands (overwriting files or host shell escapes), evaluating active rules in policy.cedar.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-cedar</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Playbook 6 */}
+                <div 
+                  className={`playbook-card ${activePlaybook === 'test-alerts' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
+                  onClick={() => authRole === 'admin' && handlePlaybookClick('test-alerts')}
+                  title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
+                >
+                  <div className="playbook-card-header">
+                    <div className="playbook-title-block">
+                      <div className="playbook-bullet bullet-sandbox" style={{ background: 'hsl(var(--info))', boxShadow: '0 0 8px hsl(var(--info))' }}></div>
+                      <span className="playbook-card-title">Incident Alerting & Webhook Gateway</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <span className="playbook-tag tag-sandbox" style={{ background: 'hsla(var(--info), 0.06)', color: 'hsl(var(--info))', borderColor: 'hsla(var(--info), 0.15)' }}>Slack Webhooks</span>
+                      {authRole !== 'admin' && (
+                        <span className="lock-badge">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="playbook-card-desc">
+                    Simulates dynamic tool call violations to generate a security event, validating that Slack operational alert dispatches format rich visual details properly.
+                  </p>
+                  <div className="playbook-card-action">
+                    <span className="playbook-cmd-preview">fidusgate-sandbox $ test-alerts</span>
+                    <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                      <span>Trigger</span>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
-              
-              <div className="arch-detail-panel">
-                {(() => {
-                  const comp = [
+            </div>
+          </section>
+
+          {/* Architecture Guide — Collapsible Inline Section */}
+          <section className={`glass-panel arch-inline-section ${showArchPanel ? 'expanded' : ''}`}>
+            <div className="arch-inline-header" onClick={() => setShowArchPanel(!showArchPanel)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div className="arch-inline-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>
+                    FidusGate Server Architecture Guide
+                  </h3>
+                  <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
+                    Explore each workspace component — its purpose, how it runs, and key capabilities.
+                  </p>
+                </div>
+              </div>
+              <div className="arch-inline-toggle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points={showArchPanel ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
+                </svg>
+              </div>
+            </div>
+
+            {showArchPanel && (
+              <div className="arch-inline-body">
+                <div className="arch-components-list">
+                  <p style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', marginBottom: '0.5rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Select a workspace component:
+                  </p>
+                  {[
                     {
                       id: 'gateway',
                       name: 'Secure Gateway Backend',
@@ -2491,7 +2357,7 @@ export default function App() {
                       package: '@fidusgate/database',
                       icon: '💾',
                       value: 'Manages thread-safe persistence using either lightweight local JSON databases or a production-ready Postgres database structure.',
-                      howItRuns: 'Operates in local flat file mode by default. Connects to Postgres using the Prisma ORM by supplying the DATABASE_URL variable.',
+                      howItRuns: 'Operates in local flat file mode by default. Connects to Postgres using the DATABASE_URL variable.',
                       functions: 'JSON database operations, schema-guided Prisma clients, database seeding, and log truncation.'
                     },
                     {
@@ -2514,54 +2380,143 @@ export default function App() {
                       howItRuns: 'Triggered automatically via shell scripts (sandbox-execute.sh, ci-verify.sh) whenever scripts are spawned by the gateway.',
                       functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
                     }
-                  ].find(c => c.id === selectedArchComp);
-                  
-                  if (!comp) {
-                    return (
-                      <div className="arch-placeholder-view">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10"/>
-                          <line x1="12" y1="16" x2="12" y2="12"/>
-                          <line x1="12" y1="8" x2="12.01" y2="8"/>
-                        </svg>
-                        <p>Select a component on the left to inspect its architecture.</p>
+                  ].map(comp => (
+                    <div 
+                      key={comp.id} 
+                      className={`arch-component-card ${selectedArchComp === comp.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedArchComp(comp.id)}
+                    >
+                      <div className="arch-card-icon">{comp.icon}</div>
+                      <div className="arch-card-meta">
+                        <div className="arch-card-title">{comp.name}</div>
+                        <div className="arch-card-sub">{comp.path}</div>
                       </div>
-                    );
-                  }
-                  
-                  return (
-                    <>
-                      <div className="arch-detail-header">
-                        <div className="arch-detail-icon">{comp.icon}</div>
-                        <div className="arch-detail-title-block">
-                          <h3>{comp.name}</h3>
-                          <p>{comp.package !== 'N/A' ? `npm Workspace: ${comp.package}` : 'System Shell Integration'}</p>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="arch-detail-panel">
+                  {(() => {
+                    const comp = [
+                      {
+                        id: 'gateway',
+                        name: 'Secure Gateway Backend',
+                        path: 'apps/secure-gateway',
+                        package: '@fidusgate/secure-gateway',
+                        icon: '🛡️',
+                        value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues tamper-proof cryptographic receipts.',
+                        howItRuns: 'Concurrently in development using "npm run dev" (Port 3001), or as a multi-stage Alpine Docker container in production.',
+                        functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, OIDC auth attestation, and MS Teams / Slack webhook alerting.'
+                      },
+                      {
+                        id: 'dashboard',
+                        name: 'Operations Dashboard',
+                        path: 'apps/admin-dashboard',
+                        package: '@fidusgate/admin-dashboard',
+                        icon: '🎨',
+                        value: 'Provides real-time visibility, live transaction auditing, dynamic Cedar policy simulator dry-runs, and client-side Ed25519 receipt verification.',
+                        howItRuns: 'Served via Vite at Port 3000 in development, compiled into optimized static HTML/CSS/JS bundles for production deployment.',
+                        functions: 'OIDC token simulation, unified sandbox execution timeline, live policy simulator overrides, and SVG telemetry charts.'
+                      },
+                      {
+                        id: 'daemon',
+                        name: 'Rust Cedar Policy Daemon',
+                        path: 'packages/cedar-daemon',
+                        package: '@fidusgate/cedar-daemon',
+                        icon: '🦀',
+                        value: 'Executes microsecond-level Cedar authorization queries using a Rust-native tiny-http server and guarantees typological schema safety.',
+                        howItRuns: 'Runs inside a lightweight Alpine Docker container on Port 50051. Secure Gateway forwards validation requests to it.',
+                        functions: 'Schema validation (policy.cedarschema), high-speed context matching, and multi-tier permission decisions.'
+                      },
+                      {
+                        id: 'crypto',
+                        name: 'Cryptographic Utilities',
+                        path: 'packages/crypto-utils',
+                        package: '@fidusgate/crypto-utils',
+                        icon: '🔑',
+                        value: 'Provides the cryptographic engine for FidusGate, establishing zero-trust non-repudiation using Ed25519 public-key signature blocks.',
+                        howItRuns: 'Imported as a monorepo library. Also includes an offline CLI utility for regulators to verify receipts.',
+                        functions: 'Ed25519 key pair generation, payload signature signing, HSM/KMS provider routing (HashiCorp Vault Transit / Google Cloud KMS).'
+                      },
+                      {
+                        id: 'database',
+                        name: 'Core Database Client',
+                        path: 'packages/database',
+                        package: '@fidusgate/database',
+                        icon: '💾',
+                        value: 'Manages thread-safe persistence using either lightweight local JSON databases or a production-ready Postgres database structure.',
+                        howItRuns: 'Operates in local flat file mode by default. Connects to Postgres using the DATABASE_URL variable.',
+                        functions: 'JSON database operations, schema-guided Prisma clients, database seeding, and log truncation.'
+                      },
+                      {
+                        id: 'types',
+                        name: 'Unified Core Types',
+                        path: 'packages/core-types',
+                        package: '@fidusgate/core-types',
+                        icon: '📝',
+                        value: 'Enforces compile-time type boundaries across all applications and shared libraries, ensuring absolute data structure consistency.',
+                        howItRuns: 'Imported globally as the foundation of the npm Workspaces dependency graph. Compiled using tsc.',
+                        functions: 'Log log-entry schemas, Transaction types, AuditReceipt specifications, and SecurityFinding structures.'
+                      },
+                      {
+                        id: 'sandbox',
+                        name: 'Execution Sandbox',
+                        path: 'scripts/*',
+                        package: 'N/A',
+                        icon: '🐳',
+                        value: 'Wraps agent terminal execution within gVisor microVMs and copy-on-write Docker containers, preventing host environment pollution.',
+                        howItRuns: 'Triggered automatically via shell scripts (sandbox-execute.sh, ci-verify.sh) whenever scripts are spawned by the gateway.',
+                        functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
+                      }
+                    ].find(c => c.id === selectedArchComp);
+                    
+                    if (!comp) {
+                      return (
+                        <div className="arch-placeholder-view">
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                          </svg>
+                          <p>Select a component on the left to inspect its architecture.</p>
                         </div>
-                      </div>
-                      
-                      <div className="arch-detail-section">
-                        <span className="arch-section-lbl">Purpose & Security Value</span>
-                        <p className="arch-section-val">{comp.value}</p>
-                      </div>
-                      
-                      <div className="arch-detail-section">
-                        <span className="arch-section-lbl">How It Runs</span>
-                        <p className="arch-section-val">{comp.howItRuns}</p>
-                      </div>
-                      
-                      <div className="arch-detail-section">
-                        <span className="arch-section-lbl">Key Capabilities & Functions</span>
-                        <p className="arch-section-code">{comp.functions}</p>
-                      </div>
-                    </>
-                  );
-                })()}
+                      );
+                    }
+                    
+                    return (
+                      <>
+                        <div className="arch-detail-header">
+                          <div className="arch-detail-icon">{comp.icon}</div>
+                          <div className="arch-detail-title-block">
+                            <h3>{comp.name}</h3>
+                            <p>{comp.package !== 'N/A' ? `npm Workspace: ${comp.package}` : 'System Shell Integration'}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="arch-detail-section">
+                          <span className="arch-section-lbl">Purpose & Security Value</span>
+                          <p className="arch-section-val">{comp.value}</p>
+                        </div>
+                        
+                        <div className="arch-detail-section">
+                          <span className="arch-section-lbl">How It Runs</span>
+                          <p className="arch-section-val">{comp.howItRuns}</p>
+                        </div>
+                        
+                        <div className="arch-detail-section">
+                          <span className="arch-section-lbl">Key Capabilities & Functions</span>
+                          <p className="arch-section-code">{comp.functions}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        </div>
 
-        {/* Embedded Secure Console Shell */}
+        {/* Right Column: Embedded Secure Console Shell */}
         <section className="glass-panel terminal-window" style={{ marginTop: 0 }}>
           <div className="terminal-header">
             <div className="terminal-dots">
@@ -2608,6 +2563,155 @@ export default function App() {
             />
           </form>
         </section>
+      </div>
+    );
+  };
+
+  return (
+    <div className="app-container animate-fade-in">
+      {/* Header */}
+      <header className="app-header">
+        <div className="brand-section">
+          <h1>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))', filter: 'drop-shadow(0 0 8px hsla(var(--primary), 0.45))' }}>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            FidusGate Security Portal
+          </h1>
+          <p>Secure, Governed, and Self-Refactoring AI-Agentic SDLC Console</p>
+        </div>
+        <div className="system-status">
+          <div className="status-indicator"></div>
+          <span className="status-label">SECURITY ONLINE</span>
+
+          <button className="btn btn-secondary" onClick={handleResetDatabase} style={{ marginLeft: '0.8rem', padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Reset DB
+          </button>
+        </div>
+      </header>
+
+      {/* OIDC Session Controller Drawer */}
+      <section className="glass-panel oidc-panel">
+        <div className="oidc-header">
+          <div className="oidc-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+            </svg>
+          </div>
+          <div className="oidc-title">
+            <h3>OIDC Federated Identity Provider (JWT Simulator)</h3>
+            <p>Select a corporate identity role to obtain a signed JWT token and mount bearer auth gates.</p>
+          </div>
+        </div>
+        
+        <div className="oidc-controls">
+          {authRole === 'unauthenticated' ? (
+            <>
+              <input 
+                type="email" 
+                className="form-control oidc-input" 
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                placeholder="admin@fidusgate.internal"
+              />
+              <button className="btn btn-secondary" onClick={() => handleOidcLogin('developer')} disabled={authLoading}>
+                Login as Developer
+              </button>
+              <button className="btn btn-primary" onClick={() => handleOidcLogin('admin')} disabled={authLoading}>
+                Login as Administrator
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="oidc-session-info">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))' }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <circle cx="12" cy="11" r="2" />
+                  <path d="M12 13v3" />
+                </svg>
+                Active Session: <strong style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))', marginLeft: '0.2rem' }}>{authRole.toUpperCase()}</strong> <span style={{ color: 'hsl(var(--text-muted))', margin: '0 0.2rem' }}>|</span> User: <strong style={{ color: '#fff' }}>{authEmail}</strong>
+              </span>
+              <button className="btn btn-secondary" onClick={handleOidcLogout}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+                </svg>
+                Disconnect Session
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Tab Navigation */}
+      <nav className="tabs-navigation">
+        <button 
+          className={`tab-btn ${activeTab === 'ledger' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ledger')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          Ledger & Transactions
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'compliance' ? 'active' : ''}`}
+          onClick={() => setActiveTab('compliance')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          Compliance & Attestation
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'policy' ? 'active' : ''}`}
+          onClick={() => setActiveTab('policy')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <circle cx="12" cy="11" r="2" />
+            <path d="M12 13v3" />
+          </svg>
+          Cedar Policy & Simulator
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'forensics' ? 'active' : ''}`}
+          onClick={() => setActiveTab('forensics')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="11" y1="8" x2="11" y2="14" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+          Forensics & Verifier
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'sandbox' ? 'active' : ''}`}
+          onClick={() => setActiveTab('sandbox')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+          Interactive Sandbox
+        </button>
+      </nav>
+
+      {/* Tab Panels */}
+      <div className="tab-content-panel">
+        {activeTab === 'ledger' && renderLedgerTab()}
+        {activeTab === 'compliance' && renderComplianceTab()}
+        {activeTab === 'policy' && renderPolicyTab()}
+        {activeTab === 'forensics' && renderForensicsTab()}
+        {activeTab === 'sandbox' && renderSandboxTab()}
       </div>
     </div>
   );
