@@ -11,6 +11,60 @@ import { startMcpServer } from './mcp-server';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure } from './command-auditor';
+import * as ws from 'ws';
+
+// Active WebSocket connections tracking
+const wsClients = new Set<ws.WebSocket>();
+
+export function broadcastWS(event: string, data: any) {
+  const payload = JSON.stringify({ event, data });
+  wsClients.forEach(client => {
+    if (client.readyState === ws.WebSocket.OPEN) {
+      try {
+        client.send(payload);
+      } catch (err: any) {
+        console.error('Failed to send WebSocket broadcast:', err.message);
+      }
+    }
+  });
+}
+
+// SecOps Agent Runaway Loop Circuit Breaker state
+let consecutiveViolations = 0;
+let circuitBreakerTripped = false;
+let circuitBreakerCooldownUntil = 0;
+
+export function checkCircuitBreaker(): boolean {
+  if (circuitBreakerTripped) {
+    if (Date.now() > circuitBreakerCooldownUntil) {
+      circuitBreakerTripped = false;
+      consecutiveViolations = 0;
+      log('info', '🛡️ Circuit breaker automatically reset. Sandbox executions unlocked.');
+      broadcastWS('circuit_breaker_reset', { active: false });
+    } else {
+      return true; // Still tripped
+    }
+  }
+  return false;
+}
+
+export function handleViolation() {
+  consecutiveViolations++;
+  if (consecutiveViolations >= 3) {
+    circuitBreakerTripped = true;
+    circuitBreakerCooldownUntil = Date.now() + 3 * 60 * 1000; // 3-minute lockout
+    log('security', '🚨 CRITICAL RUNAWAY AGENT ALERT: 3 consecutive policy violations detected! Circuit breaker TRIPPED.');
+    broadcastWS('circuit_breaker_tripped', { 
+      active: true, 
+      cooldownUntil: new Date(circuitBreakerCooldownUntil).toISOString(),
+      reason: '3 consecutive Cedar policy violations'
+    });
+  }
+}
+
+export function handleSuccessfulExecution() {
+  consecutiveViolations = 0;
+}
 
 // ==========================================
 // Stateful DevOps Compliance Tracker
@@ -362,7 +416,29 @@ export class PLMComplianceTracker {
 
 const app = express();
 const port = process.env.PORT || 3001;
-const db = new FidusGateDatabase();
+const db = new Proxy(new FidusGateDatabase(), {
+  get(target, prop, receiver) {
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value === 'function') {
+      return function (...args: any[]) {
+        const result = value.apply(target, args);
+        // Intercept async write results to broadcast
+        if (result instanceof Promise) {
+          return result.then((res) => {
+            if (prop === 'addTransaction') {
+              broadcastWS('transaction_created', args[0]);
+            } else if (prop === 'addCommandLog') {
+              broadcastWS('command_log_created', args[0]);
+            }
+            return res;
+          });
+        }
+        return result;
+      };
+    }
+    return value;
+  }
+}) as unknown as FidusGateDatabase;
 const devopsTracker = new DevOpsComplianceTracker();
 const ibpTracker = new IBPComplianceTracker();
 const plmTracker = new PLMComplianceTracker();
@@ -744,8 +820,10 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
 
   if (decision === 'allow') {
     fidusgatePolicyEvaluationsAllow++;
+    handleSuccessfulExecution();
   } else {
     fidusgatePolicyEvaluationsDeny++;
+    handleViolation();
   }
 
   return decision;
@@ -1011,6 +1089,14 @@ app.post('/api/findings', requireAuth(['admin']), async (req, res) => {
 // ==========================================
 app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
   try {
+    if (checkCircuitBreaker()) {
+      const remainingSecs = Math.max(0, Math.ceil((circuitBreakerCooldownUntil - Date.now()) / 1000));
+      res.status(429).json({
+        error: `Sandbox execution locked. SecOps Circuit Breaker tripped due to consecutive security violations. Lock releases in ${remainingSecs} seconds.`
+      });
+      return;
+    }
+
     const { command } = req.body;
     if (!command) {
        res.status(400).json({ error: 'Missing required parameters: command' });
@@ -1024,6 +1110,8 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
     const auditResult = isCommandLineSecure(command);
     if (!auditResult.secure) {
       log('security', `BLOCKED WEB CONSOLE COMMAND: Forbidden command execution attempted. Reason: ${auditResult.reason}`, { command });
+      
+      handleViolation();
       
       // Persist forensic log for blocked/audit-violated command
       await db.addCommandLog({
@@ -1588,8 +1676,20 @@ const metricsServer = http.createServer(async (req, res) => {
 if (process.argv.includes('--mcp')) {
   startMcpServer();
 } else {
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     log('info', `FidusGate Security Gateway API listening on Port ${port}`);
+  });
+
+  // Attach WebSocket server to Express HTTP Server
+  const wss = new ws.Server({ server });
+  wss.on('connection', (socket) => {
+    wsClients.add(socket);
+    log('info', '📡 New WebSocket client connected to SecOps Telemetry Stream');
+
+    socket.on('close', () => {
+      wsClients.delete(socket);
+      log('info', '📡 WebSocket client disconnected');
+    });
   });
 
   metricsServer.listen(metricsPort, () => {
