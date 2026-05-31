@@ -13,10 +13,11 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:wasm": "node scripts/build-wasm.js",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "ci": "bash scripts/ci-verify.sh",
-    "bootstrap": "bash scripts/bootstrap.sh",
+    "bootstrap": "node scripts/build-wasm.js && bash scripts/bootstrap.sh",
     "sandbox": "bash scripts/sandbox-execute.sh",
     "release": "semantic-release"
   },

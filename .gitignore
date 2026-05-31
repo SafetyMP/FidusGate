@@ -108,4 +108,8 @@ out/
 .env.*.local
 .secrets
 
+# Runtime / local state folders
+.memory/
+apps/secure-gateway/.memory/
+
 # End of .gitignore

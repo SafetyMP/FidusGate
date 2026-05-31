@@ -30,6 +30,8 @@ model AuditReceipt {
   claimed_issuer_tier Int?
   signature_alg       String   @default("EdDSA")
   signature_sig       String
+  receiptHash         String   @default("")
+  previousReceiptHash String   @default("")
 }
 
 model SecurityFinding {
@@ -73,6 +75,9 @@ model PendingAction {
   role           String
   requiredVotes  Int                 @default(2)
   status         String              // 'pending' | 'approved' | 'rejected' | 'expired'
+  aiRating       String              @default("safe") // 'safe' | 'suspicious' | 'dangerous'
+  aiReason       String              @default("")
+  adminOverridden Boolean             @default(false)
   approvals      ConsensusApproval[]
 }
 
@@ -93,6 +98,12 @@ model FilesystemDrift {
   changeType String   // 'modified' | 'added' | 'deleted'
   diff       String?  @db.Text
   reconciled Boolean  @default(false)
+}
+
+model SystemConfig {
+  id                  String   @id @default("active_config")
+  circuitBreakerActive Boolean @default(false)
+  agentTokenBudget    Float    @default(1000.0)
 }
 
 

@@ -26,6 +26,7 @@ graph TD
         Crypto["packages/crypto-utils (Ed25519 Cryptography)"]
         DB["packages/database (Mock & Prisma ORM)"]
         Daemon["packages/cedar-daemon (Rust gRPC/tiny-http)"]
+        Action["packages/github-action (CI Gate Custom Action)"]
     end
 
     %% Interfaces
@@ -34,6 +35,8 @@ graph TD
     Gateway --> DB
     Gateway --> Daemon
     Dashboard --> Types
+    Action --> Crypto
+    Action --> Types
 ```
 
 ---
@@ -48,6 +51,7 @@ graph TD
 | **Cryptographic Utilities** | `packages/crypto-utils` | `@fidusgate/crypto-utils` | Encapsulates Ed25519 signature flows, offline CLI verifiers, and interfaces to remote HSM providers (Vault/GCP). |
 | **Core Database Client** | `packages/database` | `@fidusgate/database` | Thread-safe transaction persistence layer supporting JSON local files and PostgreSQL database configurations. |
 | **Unified Core Types** | `packages/core-types` | `@fidusgate/core-types` | Strictly typed interfaces for logs, receipts, compliance findings, and transaction payloads. |
+| **Custom GitHub Action Guard** | `packages/github-action` | `@fidusgate/github-action` | Custom Github Action verifying workflows for prompt injections and verifying cryptographic audit receipts. |
 | **Isolated Execution Sandbox** | `scripts/*` & `scripts/sandbox` | *N/A* | Shell-based runtime controllers providing copy-on-write Docker microVM mounts and gVisor isolation gates. |
 
 ---
@@ -165,9 +169,29 @@ The **Execution Sandbox** manages runtime virtualization, guaranteeing that high
 
 ---
 
+### 📦 8. Custom GitHub Action Guard (`packages/github-action`)
+
+#### 🔹 Value & Function
+The **Custom GitHub Action Guard** extends FidusGate's runtime governance policies into the continuous integration (CI) pipeline. It acts as an automated static and dynamic audit checkpoint, running checks on pull requests before changes are merged.
+* **Commit Cryptographic Audit Receipt Verification:** Connects to `@fidusgate/crypto-utils` to verify that commit audit signatures on changes were signed by a registered, cryptographically authorized AI agent or developer.
+* **Pipeline Prompt Injection Auditing:** Scans the active workflow configuration (`.github/workflows/*.yml`) for dynamic interpolation of user-controlled variables (e.g., `${{ github.event.head_commit.message }}`) in bash runs or prompts to protect against CI environment hijack.
+* **Rule-Based Access Checking:** Ensures only valid changes are permitted to run within privileged environments.
+
+#### 🔹 Operational Runbook
+* **Workflow Configuration:** Mounted as a step within `.github/workflows/ci-agent-pipeline.yml` or standard CI runner configuration:
+  ```yaml
+  - name: FidusGate SecOps Guard
+    uses: ./packages/github-action
+    with:
+      fidusgate_root_key: ${{ secrets.FIDUSGATE_ROOT_KEY }}
+  ```
+* **Build Procedure:** Spawns TypeScript compiler to emit single-file execution package under `packages/github-action/dist/index.js` which is executed directly via `node20` runner environments.
+
+---
+
 ## 💎 Premium Feature Architectures & Observability Flows
 
-FidusGate implements four core premium modules designed for advanced enterprise governance:
+FidusGate implements seven core premium modules designed for advanced enterprise governance:
 
 ### 1. Live + Draft Cedar Policy Simulator
 * **Architecture:** Exposes a secure endpoint `/api/policy/simulate`. When active, it parses the input JSON structure `{ principal, action, context }`.
@@ -184,6 +208,21 @@ FidusGate implements four core premium modules designed for advanced enterprise 
 ### 4. Interactive Collapsible Portals Guide
 * **UX Redesign:** Positioned as an inline collapsible accordion panel in `App.tsx` directly above the terminal shell window.
 * **Animations & Styles:** Uses custom `@keyframes archSlideDown` and transition rules in `App.css` to open/close dynamically under a single React state trigger (`showArchPanel`), providing instant visibility of system runbooks to SecOps auditors.
+
+### 5. Active Filesystem Drift Auto-Reconciliation (Phase 3)
+* **Real-time Porcelain Scans:** Spawns `scripts/sandbox-drift-detect.sh` inside the active workspace path on transaction events. It captures porcelain status lines (e.g. `M`, `??`, `D`), filtering configuration and environment directories.
+* **Prisma Schema Logs:** Records file paths, action statuses (`added`, `modified`, `deleted`), and computes full Git diff patches inside a dedicated `FilesystemDrift` table (or local `drifts.json` backup).
+* **WS-Driven Alert Broadcast:** Dispatches changes to active administrator dashboards via WebSockets, rendering live UI overlays of environment contamination.
+* **Transactional Revert Endpoint (`/api/sandbox/reconcile`):** Executes `git restore . && git clean -fd` to atomic rollback the workspace to a pristine git state, marked statefully as reconciled in the database to clear dashboard indicators.
+
+### 6. Gemini-Powered Cedar Co-Pilot (Phase 3)
+* **Natural Language Processing Loop:** Translates standard speech patterns into active Cedar authorization code inside the `/api/policy/co-pilot` Express route.
+* **API Synthesis:** Relies on a standard POST payload with a `prompt` field. It executes an authenticated HTTPS call to the Google Gemini model endpoint `gemini-1.5-pro`, requesting strict structured JSON response boundaries.
+* **Stateful Fallbacks:** Spawns a local pattern-based mock parser in the event `GEMINI_API_KEY` is not present, ensuring that local developer test cycles for key administrative or pm roles return syntactically valid Cedar permit policies instantly without offline failure.
+
+### 7. Conventional Commits & Semantic Release Workflow
+* **Deterministic Versioning:** Integrates semantic-release libraries inside the workspace, configuring conventional commit analyzers that scan commit formats (`feat(...)`, `fix(...)`, `docs(...)`) to determine version iterations automatically.
+* **Changelog Compilers:** Auto-compiles markdown files summarizing development contributions and patches on successful trunk pushes, drafting release archives entirely via automated actions.
 
 ---
 

@@ -53,10 +53,16 @@ export function parseShellCommand(commandLine: string): string[] {
   return args;
 }
 
+export interface SuggestedAutofix {
+  target: string;
+  replacement: string;
+}
+
 export interface AuditResult {
   secure: boolean;
   reason?: string;
   remediationSuggestion?: string;
+  suggestedAutofix?: SuggestedAutofix;
 }
 
 /**
@@ -112,16 +118,23 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
   
   if (forbiddenBinaries.includes(binaryName)) {
     let suggestion = "Dynamic host-level execution of compilers and network tools is globally blocked.";
+    let fix: SuggestedAutofix | undefined = undefined;
+    
     if (binaryName === 'curl' || binaryName === 'wget') {
       suggestion = "Network downloads via curl/wget are forbidden. Retrieve dependencies via pre-approved package files or utilize the secure proxy gateway.";
     } else if (['pip', 'pip3', 'python', 'python3', 'go', 'cargo', 'rustc'].includes(binaryName)) {
       suggestion = `Dynamic compilation with '${binaryName}' is blocked on the host. Please execute tool chains inside the sandboxed overlay via 'scripts/sandbox-execute.sh "${cleanCmd.replace(/"/g, '\\"')}"'.`;
+      fix = {
+        target: cleanCmd,
+        replacement: `bash scripts/sandbox-execute.sh "${cleanCmd.replace(/"/g, '\\"')}" "${process.cwd()}"`
+      };
     }
     
     return {
       secure: false,
       reason: `Binary '${binaryName}' is explicitly forbidden to prevent network downloads and unauthorized compilation.`,
-      remediationSuggestion: suggestion
+      remediationSuggestion: suggestion,
+      suggestedAutofix: fix
     };
   }
 
@@ -188,7 +201,11 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
         return {
           secure: false,
           reason: 'Dynamic package installation is forbidden at runtime to prevent supply chain contamination.',
-          remediationSuggestion: 'Add new dependencies inside the root package.json file first, then run standard workspace bootstraps.'
+          remediationSuggestion: 'Add new dependencies inside the root package.json file first, then run standard workspace bootstraps.',
+          suggestedAutofix: {
+            target: cleanCmd,
+            replacement: 'npm run bootstrap'
+          }
         };
       }
     }

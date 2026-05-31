@@ -37,6 +37,25 @@ Verify GitHub Action workflows locally using `act`:
 bash scripts/ci-verify.sh
 ```
 
+### Active Filesystem Drift Audits & Reconciliation
+Detect modified or untracked changes relative to the git index, and perform rollbacks:
+```bash
+# Detect drift
+bash scripts/sandbox-drift-detect.sh <workspace_path>
+
+# Reconcile/Rollback untracked & modified files
+curl -X POST http://localhost:3001/api/sandbox/reconcile -H "Authorization: Bearer <admin_token>"
+```
+
+### Cedar Policy Co-Pilot Conversations
+Generate policies conversational-style using the Gemini API:
+```bash
+curl -X POST http://localhost:3001/api/policy/co-pilot \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <developer_token>" \
+  -d '{"prompt": "allow pm-sme to write md files"}'
+```
+
 ---
 
 ## 📐 Coding Guidelines & Standards

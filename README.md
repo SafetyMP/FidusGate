@@ -19,6 +19,17 @@ FidusGate is modeled to align with international risk management and cybersecuri
 
 ---
 
+## 📖 Documentation & Playbooks Portal
+
+FidusGate includes a comprehensive set of engineering references, operational manuals, and domain-scoped SME playbooks to assist security officers and developers in managing agentic boundaries.
+
+* **[Documentation Portal](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/README.md):** The primary index mapping all guides and governance skills.
+* **[Monorepo Architecture Guide](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/ARCHITECTURE.md):** Deep dive into high-level topologies, component details, and Docker sandbox configurations.
+* **[Local CI/CD Emulation Manual](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/local-ci-emulation.md):** Offline pipeline execution using `act` and prompt injection verification checks.
+* **[Phase 3 Verification Walkthrough](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/walkthrough.md):** Concrete operational runbooks for filesystem drift auto-reconciliation, Gemini Cedar Co-Pilots, and conventional commit tags.
+
+---
+
 ## 📐 Unified Monorepo Architecture
 
 The workspace is structured as a modular **npm Workspaces** monorepo, promoting strict dependency scoping and isolated boundaries:
@@ -47,6 +58,7 @@ graph TD
         Types["packages/core-types (Models)"]
         Crypto["packages/crypto-utils (Ed25519)"]
         DB["packages/database (Mock Store)"]
+        Action["packages/github-action (CI Gate)"]
     end
 
     %% Sandboxed Verification Pipelines
@@ -63,6 +75,8 @@ graph TD
     Gateway --> Crypto
     Gateway --> DB
     Dashboard --> Types
+    Action --> Crypto
+    Action --> Types
 
     %% Flow of Controls
     CedarPolicy --> Gateway
@@ -74,8 +88,9 @@ graph TD
 1.  **`packages/core-types`**: Declares strictly typed boundaries for transactions, security findings, logs, and verifiable receipts.
 2.  **`packages/crypto-utils`**: Encapsulates cryptographic signing and verification routines powered by modern **Ed25519** public-key cryptography.
 3.  **`packages/database`**: A mock thread-safe database backed by persistent, seeded JSON records for immediate offline display.
-4.  **`apps/secure-gateway`**: High-security Express microservice exposing transaction APIs with automatic PII (Personally Identifiable Information) masking and signature signing.
-5.  **`apps/admin-dashboard`**: A premium Vite-React operations control center styled with deep HSL space colors, glassmorphic card overlays, and Outfitted typography. Includes a standalone receipt signature verifier, live log streams, and interactive command consoles.
+4.  **`packages/github-action`**: A custom GitHub Action guard that validates workflows, scans for prompt injections, and verifies commit receipts.
+5.  **`apps/secure-gateway`**: High-security Express microservice exposing transaction APIs with automatic PII (Personally Identifiable Information) masking and signature signing.
+6.  **`apps/admin-dashboard`**: A premium Vite-React operations control center styled with deep HSL space colors, glassmorphic card overlays, and Outfitted typography. Includes a standalone receipt signature verifier, live log streams, and interactive command consoles.
 
 ---
 
@@ -133,6 +148,16 @@ FidusGate includes a robust, high-performance suite of SecOps observability and 
 * **Smooth Micro-Animations:** A clickable header toggle slides the guide body open or closed with smooth CSS slide-down animations and updates a reactive chevron indicator.
 * **Component Profiling:** SecOps administrators can interactively select component cards (Secure Gateway, Operations Console, Rust Cedar Daemon, Cryptographic Utilities, Database Clients, Core Types, and Sandbox execution layers) to instantly view their **Purpose & Security Value**, **Operational Runbook instructions (ports, triggers, scripts)**, and **Key Capabilities & Functions**.
 
+### 📡 5. Phase 3 Active Filesystem Drift Auto-Reconciliation
+* **Real-Time Drift Detection:** The Secure Gateway utilizes `scripts/sandbox-drift-detect.sh` to track untracked, modified, or deleted files inside the workspace relative to git index status (excluding environment, node_modules, and cache files).
+* **Stateful Logging & WebSockets:** Logs all drift files, change types (`added`, `modified`, `deleted`), and raw diffs into the database, instantly broadcasting them via WebSockets (`filesystem_drift_detected`) to update the Operations Console UI with warning status overlays.
+* **One-Click Reconcile Rollbacks:** Security administrators can trigger `POST /api/sandbox/reconcile` directly from the dashboard, executing a clean and restore sequence (`git restore . && git clean -fd`) inside the workspace to instantly revert the environment to a clean git status, reconcile database records, and update WebSocket clients.
+
+### 🧠 6. Phase 3 Gemini-Powered Cedar Co-Pilot
+* **Natural Language to Policy Translation:** Provides conversational policy generation inside the `/api/policy/co-pilot` endpoint. SecOps developers submit conversational prompts (e.g. *"allow pm-sme to write .md files"*).
+* **Gemini-1.5-Pro API Integration:** Leverages the official Google Gemini API (with `gemini-1.5-pro` model) to interpret user intent, generating a syntactically correct Cedar authorization rule and a concise plain-English explanation returned as JSON.
+* **Resilient Mock Fallback Engine:** Implements a robust rule-based mock parser that handles key policies (for roles like `pm-sme` and `security-sme`) when `GEMINI_API_KEY` is not set, providing robust fail-safes during offline development.
+
 ---
 
 
@@ -173,6 +198,38 @@ You can copy any cryptographically signed transaction receipt from the dashboard
 ```bash
 node packages/crypto-utils/dist/index.js --verify <path_to_receipt_json>
 ```
+
+### 📡 6. Filesystem Drift Detection & Auto-Reconciliation
+To manually audit filesystem drift in a sandbox or workspace:
+```bash
+bash scripts/sandbox-drift-detect.sh <workspace_path>
+```
+To trigger the active rollback and reconcile all untracked or modified changes:
+```bash
+curl -X POST http://localhost:3001/api/sandbox/reconcile -H "Authorization: Bearer <admin_token>"
+```
+
+### 🧠 7. Gemini Cedar Policy Co-Pilot
+To generate a Cedar policy from a natural language request using the Co-Pilot API:
+```bash
+curl -X POST http://localhost:3001/api/policy/co-pilot \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <developer_token>" \
+  -d '{"prompt": "allow pm-sme to write md files"}'
+```
+
+---
+
+## 📦 Continuous Delivery & Automated Releases
+
+FidusGate implements a highly standardized, trunk-based delivery model governed by conventional commits and automated release pipelines:
+
+* **Conventional Commit Compliance:** Code changes are prefixed using semantic scopes (e.g. `feat(secops)`, `chore(release)`, `fix(crypto)`). This enables deterministic dependency mapping and machine-readable changelog logs.
+* **Semantic Release Automation (`.releaserc.json`):** Leverages automated release steps during the main branch pipeline build to:
+  1. Parse commit messages and automatically calculate the next semantic version (Major/Minor/Patch).
+  2. Auto-generate comprehensive changelogs based on standard templates.
+  3. Publish release tags and drafts directly to GitHub.
+* **Release Pipeline Workflow (`.github/workflows/release.yml`):** Runs on push to the `main` branch, performing automated test validation (`npm run test`), monorepo type-checking (`tsc`), and launching the release runner securely.
 
 ---
 

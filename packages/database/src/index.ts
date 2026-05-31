@@ -1,7 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
+
+function calculateReceiptHash(payload: any): string {
+  const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
 
 export interface CommandLogEntry {
   id: string;
@@ -285,7 +291,9 @@ export class FidusGateDatabase {
             alg: r.signature_alg as any,
             kid: r.issuer_id,
             sig: r.signature_sig
-          }
+          },
+          receiptHash: r.receiptHash || undefined,
+          previousReceiptHash: r.previousReceiptHash || undefined
         }));
       } catch (err: any) {
         console.warn('⚠️  Prisma Receipt query failed, falling back to JSON storage:', err.message);
@@ -295,6 +303,37 @@ export class FidusGateDatabase {
   }
 
   public async addAuditReceipt(receipt: AuditReceipt): Promise<void> {
+    let previousHash = '';
+    if (this.usePostgres && this.prisma) {
+      try {
+        const lastReceipt = await this.prisma.auditReceipt.findFirst({
+          orderBy: { issued_at: 'desc' }
+        });
+        if (lastReceipt) {
+          previousHash = lastReceipt.receiptHash || '';
+        }
+      } catch (err) {
+        // Ignore and default to empty
+      }
+    } else {
+      const list = this.getAuditReceiptsJson();
+      if (list.length > 0) {
+        const lastReceipt = list[0];
+        previousHash = (lastReceipt as any).receiptHash || '';
+      }
+    }
+
+    const receiptToStore = {
+      ...receipt,
+      previousReceiptHash: previousHash
+    };
+    const hash = calculateReceiptHash({
+      payload: receipt.payload,
+      signature: receipt.signature,
+      previousReceiptHash: previousHash
+    });
+    (receiptToStore as any).receiptHash = hash;
+
     if (this.usePostgres && this.prisma) {
       try {
         await this.prisma.auditReceipt.create({
@@ -309,7 +348,9 @@ export class FidusGateDatabase {
             reason: receipt.payload.reason || null,
             claimed_issuer_tier: receipt.payload.claimed_issuer_tier || null,
             signature_alg: receipt.signature.alg,
-            signature_sig: receipt.signature.sig
+            signature_sig: receipt.signature.sig,
+            receiptHash: hash,
+            previousReceiptHash: previousHash
           }
         });
         return;
@@ -319,7 +360,7 @@ export class FidusGateDatabase {
     }
     
     const list = this.getAuditReceiptsJson();
-    list.unshift(receipt);
+    list.unshift(receiptToStore);
     writeJsonAtomic(RECEIPTS_FILE, list);
   }
 
@@ -573,6 +614,286 @@ export class FidusGateDatabase {
     writeJsonAtomic(DRIFTS_FILE, updated);
   }
 
+  // ==========================================
+  // System Config / Circuit Breaker Management
+  // ==========================================
+  private getSystemConfigJson(): { circuitBreakerActive: boolean; agentTokenBudget: number } {
+    const CONFIG_FILE = path.join(DATA_DIR, 'system-config.json');
+    if (!fs.existsSync(CONFIG_FILE)) {
+      writeJsonAtomic(CONFIG_FILE, { circuitBreakerActive: false, agentTokenBudget: 1000.0 });
+    }
+    try {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf-8');
+      return JSON.parse(data);
+    } catch (e) {
+      return { circuitBreakerActive: false, agentTokenBudget: 1000.0 };
+    }
+  }
+
+  public async getSystemConfig(): Promise<{ circuitBreakerActive: boolean; agentTokenBudget: number }> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const config = await this.prisma.systemConfig.findFirst();
+        if (config) {
+          return {
+            circuitBreakerActive: config.circuitBreakerActive,
+            agentTokenBudget: config.agentTokenBudget
+          };
+        } else {
+          const newConfig = await this.prisma.systemConfig.create({
+            data: { id: 'active_config', circuitBreakerActive: false, agentTokenBudget: 1000.0 }
+          });
+          return {
+            circuitBreakerActive: newConfig.circuitBreakerActive,
+            agentTokenBudget: newConfig.agentTokenBudget
+          };
+        }
+      } catch (err: any) {
+        console.warn('⚠️  Prisma SystemConfig query failed, falling back to JSON storage:', err.message);
+      }
+    }
+    return this.getSystemConfigJson();
+  }
+
+  public async updateSystemConfig(config: { circuitBreakerActive?: boolean; agentTokenBudget?: number }): Promise<void> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.systemConfig.upsert({
+          where: { id: 'active_config' },
+          update: {
+            circuitBreakerActive: config.circuitBreakerActive !== undefined ? config.circuitBreakerActive : undefined,
+            agentTokenBudget: config.agentTokenBudget !== undefined ? config.agentTokenBudget : undefined
+          },
+          create: {
+            id: 'active_config',
+            circuitBreakerActive: config.circuitBreakerActive || false,
+            agentTokenBudget: config.agentTokenBudget || 1000.0
+          }
+        });
+        return;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma SystemConfig upsert failed, falling back to JSON storage:', err.message);
+      }
+    }
+
+    const current = this.getSystemConfigJson();
+    const updated = {
+      circuitBreakerActive: config.circuitBreakerActive !== undefined ? config.circuitBreakerActive : current.circuitBreakerActive,
+      agentTokenBudget: config.agentTokenBudget !== undefined ? config.agentTokenBudget : current.agentTokenBudget
+    };
+    const CONFIG_FILE = path.join(DATA_DIR, 'system-config.json');
+    writeJsonAtomic(CONFIG_FILE, updated);
+  }
+
+  // ==========================================
+  // Consensus Gating / Pending Actions Management
+  // ==========================================
+  private getPendingActionsJson(): any[] {
+    const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
+    if (!fs.existsSync(ACTIONS_FILE)) {
+      writeJsonAtomic(ACTIONS_FILE, []);
+    }
+    try {
+      const data = fs.readFileSync(ACTIONS_FILE, 'utf-8');
+      return JSON.parse(data);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  public async getPendingActions(): Promise<any[]> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        return await this.prisma.pendingAction.findMany({
+          include: { approvals: true },
+          orderBy: { createdAt: 'desc' }
+        });
+      } catch (err: any) {
+        console.warn('⚠️  Prisma PendingAction query failed, falling back to JSON storage:', err.message);
+      }
+    }
+    return this.getPendingActionsJson();
+  }
+
+  public async createPendingAction(action: {
+    id: string;
+    command: string;
+    initiator: string;
+    role: string;
+    requiredVotes?: number;
+    expiresInSeconds?: number;
+    aiRating?: string;
+    aiReason?: string;
+  }): Promise<any> {
+    const expiresAt = new Date(Date.now() + (action.expiresInSeconds || 3600) * 1000).toISOString();
+    const newEntry = {
+      id: action.id,
+      createdAt: new Date().toISOString(),
+      expiresAt,
+      command: action.command,
+      initiator: action.initiator,
+      role: action.role,
+      requiredVotes: action.requiredVotes || 2,
+      status: 'pending',
+      aiRating: action.aiRating || 'safe',
+      aiReason: action.aiReason || '',
+      adminOverridden: false,
+      approvals: []
+    };
+
+    if (this.usePostgres && this.prisma) {
+      try {
+        const created = await this.prisma.pendingAction.create({
+          data: {
+            id: newEntry.id,
+            createdAt: new Date(newEntry.createdAt),
+            expiresAt: new Date(newEntry.expiresAt),
+            command: newEntry.command,
+            initiator: newEntry.initiator,
+            role: newEntry.role,
+            requiredVotes: newEntry.requiredVotes,
+            status: 'pending',
+            aiRating: newEntry.aiRating,
+            aiReason: newEntry.aiReason,
+            adminOverridden: false
+          },
+          include: { approvals: true }
+        });
+        return created;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma PendingAction creation failed, falling back to JSON storage:', err.message);
+      }
+    }
+
+    const list = this.getPendingActionsJson();
+    list.unshift(newEntry);
+    const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
+    writeJsonAtomic(ACTIONS_FILE, list);
+    return newEntry;
+  }
+
+  public async addConsensusApproval(approval: {
+    actionId: string;
+    approver: string;
+    role: string;
+    signature: string;
+  }): Promise<any> {
+    const newApproval = {
+      id: `app_${Math.floor(100000 + Math.random() * 900000)}`,
+      actionId: approval.actionId,
+      timestamp: new Date().toISOString(),
+      approver: approval.approver,
+      role: approval.role,
+      signature: approval.signature
+    };
+
+    if (this.usePostgres && this.prisma) {
+      try {
+        await this.prisma.consensusApproval.create({
+          data: {
+            id: newApproval.id,
+            actionId: newApproval.actionId,
+            timestamp: new Date(newApproval.timestamp),
+            approver: newApproval.approver,
+            role: newApproval.role,
+            signature: newApproval.signature
+          }
+        });
+
+        // Check if consensus is met
+        const action = await this.prisma.pendingAction.findUnique({
+          where: { id: approval.actionId },
+          include: { approvals: true }
+        });
+
+        if (action && action.approvals.length >= action.requiredVotes && action.status === 'pending') {
+          const updatedAction = await this.prisma.pendingAction.update({
+            where: { id: approval.actionId },
+            data: { status: 'approved' },
+            include: { approvals: true }
+          });
+          return updatedAction;
+        }
+        return action;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma ConsensusApproval insertion failed, falling back to JSON storage:', err.message);
+      }
+    }
+
+    const list = this.getPendingActionsJson();
+    const action = list.find(a => a.id === approval.actionId);
+    if (action) {
+      // Prevent duplicate approval roles
+      if (!action.approvals.some((app: any) => app.role === approval.role)) {
+        action.approvals.push({
+          id: newApproval.id,
+          actionId: newApproval.actionId,
+          timestamp: newApproval.timestamp,
+          approver: newApproval.approver,
+          role: newApproval.role,
+          signature: newApproval.signature
+        });
+        if (action.approvals.length >= action.requiredVotes && action.status === 'pending') {
+          action.status = 'approved';
+        }
+        const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
+        writeJsonAtomic(ACTIONS_FILE, list);
+      }
+      return action;
+    }
+    return null;
+  }
+
+  public async expirePendingAction(actionId: string): Promise<any> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const updated = await this.prisma.pendingAction.update({
+          where: { id: actionId },
+          data: { status: 'expired' },
+          include: { approvals: true }
+        });
+        return updated;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma PendingAction update to expired failed, falling back to JSON storage:', err.message);
+      }
+    }
+
+    const list = this.getPendingActionsJson();
+    const action = list.find(a => a.id === actionId);
+    if (action) {
+      action.status = 'expired';
+      const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
+      writeJsonAtomic(ACTIONS_FILE, list);
+      return action;
+    }
+    return null;
+  }
+
+  public async adminOverrideAction(actionId: string): Promise<any> {
+    if (this.usePostgres && this.prisma) {
+      try {
+        const updated = await this.prisma.pendingAction.update({
+          where: { id: actionId },
+          data: { adminOverridden: true },
+          include: { approvals: true }
+        });
+        return updated;
+      } catch (err: any) {
+        console.warn('⚠️  Prisma PendingAction admin override failed, falling back to JSON storage:', err.message);
+      }
+    }
+
+    const list = this.getPendingActionsJson();
+    const action = list.find(a => a.id === actionId);
+    if (action) {
+      action.adminOverridden = true;
+      const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
+      writeJsonAtomic(ACTIONS_FILE, list);
+      return action;
+    }
+    return null;
+  }
+
   public async healthCheck(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs: number; error?: string }> {
     if (!this.usePostgres || !this.prisma) {
       return { status: 'healthy', latencyMs: 0 };
@@ -597,6 +918,7 @@ export class FidusGateDatabase {
     if (this.usePostgres && this.prisma) {
       try {
         await this.prisma.$transaction([
+          this.prisma.systemConfig.deleteMany(),
           this.prisma.filesystemDrift.deleteMany(),
           this.prisma.consensusApproval.deleteMany(),
           this.prisma.pendingAction.deleteMany(),
@@ -617,5 +939,7 @@ export class FidusGateDatabase {
     writeJsonAtomic(FINDINGS_FILE, []);
     writeJsonAtomic(COMMAND_LOGS_FILE, []);
     writeJsonAtomic(DRIFTS_FILE, []);
+    const CONFIG_FILE = path.join(DATA_DIR, 'system-config.json');
+    writeJsonAtomic(CONFIG_FILE, { circuitBreakerActive: false, agentTokenBudget: 1000.0 });
   }
 }

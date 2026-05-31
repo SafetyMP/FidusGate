@@ -49,6 +49,10 @@ export function createAttestedSession(
   };
 }
 
+export function hashReceipt(payload: any): string {
+  const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
 
 // ==========================================
 // Recommendation #2: KMS Provider Abstraction
@@ -144,6 +148,14 @@ function curlPost(url: string, headers: Record<string, string>, body: any): any 
   const curlCmd = `curl -s -X POST "${url}" ` +
     Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ') +
     ` -d '${JSON.stringify(body).replace(/'/g, "'\\''")}'`;
+  const output = execSync(curlCmd, { encoding: 'utf8' });
+  return JSON.parse(output);
+}
+
+// Synchronous curl get helper to handle networked HSM queries
+function curlGet(url: string, headers: Record<string, string>): any {
+  const curlCmd = `curl -s -X GET "${url}" ` +
+    Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ');
   const output = execSync(curlCmd, { encoding: 'utf8' });
   return JSON.parse(output);
 }
@@ -261,13 +273,134 @@ export class GcpKMSProvider implements KMSProvider {
   }
 
   public verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
-    const local = new LocalKMSProvider();
-    return local.verifyReceipt(receipt, publicKeyHex);
+    const projectId = process.env.GCP_PROJECT_ID || 'fidusgate-audit';
+    const location = process.env.GCP_LOCATION || 'global';
+    const keyRing = process.env.GCP_KMS_KEY_RING || 'fidusgate-keyring';
+    const cryptoKey = process.env.GCP_KMS_KEY_NAME || 'fidusgate-key';
+    const version = process.env.GCP_KMS_KEY_VERSION || '1';
+    const accessToken = process.env.GCP_ACCESS_TOKEN || 'mock-access-token';
+
+    console.log(`📡 KMS API CALL: Dispatching Google Cloud KMS public key retrieval to key: ${cryptoKey}`);
+
+    try {
+      const url = `https://cloudkms.googleapis.com/v1/projects/${projectId}/locations/${location}/keyRings/${keyRing}/cryptoKeys/${cryptoKey}/cryptoKeyVersions/${version}/publicKey`;
+      const response = curlGet(
+        url,
+        { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      );
+
+      const pem = response?.pem;
+      if (!pem) {
+        throw new Error(response?.error?.message || 'No public key returned from GCP KMS');
+      }
+
+      const verifier = crypto.createVerify('sha256');
+      verifier.update(JSON.stringify(receipt.payload));
+      return verifier.verify(pem, Buffer.from(receipt.signature.sig, 'base64'));
+    } catch (err: any) {
+      console.warn(`⚠️ GCP KMS verification failed: ${err.message}. Falling back to local offline check.`);
+      const local = new LocalKMSProvider();
+      return local.verifyReceipt(receipt, publicKeyHex);
+    }
+  }
+}
+
+export class AwsKMSProvider implements KMSProvider {
+  public signPayload(
+    payload: AuditReceiptPayload,
+    privateKeyHex: string,
+    kid: string
+  ): AuditReceipt {
+    const keyId = process.env.AWS_KMS_KEY_ID || 'fidusgate-key';
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || 'mock-access-key';
+
+    console.log(`🔐 KMS API CALL: Dispatching AWS KMS signing request to key: ${keyId}`);
+
+    try {
+      const dataStr = JSON.stringify(payload);
+      const sha256Hex = crypto.createHash('sha256').update(dataStr).digest('hex');
+
+      const url = `https://kms.${region}.amazonaws.com/`;
+      const response = curlPost(
+        url,
+        {
+          'X-Amz-Target': 'TrentService.Sign',
+          'Content-Type': 'application/x-amz-json-1.1',
+          'Authorization': `AWS4-HMAC-SHA256 Credential=${accessKeyId}/mock-date/${region}/kms/aws4_request`
+        },
+        {
+          KeyId: keyId,
+          Message: Buffer.from(sha256Hex, 'hex').toString('base64'),
+          MessageType: 'DIGEST',
+          SigningAlgorithm: 'RSASSA_PSS_SHA_256'
+        }
+      );
+
+      const sig = response?.Signature;
+      if (!sig) {
+        throw new Error(response?.Message || 'No signature returned from AWS KMS');
+      }
+
+      return {
+        payload,
+        signature: {
+          alg: 'EdDSA',
+          kid,
+          sig
+        }
+      };
+    } catch (err: any) {
+      console.warn(`⚠️ AWS KMS sign failed: ${err.message}. Falling back to local keys.`);
+      const local = new LocalKMSProvider();
+      return local.signPayload(payload, privateKeyHex, kid);
+    }
+  }
+
+  public verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
+    const keyId = process.env.AWS_KMS_KEY_ID || 'fidusgate-key';
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || 'mock-access-key';
+
+    console.log(`📡 KMS API CALL: Dispatching AWS KMS verification request to key: ${keyId}`);
+
+    try {
+      const dataStr = JSON.stringify(receipt.payload);
+      const sha256Hex = crypto.createHash('sha256').update(dataStr).digest('hex');
+      const url = `https://kms.${region}.amazonaws.com/`;
+      const response = curlPost(
+        url,
+        {
+          'X-Amz-Target': 'TrentService.Verify',
+          'Content-Type': 'application/x-amz-json-1.1',
+          'Authorization': `AWS4-HMAC-SHA256 Credential=${accessKeyId}/mock-date/${region}/kms/aws4_request`
+        },
+        {
+          KeyId: keyId,
+          Message: Buffer.from(sha256Hex, 'hex').toString('base64'),
+          MessageType: 'DIGEST',
+          Signature: receipt.signature.sig,
+          SigningAlgorithm: 'RSASSA_PSS_SHA_256'
+        }
+      );
+
+      if (response?.SignatureValid === true) {
+        return true;
+      }
+      throw new Error(response?.Message || 'Verification returned SignatureValid = false');
+    } catch (err: any) {
+      console.warn(`⚠️ AWS KMS verification failed: ${err.message}. Falling back to local offline check.`);
+      const local = new LocalKMSProvider();
+      return local.verifyReceipt(receipt, publicKeyHex);
+    }
   }
 }
 
 // Dynamically resolve provider based on environment configurations
 function getKMSProvider(): KMSProvider {
+  if (process.env.AWS_KMS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) {
+    return new AwsKMSProvider();
+  }
   if (process.env.GCP_KMS_KEY_RING || process.env.GCP_KMS_KEY_NAME) {
     return new GcpKMSProvider();
   }
