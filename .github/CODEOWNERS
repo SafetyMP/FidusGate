@@ -1,0 +1,23 @@
+# FidusGate CODEOWNERS File
+# Automates PR review assignments based on monorepo directory directories
+
+# Global owners for catch-all changes
+*                           @SafetyMP/fidusgate-core
+
+# Security Policies & Cedar Rules
+/policy.cedar               @SafetyMP/security-core
+/policy.cedarschema         @SafetyMP/security-core
+/.github/workflows/         @SafetyMP/security-core @SafetyMP/devops-core
+
+# Applications
+/apps/secure-gateway/       @SafetyMP/fidusgate-core
+/apps/admin-dashboard/      @SafetyMP/fidusgate-core @SafetyMP/frontend-team
+
+# Shared Modules & Libraries
+/packages/cedar-daemon/     @SafetyMP/security-core @SafetyMP/rust-devs
+/packages/crypto-utils/     @SafetyMP/cryptography-sme
+/packages/database/         @SafetyMP/platform-team
+/packages/core-types/       @SafetyMP/platform-team
+
+# Sandbox & Execution Scripts
+/scripts/                   @SafetyMP/security-core @SafetyMP/devops-core
