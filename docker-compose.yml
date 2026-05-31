@@ -16,5 +16,17 @@ services:
       timeout: 5s
       retries: 5
 
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: fidusgate-vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "root"
+      VAULT_ADDR: "http://0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+
 volumes:
   fidusgate-postgres-data:
+

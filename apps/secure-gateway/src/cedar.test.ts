@@ -611,4 +611,97 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
     assert.strictEqual(logs[0].status, 'success', 'The retrieved status should match');
     assert.strictEqual(logs[0].cedarDecision, 'allow', 'The retrieved cedarDecision should match');
   });
+
+  await t.test('Multi-Agent Consensus Gating - PostgreSQL State Persistence', async () => {
+    const db = new FidusGateDatabase();
+    await db.clearDatabase();
+    
+    const prisma = db.getPrisma();
+    if (!prisma) {
+      console.log('Skipping PostgreSQL consensus test: Database is in JSON mock mode.');
+      return;
+    }
+
+    // 1. Create a suspended PendingAction in PostgreSQL
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const action = await prisma.pendingAction.create({
+      data: {
+        command: 'rm -rf /unauthorized/path',
+        initiator: 'developer@fidusgate.internal',
+        role: 'developer',
+        requiredVotes: 2,
+        status: 'pending',
+        expiresAt
+      }
+    });
+
+    assert.ok(action.id, 'PendingAction ID should be generated');
+    assert.strictEqual(action.status, 'pending');
+
+    // 2. Add ConsensusApproval signature
+    const approval = await prisma.consensusApproval.create({
+      data: {
+        actionId: action.id,
+        approver: 'security-officer@fidusgate.internal',
+        role: 'admin',
+        signature: 'mock_attestation_signature_hex_value'
+      }
+    });
+
+    assert.ok(approval.id);
+    assert.strictEqual(approval.actionId, action.id);
+
+    // 3. Query back from database and verify relations
+    const retrievedAction = await prisma.pendingAction.findUnique({
+      where: { id: action.id },
+      include: { approvals: true }
+    });
+
+    assert.ok(retrievedAction);
+    assert.strictEqual(retrievedAction.approvals.length, 1);
+    assert.strictEqual(retrievedAction.approvals[0].approver, 'security-officer@fidusgate.internal');
+  });
+
+  await t.test('Ephemeral Session Keyrings - Verification Attestation', async () => {
+    const { generateKeyPair, createAttestedSession, verifyReceipt } = require('@fidusgate/crypto-utils');
+    
+    const masterKeys = generateKeyPair();
+    const issuerId = 'sb:issuer:developer-session';
+
+    // 1. Bootstrap attested session
+    const session = createAttestedSession(
+      masterKeys.privateKeyHex,
+      masterKeys.publicKeyHex,
+      issuerId,
+      1800
+    );
+
+    assert.ok(session.sessionKeyPair.publicKeyHex);
+    assert.ok(session.attestationCert.attestationSignature);
+
+    const payload = {
+      type: 'protectmcp:decision',
+      tool_name: 'write_file',
+      decision: 'allow' as const,
+      policy_digest: 'sha256:digest123',
+      issued_at: new Date().toISOString(),
+      issuer_id: issuerId
+    };
+
+    // 2. Sign with ephemeral session key
+    const { signPayload } = require('@fidusgate/crypto-utils');
+    const localReceipt = signPayload(payload, session.sessionKeyPair.privateKeyHex, issuerId);
+    
+    const attestedReceipt = {
+      ...localReceipt,
+      signature: {
+        ...localReceipt.signature,
+        attestation: session.attestationCert
+      }
+    };
+
+    // 3. Verify mathematically via FidusGate root master public key
+    const isValid = verifyReceipt(attestedReceipt, masterKeys.publicKeyHex);
+    assert.strictEqual(isValid, true, 'Gateway verifyReceipt should successfully validate attested session signatures');
+  });
 });

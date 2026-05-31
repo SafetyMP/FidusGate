@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { generateKeyPair, signPayload, verifyReceipt } from './index';
+import { generateKeyPair, signPayload, verifyReceipt, createAttestedSession } from './index';
 import { AuditReceiptPayload } from '@fidusgate/core-types';
 
 test('Ed25519 Public-Key Cryptography Tests', async (t) => {
@@ -125,5 +125,72 @@ test('Ed25519 Public-Key Cryptography Tests', async (t) => {
 
     const isValid = verifyReceipt(malformedReceipt, keys.publicKeyHex);
     assert.strictEqual(isValid, false, 'Verification must gracefully catch format conversion errors and return false');
+  });
+
+  await t.test('Successful attested ephemeral session key sign-and-verify cycle', () => {
+    const masterKeys = generateKeyPair();
+    const issuerId = 'sb:issuer:test-identity';
+    
+    // 1. Create attested session (signs the ephemeral key with the master private key)
+    const session = createAttestedSession(
+      masterKeys.privateKeyHex,
+      masterKeys.publicKeyHex,
+      issuerId,
+      3600 // 1 hour expiry
+    );
+    
+    assert.ok(session.sessionKeyPair.publicKeyHex, 'Session key should exist');
+    assert.ok(session.attestationCert.attestationSignature, 'Attestation signature should exist');
+    assert.strictEqual(session.attestationCert.issuerId, issuerId);
+
+    const payload: AuditReceiptPayload = {
+      type: 'protectmcp:decision',
+      tool_name: 'execute_command',
+      decision: 'allow',
+      policy_digest: 'sha256:8f413a9de010',
+      issued_at: new Date().toISOString(),
+      issuer_id: issuerId
+    };
+
+    // 2. Sign the payload using the ephemeral session key
+    const localReceipt = signPayload(payload, session.sessionKeyPair.privateKeyHex, issuerId);
+    
+    // Attach the attestation certificate to the signature
+    const attestedReceipt = {
+      ...localReceipt,
+      signature: {
+        ...localReceipt.signature,
+        attestation: session.attestationCert
+      }
+    };
+
+    // 3. Verify the receipt using FidusGate's master root public key
+    const isValid = verifyReceipt(attestedReceipt, masterKeys.publicKeyHex);
+    assert.strictEqual(isValid, true, 'Attested receipt should be successfully verified via master root public key');
+
+    // 4. Reject if attestation certificate signature is tampered
+    const tamperedAttestationReceipt = {
+      ...attestedReceipt,
+      signature: {
+        ...attestedReceipt.signature,
+        attestation: {
+          ...attestedReceipt.signature.attestation,
+          attestationSignature: attestedReceipt.signature.attestation.attestationSignature.replace(/^[0-9a-f]/, '0')
+        }
+      }
+    };
+    const isTamperedAttestationValid = verifyReceipt(tamperedAttestationReceipt, masterKeys.publicKeyHex);
+    assert.strictEqual(isTamperedAttestationValid, false, 'Should reject receipt if attestation certificate signature is tampered');
+
+    // 5. Reject if receipt payload is tampered
+    const tamperedPayloadReceipt = {
+      ...attestedReceipt,
+      payload: {
+        ...attestedReceipt.payload,
+        decision: 'deny' as const
+      }
+    };
+    const isTamperedPayloadValid = verifyReceipt(tamperedPayloadReceipt, masterKeys.publicKeyHex);
+    assert.strictEqual(isTamperedPayloadValid, false, 'Should reject receipt if payload is tampered');
   });
 });

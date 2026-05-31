@@ -1,0 +1,9 @@
+name: 'FidusGate SecOps Guard'
+description: 'Validates workspace workflows, detects prompt injections, and verifies commit cryptographic audit receipts.'
+inputs:
+  fidusgate_root_key:
+    description: 'FidusGate master root public key for verifying commit receipts.'
+    required: true
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

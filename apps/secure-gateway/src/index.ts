@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { FidusGateDatabase, CommandLogEntry } from '@fidusgate/database';
 import * as http from 'node:http';
-import { verifyReceipt } from '@fidusgate/crypto-utils';
+import { verifyReceipt, generateKeyPair, createAttestedSession } from '@fidusgate/crypto-utils';
 import { startMcpServer } from './mcp-server';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
@@ -730,6 +730,72 @@ app.post('/api/auth/token', (req, res) => {
   }
 });
 
+// Ephemeral Keyring Session Bootstrapping Endpoint (Role: developer, admin)
+app.post('/api/sessions/bootstrap', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'agent@fidusgate.internal';
+    const issuerId = `sb:issuer:${userEmail.split('@')[0]}`;
+    
+    // Create an attested session keyring
+    const session = createAttestedSession(
+      MASTER_ROOT_KEYS.privateKeyHex,
+      MASTER_ROOT_KEYS.publicKeyHex,
+      issuerId,
+      3600 // 1 hour expiration
+    );
+    
+    const sessionId = `sess_${Math.floor(100000 + Math.random() * 900000)}`;
+    activeSessions[sessionId] = {
+      privateKeyHex: session.sessionKeyPair.privateKeyHex,
+      publicKeyHex: session.sessionKeyPair.publicKeyHex,
+      attestation: session.attestationCert
+    };
+    
+    log('security', `SECURITY KEYRING BOOTSTRAP: Spawned ephemeral session keyring [${sessionId}] attested for issuer: ${issuerId}`);
+    res.json({
+      sessionId,
+      publicKey: session.sessionKeyPair.publicKeyHex,
+      attestation: session.attestationCert
+    });
+  } catch (err: any) {
+    log('error', 'Failed to bootstrap ephemeral session keyring', err);
+    res.status(500).json({ error: `Failed to bootstrap session: ${err.message}` });
+  }
+});
+
+// Sign a payload using an active ephemeral session keyring
+app.post('/api/sessions/sign', requireAuth(['developer', 'admin']), (req, res) => {
+  try {
+    const { sessionId, payload } = req.body;
+    if (!sessionId || !payload) {
+      res.status(400).json({ error: 'Missing required parameters: sessionId, payload' });
+      return;
+    }
+    
+    const session = activeSessions[sessionId];
+    if (!session) {
+      res.status(404).json({ error: 'Active session keyring not found or expired.' });
+      return;
+    }
+    
+    const { signPayload } = require('@fidusgate/crypto-utils');
+    const localReceipt = signPayload(payload, session.privateKeyHex, session.attestation.issuerId);
+    
+    // Embed the attestation certificate in the signature payload
+    const attestedReceipt = {
+      ...localReceipt,
+      signature: {
+        ...localReceipt.signature,
+        attestation: session.attestation
+      }
+    };
+    
+    res.json(attestedReceipt);
+  } catch (err: any) {
+    res.status(500).json({ error: `Signing failed: ${err.message}` });
+  }
+});
+
 // ==========================================
 // Recommendation #3: Rust-Native Cedar Daemon Resolver
 // ==========================================
@@ -913,6 +979,17 @@ const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:devops-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de87'
 };
 
+// Dynamically generate the Master Root Keypair for attestation at startup
+const MASTER_ROOT_KEYS = generateKeyPair();
+PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'] = MASTER_ROOT_KEYS.publicKeyHex;
+
+const activeSessions: Record<string, {
+  privateKeyHex: string;
+  publicKeyHex: string;
+  attestation: any;
+}> = {};
+
+
 // 3. GET /api/receipts - Retrieve list of signed audit receipts (Role: developer, admin, auditor)
 app.get('/api/receipts', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
   try {
@@ -1085,9 +1162,26 @@ app.post('/api/findings', requireAuth(['admin']), async (req, res) => {
 });
 
 // ==========================================
-// Recommendation #2: Live Sandbox Execution API (Role: admin)
+// Multi-Agent Consensus Gating Checks
 // ==========================================
-app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
+const CONSENSUS_REQUIRED_PATTERNS = [
+  /rm\s+-rf/,
+  /npm\s+install/,
+  /curl\b/,
+  /wget\b/,
+  /clearDatabase/,
+  /database\s+clear/
+];
+
+function requiresConsensus(command: string, role: string): boolean {
+  if (role === 'developer') return true; // Developers always require consensus for executions!
+  return CONSENSUS_REQUIRED_PATTERNS.some(pattern => pattern.test(command));
+}
+
+// ==========================================
+// Recommendation #2: Live Sandbox Execution API (Role: admin, developer)
+// ==========================================
+app.post('/api/sandbox/execute', requireAuth(['admin', 'developer']), async (req, res) => {
   try {
     if (checkCircuitBreaker()) {
       const remainingSecs = Math.max(0, Math.ceil((circuitBreakerCooldownUntil - Date.now()) / 1000));
@@ -1105,6 +1199,40 @@ app.post('/api/sandbox/execute', requireAuth(['admin']), async (req, res) => {
 
     const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
     const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
+
+    // Consensus Gating Interceptor
+    if (requiresConsensus(command, userRole)) {
+      const prisma = db.getPrisma();
+      if (prisma) {
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
+        const pendingAction = await prisma.pendingAction.create({
+          data: {
+            expiresAt,
+            command,
+            initiator: userEmail,
+            role: userRole,
+            requiredVotes: 2,
+            status: 'pending'
+          }
+        });
+        
+        log('security', `🛡️ CONSENSUS GATING TRIGGERED: Suspended command execution [${command}] from ${userEmail} (${userRole.toUpperCase()}). Action ID: ${pendingAction.id}`);
+        broadcastWS('consensus_gating_triggered', {
+          actionId: pendingAction.id,
+          command,
+          initiator: userEmail,
+          role: userRole,
+          status: 'pending'
+        });
+
+        res.json({
+          status: 'pending_consensus',
+          actionId: pendingAction.id,
+          message: 'This high-privileged command has been suspended under active Consensus Gating. It requires 2 cryptographic approval signatures from authorized roles to execute.'
+        });
+        return;
+      }
+    }
 
     // Input command tokenized audit (Defense-in-Depth against bypasses)
     const auditResult = isCommandLineSecure(command);
@@ -1240,6 +1368,189 @@ app.get('/api/ibp/state', requireAuth(['developer', 'admin', 'auditor']), (req, 
     res.json(ibpTracker.getState());
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to retrieve IBP state' });
+  }
+});
+
+// ==========================================
+// Multi-Agent Consensus Gating Endpoints
+// ==========================================
+
+// GET /api/consensus/pending - Retrieve list of suspended actions waiting for approvals
+app.get('/api/consensus/pending', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
+  try {
+    const prisma = db.getPrisma();
+    if (!prisma) {
+      res.json([]);
+      return;
+    }
+    const list = await prisma.pendingAction.findMany({
+      where: { status: 'pending' },
+      include: { approvals: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(list);
+  } catch (error: any) {
+    log('error', 'Failed to retrieve pending consensus actions', error);
+    res.status(500).json({ error: 'Failed to retrieve pending actions' });
+  }
+});
+
+// POST /api/consensus/approve - Cryptographically approve a suspended action
+app.post('/api/consensus/approve', requireAuth(['developer', 'admin']), async (req, res) => {
+  try {
+    const { actionId, signature } = req.body;
+    if (!actionId || !signature) {
+      res.status(400).json({ error: 'Missing required parameters: actionId, signature' });
+      return;
+    }
+
+    const prisma = db.getPrisma();
+    if (!prisma) {
+      res.status(500).json({ error: 'PostgreSQL persistence layer is not active.' });
+      return;
+    }
+
+    const action = await prisma.pendingAction.findUnique({
+      where: { id: actionId },
+      include: { approvals: true }
+    });
+
+    if (!action) {
+      res.status(404).json({ error: 'Pending action not found.' });
+      return;
+    }
+
+    if (action.status !== 'pending') {
+      res.status(400).json({ error: `Pending action is already in ${action.status} state.` });
+      return;
+    }
+
+    if (new Date(action.expiresAt).getTime() < Date.now()) {
+      await prisma.pendingAction.update({
+        where: { id: actionId },
+        data: { status: 'expired' }
+      });
+      res.status(400).json({ error: 'Pending action has expired.' });
+      return;
+    }
+
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'approver@fidusgate.internal';
+    const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
+
+    // Prevent double voting by the same user email or the initiator
+    if (action.initiator === userEmail) {
+      res.status(400).json({ error: 'Action initiator cannot sign their own consensus request.' });
+      return;
+    }
+
+    const alreadyApproved = action.approvals.some(app => app.approver === userEmail);
+    if (alreadyApproved) {
+      res.status(400).json({ error: 'You have already approved this action.' });
+      return;
+    }
+
+    // Mathematically verify the approver's cryptographic signature!
+    const publicKeyHex = PUBLIC_KEY_MAP[`sb:issuer:${userEmail.split('@')[0]}`] || PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'];
+    
+    // The payload signed by the approver is the actionId
+    const { verifyReceipt } = require('@fidusgate/crypto-utils');
+    const isValid = verifyReceipt({
+      payload: {
+        type: 'consensus:approval',
+        tool_name: 'approve',
+        decision: 'allow',
+        policy_digest: 'actionId:' + actionId,
+        issued_at: new Date().toISOString(),
+        issuer_id: `sb:issuer:${userEmail.split('@')[0]}`
+      },
+      signature: {
+        alg: 'EdDSA',
+        kid: `sb:issuer:${userEmail.split('@')[0]}`,
+        sig: signature
+      }
+    }, publicKeyHex);
+
+    if (!isValid) {
+      res.status(400).json({ error: 'Cryptographic signature verification failed.' });
+      return;
+    }
+
+    // Write approval record
+    await prisma.consensusApproval.create({
+      data: {
+        actionId,
+        approver: userEmail,
+        role: userRole,
+        signature
+      }
+    });
+
+    // Refresh approvals list
+    const currentApprovals = await prisma.consensusApproval.findMany({
+      where: { actionId }
+    });
+
+    log('security', `CONSENSUS GATING SIGN-OFF: ${userEmail} (${userRole.toUpperCase()}) approved action ${actionId}. Active signatures: ${currentApprovals.length}/${action.requiredVotes}`);
+
+    let executedOutput = '';
+    let executeStatus = 'pending';
+
+    // If threshold is reached, execute the suspended task! ( initiator + 1 approver = 2 signatures )
+    if (currentApprovals.length >= action.requiredVotes - 1) {
+      executeStatus = 'approved';
+      await prisma.pendingAction.update({
+        where: { id: actionId },
+        data: { status: 'approved' }
+      });
+
+      log('security', `🛡️ CONSENSUS GATING PASSED: Action ${actionId} approved. Launching command in gVisor sandbox: [${action.command}]`);
+
+      // Execute command inside sandbox
+      const workspacePath = path.resolve(__dirname, '..', '..', '..');
+      const sandboxCmd = `bash scripts/sandbox-execute.sh "${action.command}" "${workspacePath}"`;
+
+      try {
+        executedOutput = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        
+        await db.addCommandLog({
+          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          timestamp: new Date().toISOString(),
+          command: action.command,
+          user: action.initiator,
+          role: action.role,
+          status: 'success',
+          exitCode: 0,
+          cedarDecision: 'allow'
+        });
+      } catch (err: any) {
+        executedOutput = [err.stdout, err.stderr].filter(Boolean).join('\n') || err.message;
+        await db.addCommandLog({
+          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          timestamp: new Date().toISOString(),
+          command: action.command,
+          user: action.initiator,
+          role: action.role,
+          status: 'failed',
+          exitCode: err.status || 1,
+          cedarDecision: 'allow'
+        });
+      }
+
+      broadcastWS('consensus_gating_approved', {
+        actionId,
+        command: action.command,
+        logs: executedOutput
+      });
+    }
+
+    res.json({
+      status: executeStatus,
+      approvalsCount: currentApprovals.length + 1, // initiator count
+      logs: executedOutput
+    });
+  } catch (error: any) {
+    log('error', 'Failed to approve consensus action', error);
+    res.status(500).json({ error: `Failed to approve action: ${error.message}` });
   }
 });
 

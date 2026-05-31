@@ -129,6 +129,10 @@ export class FidusGateDatabase {
   private prisma: PrismaClient | null = null;
   private usePostgres = false;
 
+  public getPrisma(): PrismaClient | null {
+    return this.prisma;
+  }
+
   constructor() {
     this.ensureInitialized();
     this.initPrisma();
@@ -486,6 +490,8 @@ export class FidusGateDatabase {
     if (this.usePostgres && this.prisma) {
       try {
         await this.prisma.$transaction([
+          this.prisma.consensusApproval.deleteMany(),
+          this.prisma.pendingAction.deleteMany(),
           this.prisma.transaction.deleteMany(),
           this.prisma.auditReceipt.deleteMany(),
           this.prisma.securityFinding.deleteMany(),

@@ -64,3 +64,26 @@ model CommandLog {
   cedarDecision String   // 'allow' | 'deny'
 }
 
+model PendingAction {
+  id             String              @id @default(uuid())
+  createdAt      DateTime            @default(now())
+  expiresAt      DateTime
+  command        String
+  initiator      String
+  role           String
+  requiredVotes  Int                 @default(2)
+  status         String              // 'pending' | 'approved' | 'rejected' | 'expired'
+  approvals      ConsensusApproval[]
+}
+
+model ConsensusApproval {
+  id              String        @id @default(uuid())
+  actionId        String
+  action          PendingAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  timestamp       DateTime      @default(now())
+  approver        String
+  role            String
+  signature       String        // Cryptographic Ed25519 signature of the approval
+}
+
+

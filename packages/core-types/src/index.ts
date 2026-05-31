@@ -21,10 +21,18 @@ export interface AuditReceiptPayload {
   args?: Record<string, any>;
 }
 
+export interface AttestationCertificate {
+  sessionPublicKey: string;
+  issuerId: string;
+  expiresAt: string;
+  attestationSignature: string; // Signature of sessionPublicKey+issuerId+expiresAt signed by root master key
+}
+
 export interface AuditReceiptSignature {
   alg: 'EdDSA';
   kid: string;
   sig: string;
+  attestation?: AttestationCertificate;
 }
 
 export interface AuditReceipt {

@@ -1,0 +1,19 @@
+{
+  "name": "@fidusgate/github-action",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'No action tests defined.'"
+  },
+  "dependencies": {
+    "@fidusgate/core-types": "1.0.0",
+    "@fidusgate/crypto-utils": "1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "typescript": "^5.4.5"
+  }
+}

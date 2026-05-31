@@ -15,6 +15,41 @@ export function generateKeyPair(): KeyPair {
   };
 }
 
+export function createAttestedSession(
+  masterPrivateKeyHex: string,
+  masterPublicKeyHex: string,
+  issuerId: string,
+  expiresInSeconds: number = 3600
+) {
+  const sessionKeyPair = generateKeyPair();
+  const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+  
+  const attestationPayload = JSON.stringify({
+    sessionPublicKey: sessionKeyPair.publicKeyHex,
+    issuerId,
+    expiresAt
+  });
+  
+  const masterPrivateKey = crypto.createPrivateKey({
+    key: Buffer.from(masterPrivateKeyHex, 'hex'),
+    format: 'der',
+    type: 'pkcs8'
+  });
+  const data = Buffer.from(attestationPayload);
+  const attestationSignature = crypto.sign(null, data, masterPrivateKey).toString('hex');
+  
+  return {
+    sessionKeyPair,
+    attestationCert: {
+      sessionPublicKey: sessionKeyPair.publicKeyHex,
+      issuerId,
+      expiresAt,
+      attestationSignature
+    }
+  };
+}
+
+
 // ==========================================
 // Recommendation #2: KMS Provider Abstraction
 // ==========================================
@@ -50,6 +85,44 @@ export class LocalKMSProvider implements KMSProvider {
 
   public verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
     try {
+      const attestation = receipt.signature.attestation;
+      
+      if (attestation) {
+        // 1. Verify attestation is not expired
+        if (new Date(attestation.expiresAt).getTime() < Date.now()) {
+          return false;
+        }
+
+        // 2. Verify the attestation certificate signed by the master root key
+        const rootPublicKey = crypto.createPublicKey({
+          key: Buffer.from(publicKeyHex, 'hex'),
+          format: 'der',
+          type: 'spki'
+        });
+        const attestationPayload = JSON.stringify({
+          sessionPublicKey: attestation.sessionPublicKey,
+          issuerId: attestation.issuerId,
+          expiresAt: attestation.expiresAt
+        });
+        const rootData = Buffer.from(attestationPayload);
+        const rootSig = Buffer.from(attestation.attestationSignature, 'hex');
+        const isAttestationValid = crypto.verify(null, rootData, rootPublicKey, rootSig);
+        if (!isAttestationValid) {
+          return false;
+        }
+
+        // 3. Verify the receipt signature signed by the ephemeral session key
+        const sessionPublicKey = crypto.createPublicKey({
+          key: Buffer.from(attestation.sessionPublicKey, 'hex'),
+          format: 'der',
+          type: 'spki'
+        });
+        const receiptData = Buffer.from(JSON.stringify(receipt.payload));
+        const receiptSig = Buffer.from(receipt.signature.sig, 'hex');
+        return crypto.verify(null, receiptData, sessionPublicKey, receiptSig);
+      }
+
+      // Standard non-attested master key verification
       const publicKey = crypto.createPublicKey({
         key: Buffer.from(publicKeyHex, 'hex'),
         format: 'der',
@@ -213,6 +286,10 @@ export function signPayload(
 }
 
 export function verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
+  if (receipt.signature.attestation) {
+    const local = new LocalKMSProvider();
+    return local.verifyReceipt(receipt, publicKeyHex);
+  }
   return getKMSProvider().verifyReceipt(receipt, publicKeyHex);
 }
 
