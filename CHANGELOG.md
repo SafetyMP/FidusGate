@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/SafetyMP/FidusGate/compare/v1.2.0...v1.3.0) (2026-05-31)
+
+
+### Features
+
+* **sandbox,gateway,dashboard:** complete live Zero-Trust execution loop, macOS timeout fallback, live eBPF system call trace logs, and OIDC widget improvements ([5427ce5](https://github.com/SafetyMP/FidusGate/commit/5427ce5cb0b51e803b413cf5f86bc42a87a0cbb3))
+
 # [1.2.0](https://github.com/SafetyMP/FidusGate/compare/v1.1.0...v1.2.0) (2026-05-31)
 
 
