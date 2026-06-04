@@ -116,8 +116,8 @@ timeout "$TIMEOUT_LIMIT" docker run --name "$CONTAINER_NAME" \
   bash -c "
     echo '🛡️  Preparing ephemeral copy-on-write workspace...' && \
     mkdir -p /app && \
-    tar -cf - --exclude=node_modules --exclude=.git --exclude=.turbo -C /workspace . | tar -xf - -C /app && \
-    find /workspace -type d -name node_modules -prune 2>/dev/null | while read -r dir; do \
+    tar -cf - --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=audio_segments --exclude=output_presentation --exclude=dist -C /workspace . | tar -xf - -C /app && \
+    find /workspace -maxdepth 3 -type d -name node_modules -prune 2>/dev/null | while read -r dir; do \
       rel=\${dir#/workspace/}; \
       mkdir -p \"/app/\${rel%/*}\" 2>/dev/null; \
       ln -s \"\$dir\" \"/app/\$rel\" 2>/dev/null; \
@@ -127,10 +127,13 @@ timeout "$TIMEOUT_LIMIT" docker run --name "$CONTAINER_NAME" \
     $COMMAND; \
     EXIT_VAL=\$?; \
     if [ \$EXIT_VAL -eq 0 ]; then \
+      if ! diff --help 2>&1 | grep -q exclude; then \
+        echo '🛡️  Installing GNU diffutils in container...' && \
+        if command -v apk >/dev/null 2>&1; then apk add --no-cache diffutils >/dev/null 2>&1; \
+        elif command -v apt-get >/dev/null 2>&1; then apt-get update -y >/dev/null 2>&1 && apt-get install -y diffutils >/dev/null 2>&1; fi; \
+      fi; \
       echo '🔍 Generating git diff patch...' && \
-      diff -ruN --exclude=node_modules --exclude=.git --exclude=.turbo /workspace /app | \
-      sed 's|^\(--- \)/workspace/|\1a/|; s|^\(+++ \)/app/|\2b/|' \
-      > /workspace-memory/pending-sandbox.patch; \
+      diff -ruN --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=audio_segments --exclude=output_presentation --exclude=dist /workspace /app | sed 's|^--- /workspace/|--- a/|; s|^+++ /app/|+++ b/|' > /workspace-memory/pending-sandbox.patch; \
     fi; \
     exit \$EXIT_VAL
   "
@@ -149,6 +152,9 @@ fi
 if [ $EXIT_CODE -eq 0 ]; then
     if [ -s "$MOUNT_DIR/.memory/pending-sandbox.patch" ]; then
         echo "💾 Saved diff patch to: $MOUNT_DIR/.memory/pending-sandbox.patch"
+        # Also copy to temp directory for apply-patch.sh compatibility
+        cp "$MOUNT_DIR/.memory/pending-sandbox.patch" "$TEMP_PATCH"
+        echo "💾 Copied diff patch to: $TEMP_PATCH"
     else
         echo "ℹ️  No file modifications detected."
         rm -f "$MOUNT_DIR/.memory/pending-sandbox.patch"

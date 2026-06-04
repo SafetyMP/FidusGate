@@ -89,7 +89,7 @@ async function handleMcpRequest(req: any): Promise<any> {
         tools: [
           {
             name: 'execute_command',
-            description: 'Run a shell command securely inside FidusGate\'s unprivileged gVisor sandbox container.',
+            description: 'Run a shell command securely inside FidusGate\'s unprivileged Docker container sandbox (gVisor optional).',
             inputSchema: {
               type: 'object',
               properties: {

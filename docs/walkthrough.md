@@ -36,7 +36,7 @@ graph TD
 
 ## 🔑 1. Cryptographic Receipt Hash-Chaining (`packages/crypto-utils`)
 
-To establish tamper-evident non-repudiation and prevent historical audit tampering, we successfully integrated a receipt ledger digest chain:
+To establish tamper-evident audit logs (illustrating non-repudiation concepts) and prevent historical audit tampering, we successfully integrated a receipt ledger digest chain:
 
 - **Mathematical Digests:** Added `hashReceipt` helper to `@fidusgate/crypto-utils` executing `SHA-256` digests over raw receipt structures.
 - **KMS Wrappers:** Built modular Transit Key routing supporting hardware security module (HSM) signing wrappers for AWS KMS (`Sign` endpoint) and GCP KMS (`AsymmetricSign` endpoint), automatically falling back to secure local keypairs in developmental modes.
@@ -78,7 +78,7 @@ Placed inside Card 1 (Cryptographic SME Role Keys & Attestation Graph) under the
 ### 🤖 Gemini Cedar Co-Pilot Playground
 Added as a widescreen sidebar console inside the **Cedar Policy Tab**:
 - Accepts natural language inputs describing security permissions.
-- Invokes Google Gemini (`gemini-1.5-pro` model) to instantly translate sentences into syntactically valid Cedar code blocks and clear rationale explanations.
+- Invokes Google Gemini (with configurable model settings, defaulting to the `gemini-1.5-pro` model) to instantly translate sentences into syntactically valid Cedar code blocks and clear rationale explanations.
 - Features a mock fallback engine to prevent blocking developers when API credentials are omitted.
 - Seamlessly connects with the Visual Simulator via a **"Simulate Draft"** handler to execute dry-runs, and includes an admin **"Commit to Prod"** button to write rules directly to host disk.
 

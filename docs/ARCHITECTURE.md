@@ -84,7 +84,7 @@ The **Operations Dashboard** is a developer and administrator interface. It prov
 * **Cryptographic Attestation Grid:** Displays real-time federated OIDC OAuth signatures, SPIFFE workload IDs, and active token budget states.
 * **Forensic Auditing Timeline:** Lists all commands executed in sandboxes, displaying raw arguments, exit codes, and providing audit-ready JSON receipt downloads.
 * **Interactive Policy Simulator:** Toggles a dry-run canvas allowing administrators to draft custom Cedar policies and instantly evaluate mock inputs without overwriting production rules.
-* **Ledger Verifier:** Incorporates a client-side public-key verification helper confirming Ed25519 signature receipts, guaranteeing non-repudiation.
+* **Ledger Verifier:** Incorporates a client-side public-key verification helper confirming Ed25519 signature receipts, illustrating non-repudiation concepts.
 
 #### 🔹 Operational Runbook
 * **Development Mode:** Runs on Vite at port `3000`. Starts via `npm run dev` and communicates with the Secure Gateway via Vite's proxy configurations.
@@ -108,7 +108,7 @@ The **Rust Cedar Policy Daemon** provides the high-performance authorization bac
 ### 🔑 4. Cryptographic Utilities (`packages/crypto-utils`)
 
 #### 🔹 Value & Function
-The **Cryptographic Utilities** package provides the cryptographic engine for FidusGate, establishing a zero-trust model of non-repudiation.
+The **Cryptographic Utilities** package provides the cryptographic engine for FidusGate, establishing a zero-trust model of receipt integrity.
 * **Receipt Signature Blocks:** Signs audit logs using **Ed25519** public-key cryptography, embedding public keys, hashes of action payloads, and OIDC claims in a signed envelope.
 * **HSM & KMS Providers:** Integrates transit signing pipelines pointing directly to **HashiCorp Vault Transit Engine** or **Google Cloud KMS AsymmetricSign** endpoints.
 * **Verification CLI:** Exposes an offline command-line verifier allowing regulators to confirm receipt integrity without access to the FidusGate server.
@@ -217,7 +217,7 @@ FidusGate implements several reference modules designed for governance and audit
 
 ### 6. Gemini-Powered Cedar Co-Pilot (Phase 3)
 * **Natural Language Processing Loop:** Translates standard speech patterns into active Cedar authorization code inside the `/api/policy/co-pilot` Express route.
-* **API Synthesis:** Relies on a standard POST payload with a `prompt` field. It executes an authenticated HTTPS call to the Google Gemini model endpoint `gemini-1.5-pro`, requesting strict structured JSON response boundaries.
+* **API Synthesis:** Relies on a standard POST payload with a `prompt` field. It executes an authenticated HTTPS call to the Google Gemini model endpoint (defaulting to the configurable `gemini-1.5-pro` model), requesting strict structured JSON response boundaries.
 * **Stateful Fallbacks:** Spawns a local pattern-based mock parser in the event `GEMINI_API_KEY` is not present, ensuring that local developer test cycles for key administrative or pm roles return syntactically valid Cedar permit policies instantly without offline failure.
 
 ### 7. Conventional Commits & Semantic Release Workflow

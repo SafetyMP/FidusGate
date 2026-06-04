@@ -8,9 +8,17 @@ echo "💾 Searching for the latest sandboxed diff patch..."
 LATEST_PATCH=$(ls -t /tmp/agent-diff-*.patch 2>/dev/null | head -n 1)
 
 if [ -z "$LATEST_PATCH" ]; then
-    echo "❌ Error: No sandboxed diff patch file found in /tmp/!"
-    echo "   Ensure you have executed a sandbox command that made file modifications."
-    exit 1
+    # Fallback to local workspace memory patch
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    WORKSPACE_PATCH="$REPO_ROOT/.memory/pending-sandbox.patch"
+    if [ -f "$WORKSPACE_PATCH" ]; then
+        LATEST_PATCH="$WORKSPACE_PATCH"
+        echo "ℹ️  No patch found in /tmp/. Falling back to workspace memory patch: $LATEST_PATCH"
+    else
+        echo "❌ Error: No sandboxed diff patch file found in /tmp/ or .memory/!"
+        echo "   Ensure you have executed a sandbox command that made file modifications."
+        exit 1
+    fi
 fi
 
 echo "📁 Found latest patch: $LATEST_PATCH"

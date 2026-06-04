@@ -17,7 +17,7 @@ FidusGate is designed as a capability showcase and educational reference. It com
 
 *   **Real Security Controls:**
     *   **Cedar Access Policy Engine:** Active, file-level policy gating parsing permissions written in the [policy.cedar](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/policy.cedar) policy file.
-    *   **Cryptographic Receipts:** Signed transaction receipts verified on the client dashboard using real Ed25519 public-key cryptography.
+    *   **Cryptographic Receipts:** Signed transaction receipts verified on the client dashboard using real Ed25519 public-key cryptography. (Note: While the Ed25519 receipt signing itself is real, because keys are stored in the local datastore for demo purposes, the non-repudiation property is illustrative, not enforceable in this configuration.)
     *   **Filesystem Drift Detection:** Live tracking of untracked/modified files using Git plumbing commands, with rollback options.
 *   **Simulated Components & Mocks:**
     *   **Database Persistence:** Defaults to a local flat-file JSON datastore for ease of local setup. Pluggable PostgreSQL integration via Prisma is provided but must be configured for real use.
@@ -35,7 +35,7 @@ FidusGate aims to defend against:
 1.  **Prompt Injection Privilege Escalation:** An attacker injecting malicious instructions (e.g. `rm -rf /`) into an agent's context, causing the agent to execute unauthorized commands.
 2.  **Unauthorized Configuration Modifications:** Restricting the agent's ability to modify system policies (`policy.cedar`) or critical scripts (`scripts/*`) even if the agent is executing files in the repository.
 3.  **Supply Chain Attacks / Package Pollution:** Gateway-level blocking of commands that dynamically download or install arbitrary packages (e.g. `curl`, `npm install`) on the host system.
-4.  **Audit Trail Tampering:** Establishing a signed, tamper-evident append-only receipt log using Ed25519 public-key signatures, making retro-active history modification visible.
+4.  **Audit Trail Tampering:** Establishing a signed, tamper-evident append-only receipt log using Ed25519 public-key signatures, making retro-active history modification visible (illustrative in this demo environment due to local key storage; see Status, Maturity & Mocks).
 
 ### Out-of-Scope (What we are NOT defending against)
 1.  **Host-Level Kernel Compromise:** The sandbox environment relies on standard Docker container namespaces. It does not prevent low-level host exploits unless configured with an active gVisor runtime.
@@ -64,10 +64,10 @@ To verify the governance model and containment controls:
 
 ## 🏛️ Regulatory & Risk Control Alignment
 
-FidusGate is modeled to align with international risk management and cybersecurity controls (e.g., **NIST SP 800-53, ISO/IEC 27001, SOC 2 Common Criteria**), translating corporate compliance structures into policy rules:
+FidusGate maps conceptually to control families in **NIST SP 800-53, ISO/IEC 27001, and SOC 2 Common Criteria**, demonstrating how corporate compliance structures can be translated into programmatic policy rules. Note that this is an illustrative, conceptual mapping, and FidusGate itself does not deliver an audited compliance posture or certification.
 
 *   **Separation of Duties (SoD):** Programmatically separates code compilation, infrastructure modification, and security policy modifications. AI agents are locked out of modifying policy boundaries (`policy.cedar`) or core scripts (`scripts/*`) directly.
-*   **Auditability & Non-Repudiation:** Generates cryptographically signed **Ed25519 receipts** for all gateway transactions, establishing a tamper-evident, append-only audit log of agent actions.
+*   **Auditability & Non-Repudiation:** Generates cryptographically signed **Ed25519 receipts** for all gateway transactions, establishing a tamper-evident, append-only audit log of agent actions (illustrative for non-repudiation in this demo due to local key storage).
 *   **Access Control & Least Privilege:** Restricts tool invocation in real-time based on risk severity, forcing high-risk terminal commands into isolated Docker sandboxes.
 *   **System Integrity Protection:** Automatically audits agentic pipelines to scan for dynamic prompt injection vectors and insecure runtime variables.
 
@@ -75,7 +75,7 @@ FidusGate is modeled to align with international risk management and cybersecuri
 
 ## 📖 Documentation & Playbooks Portal
 
-FidusGate includes a comprehensive set of engineering references, operational manuals, and domain-scoped SME playbooks to assist security officers and developers in managing agentic boundaries.
+FidusGate includes documentation and playbooks to assist security officers and developers in managing agentic boundaries.
 
 * **[Documentation Portal](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/README.md):** The primary index mapping all guides and governance skills.
 * **[Monorepo Architecture Guide](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/ARCHITECTURE.md):** Deep dive into high-level topologies, component details, and Docker sandbox configurations.
@@ -140,7 +140,7 @@ graph TD
 
 ### Component Details
 1.  **`packages/core-types`**: Declares strictly typed boundaries for transactions, security findings, logs, and verifiable receipts.
-2.  **`packages/crypto-utils`**: Encapsulates cryptographic signing and verification routines powered by modern **Ed25519** public-key cryptography.
+2.  **`packages/crypto-utils`**: Encapsulates cryptographic signing and verification routines powered by **Ed25519** public-key cryptography.
 3.  **`packages/database`**: A demonstration database module utilizing a seeded local JSON store for offline capability verification, with pluggable support for standard SQL databases (e.g. PostgreSQL via Prisma). Production deployments require a real database configuration.
 4.  **`packages/github-action`**: A custom GitHub Action guard that validates workflows, scans for prompt injections, and verifies commit receipts.
 5.  **`apps/secure-gateway`**: Express microservice exposing transaction APIs with automatic PII (Personally Identifiable Information) masking and signature signing, designed to interface with database persistence layers.
@@ -163,7 +163,7 @@ FidusGate establishes a four-tier risk classification for tools available to aut
 
 ## 🔍 CI/CD Static Security Audit Showcase
 
-To demonstrate the robustness of our scanning controls, we modeled three distinct prompt-injection vector exposures in our local GitHub Actions pipeline (`.github/workflows/ci-agent-pipeline.yml`):
+To demonstrate the robustness of our scanning controls, we modeled three distinct prompt-injection vector exposures. These are deliberately staged in an isolated demo workflow (`.github/workflows/ci-agent-pipeline.yml`) to show detection, and the live workflows ship hardened.
 
 1.  **Vector A (Env Var Intermediary):** Unauthenticated variables in AI prompts that allow an external contributor to hijack the review agent.
 2.  **Vector D (PR Target + Checkout):** Unprivileged checking out of head commits inside a privileged workflow container.
@@ -209,7 +209,7 @@ FidusGate includes a suite of security policy simulation and observability tools
 
 ### 🧠 6. Gemini-Powered Cedar Co-Pilot
 * **Natural Language to Policy Translation:** Provides conversational policy generation inside the `/api/policy/co-pilot` endpoint. Developers can submit conversational prompts (e.g. *"allow pm-sme to write .md files"*).
-* **Gemini-1.5-Pro API Integration:** Leverages the official Google Gemini API (with `gemini-1.5-pro` model) to translate user intent into syntactically valid Cedar authorization rules and a plain-text description.
+* **Google Gemini API Integration:** Leverages the Google Gemini API (with configurable model settings, defaulting to `gemini-1.5-pro` as an example) to translate user intent into syntactically valid Cedar authorization rules and a plain-text description.
 * **Rule-Based Mock Fallback Engine:** Implements a rule-based mock parser that handles key policies (for roles like `pm-sme` and `security-sme`) when `GEMINI_API_KEY` is not set, providing robust fail-safes during offline development.
 
 ### 🔑 7. Multi-Role Consensus Attestation & Execution Bypass (Phase 4)

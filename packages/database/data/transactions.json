@@ -1,17 +1,7 @@
 [
   {
-    "id": "tx_997989",
-    "timestamp": "2026-05-31T19:11:24.012Z",
-    "sender": "h***@t***",
-    "recipient": "P*** V***",
-    "amount": 1500000,
-    "currency": "USD",
-    "status": "flagged",
-    "maskedPii": true
-  },
-  {
     "id": "tx_817293",
-    "timestamp": "2026-05-31T17:09:09.111Z",
+    "timestamp": "2026-06-04T09:57:35.429Z",
     "sender": "Acme Corp Corporate Account",
     "recipient": "GlobalTech Solutions LLC",
     "amount": 150000,
@@ -21,7 +11,7 @@
   },
   {
     "id": "tx_928174",
-    "timestamp": "2026-05-31T17:39:09.112Z",
+    "timestamp": "2026-06-04T10:27:35.430Z",
     "sender": "s***@a***.io",
     "recipient": "ModelAPI Inference Gateway",
     "amount": 450.25,
@@ -31,7 +21,7 @@
   },
   {
     "id": "tx_039281",
-    "timestamp": "2026-05-31T18:39:09.112Z",
+    "timestamp": "2026-06-04T11:27:35.430Z",
     "sender": "Unknown Tor Node IP: 185.220.101.5",
     "recipient": "SageHart Admin Wallet",
     "amount": 50000,
@@ -41,7 +31,7 @@
   },
   {
     "id": "tx_129482",
-    "timestamp": "2026-05-31T19:09:09.112Z",
+    "timestamp": "2026-06-04T11:57:35.430Z",
     "sender": "System Treasury Account",
     "recipient": "Cold Storage Ledger Vault",
     "amount": 2000000,

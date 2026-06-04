@@ -2,67 +2,96 @@
 # Real-Time HAM Scoped Memory (CLAUDE.md) Drift Detector
 # Author: Antigravity Code Assistant
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-MEMORY_DIR="$REPO_ROOT/.memory"
-STATUS_FILE="$MEMORY_DIR/drift-status.json"
+node << 'EOF'
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-mkdir -p "$MEMORY_DIR"
+const repoRoot = execSync('git rev-parse --show-toplevel 2>/dev/null || pwd', { encoding: 'utf8' }).trim();
+const memoryDir = path.join(repoRoot, '.memory');
+const statusFile = path.join(memoryDir, 'drift-status.json');
 
-echo "📡 Starting real-time HAM Memory Drift Audit..."
+if (!fs.existsSync(memoryDir)) {
+  fs.mkdirSync(memoryDir, { recursive: true });
+}
 
-# Initialize JSON status
-echo "{" > "$STATUS_FILE"
-echo "  \"last_audit_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> "$STATUS_FILE"
-echo "  \"drifted_directories\": [" >> "$STATUS_FILE"
+console.log('📡 Starting real-time HAM Memory Drift Audit...');
 
-DRIFT_COUNT=0
-checked_dirs=()
+try {
+  // Find all CLAUDE.md files in subdirectories
+  const hamFiles = execSync('find . -name "CLAUDE.md" -not -path "*/.git/*" -not -path "*/node_modules/*"', { cwd: repoRoot, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .map(p => path.resolve(repoRoot, p));
 
-# Find all CLAUDE.md files in subdirectories
-HAM_FILES=$(find "$REPO_ROOT" -name "CLAUDE.md" -not -path "*/.git/*" -not -path "*/node_modules/*")
-
-first_entry=true
-
-for file in $HAM_FILES; do
-    dir=$(dirname "$file")
+  const drifted = [];
+  
+  // Get git log once for all paths
+  const logData = execSync('git log --name-only --format="COMMIT:%at"', { cwd: repoRoot, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+  const lines = logData.split('\n');
+  
+  const latestCommit = {};
+  let currentTs = 0;
+  
+  for (const line of lines) {
+    if (line.startsWith('COMMIT:')) {
+      currentTs = parseInt(line.substring(7), 10);
+    } else if (line.trim()) {
+      const filePath = path.resolve(repoRoot, line.trim());
+      if (!latestCommit[filePath]) {
+        latestCommit[filePath] = currentTs;
+      }
+      
+      // Propagate timestamps to parent directories
+      let dir = path.dirname(filePath);
+      while (dir.startsWith(repoRoot) && dir !== repoRoot) {
+        if (!latestCommit[dir] || currentTs > latestCommit[dir]) {
+          latestCommit[dir] = currentTs;
+        }
+        dir = path.dirname(dir);
+      }
+    }
+  }
+  
+  for (const file of hamFiles) {
+    const dir = path.dirname(file);
+    if (dir === repoRoot) continue; // Skip root CLAUDE.md
     
-    # Skip root CLAUDE.md
-    if [ "$dir" = "$REPO_ROOT" ]; then
-        continue
-    fi
+    const memTs = latestCommit[file] || 0;
     
-    # Get latest commit timestamp for directory (excluding CLAUDE.md itself)
-    DIR_LATEST_COMMIT=$(git log -n 1 --format="%at" -- "$dir" 2>/dev/null)
+    // Get latest commit to directory excluding the CLAUDE.md file itself
+    let dirTs = 0;
+    try {
+      const dirLog = execSync(`git log -n 1 --format="%at" -- "${dir}" ":(exclude)${file}"`, { encoding: 'utf8' }).trim();
+      if (dirLog) {
+        dirTs = parseInt(dirLog, 10);
+      }
+    } catch (err) {
+      // Fallback to directory timestamp from general log
+      dirTs = latestCommit[dir] || 0;
+    }
     
-    # Get latest commit timestamp for the CLAUDE.md memory sheet
-    MEM_LATEST_COMMIT=$(git log -n 1 --format="%at" -- "$file" 2>/dev/null)
-    
-    if [ -n "$DIR_LATEST_COMMIT" ] && [ -n "$MEM_LATEST_COMMIT" ]; then
-        # If directory has commits strictly newer than the memory sheet, it has drifted
-        if [ "$DIR_LATEST_COMMIT" -gt "$MEM_LATEST_COMMIT" ]; then
-            DRIFT_COUNT=$((DRIFT_COUNT + 1))
-            
-            # Format JSON list items correctly
-            if [ "$first_entry" = true ]; then
-                first_entry=false
-            else
-                echo "," >> "$STATUS_FILE"
-            fi
-            
-            relative_dir=${dir#"$REPO_ROOT/"}
-            echo -e "   ⚠️  Drifted: \033[33m$relative_dir\033[0m"
-            echo -n "    { \"path\": \"$relative_dir\", \"drift_seconds\": $((DIR_LATEST_COMMIT - MEM_LATEST_COMMIT)) }" >> "$STATUS_FILE"
-        fi
-    fi
-done
+    if (dirTs > memTs) {
+      const relativeDir = path.relative(repoRoot, dir);
+      console.log(`   ⚠️  Drifted: \x1b[33m${relativeDir}\x1b[0m`);
+      drifted.push({
+        path: relativeDir,
+        drift_seconds: dirTs - memTs
+      });
+    }
+  }
 
-echo "" >> "$STATUS_FILE"
-echo "  ]," >> "$STATUS_FILE"
-echo "  \"drift_count\": $DRIFT_COUNT" >> "$STATUS_FILE"
-echo "}" >> "$STATUS_FILE"
+  const result = {
+    last_audit_at: new Date().toISOString(),
+    drifted_directories: drifted,
+    drift_count: drifted.length
+  };
 
-# Make sure permissions are correct
-chmod +x "$REPO_ROOT/scripts/ham-drift-watcher.sh"
+  fs.writeFileSync(statusFile, JSON.stringify(result, null, 2) + '\n');
+  console.log(`✅ Drift audit complete. Status saved to: .memory/drift-status.json`);
+} catch (error) {
+  console.error('❌ Error running drift audit:', error.message);
+  process.exit(1);
+}
+EOF
 
-echo "✅ Drift audit complete. Status saved to: .memory/drift-status.json"
-exit 0

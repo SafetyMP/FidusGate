@@ -1750,7 +1750,7 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
         data: { status: 'approved' }
       });
 
-      log('security', `🛡️ CONSENSUS GATING PASSED: Action ${actionId} approved. Launching command in gVisor sandbox: [${action.command}]`);
+      log('security', `🛡️ CONSENSUS GATING PASSED: Action ${actionId} approved. Launching command in Docker/gVisor sandbox: [${action.command}]`);
 
       // Execute command inside sandbox
       const workspacePath = path.resolve(__dirname, '..', '..', '..');
@@ -2251,7 +2251,8 @@ app.post('/api/policy/co-pilot', requireAuth(['developer', 'admin']), async (req
       fallbackActive = true;
     } else {
       try {
-        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + apiKey, {
+        const geminiModel = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=` + apiKey, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

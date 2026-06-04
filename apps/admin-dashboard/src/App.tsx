@@ -380,7 +380,7 @@ export default function App() {
         complianceStandard: "FidusGate-SecOps-v1.0",
         reportId: `rep_${Math.floor(100000 + Math.random() * 900000)}`,
         timestamp: new Date().toISOString(),
-        environment: "FidusGate Secure gVisor Sandbox Monorepo",
+        environment: "FidusGate Secure Sandbox Monorepo (gVisor optional)",
         assessedSession: {
           userEmail: authEmail,
           userRole: authRole,
@@ -1042,7 +1042,7 @@ export default function App() {
   const executeSandboxCommand = async (fullCmd: string) => {
     setConsoleLines(prev => [
       ...prev,
-      `🛡️ [SANDBOX] Spawning unprivileged Docker/gVisor microVM sandbox container...`
+      `🛡️ [SANDBOX] Spawning unprivileged Docker container sandbox (gVisor optional)...`
     ]);
     
     try {
@@ -1120,7 +1120,7 @@ export default function App() {
           '',
           'Utility commands:',
           '  help         - Show this playbook menu',
-          '  sys-status   - Check CPU hardware and gVisor sandbox daemon',
+          '  sys-status   - Check CPU hardware and Docker/gVisor sandbox daemon',
           '  clear        - Clear the terminal console screen',
           '============================================================='
         ]);
@@ -3450,7 +3450,7 @@ export default function App() {
                     <span className="playbook-tag tag-sandbox">MicroVM Jail</span>
                   </div>
                   <p className="playbook-card-desc">
-                    Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our gVisor environment to verify total containment blocks.
+                    Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our Docker container sandbox to verify total containment blocks.
                   </p>
                   <div className="playbook-card-action">
                     <span className="playbook-cmd-preview">fidusgate-sandbox $ test-sandbox</span>
@@ -3730,7 +3730,7 @@ export default function App() {
                       path: 'scripts/*',
                       package: 'N/A',
                       icon: '🐳',
-                      value: 'Wraps agent terminal execution within gVisor microVMs and copy-on-write Docker containers, preventing host environment pollution.',
+                      value: 'Wraps agent terminal execution within copy-on-write Docker containers (with optional gVisor microVMs), preventing host environment pollution.',
                       howItRuns: 'Triggered automatically via shell scripts (sandbox-execute.sh, ci-verify.sh) whenever scripts are spawned by the gateway.',
                       functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
                     }
@@ -3818,7 +3818,7 @@ export default function App() {
                         path: 'scripts/*',
                         package: 'N/A',
                         icon: '🐳',
-                        value: 'Wraps agent terminal execution within gVisor microVMs and copy-on-write Docker containers, preventing host environment pollution.',
+                        value: 'Wraps agent terminal execution within copy-on-write Docker containers (with optional gVisor microVMs), preventing host environment pollution.',
                         howItRuns: 'Triggered automatically via shell scripts (sandbox-execute.sh, ci-verify.sh) whenever scripts are spawned by the gateway.',
                         functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
                       }
