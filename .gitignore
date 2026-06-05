@@ -107,9 +107,29 @@ out/
 .env.production.local
 .env.*.local
 .secrets
+.secrets*
+*_secret*
+*_token*
+
+# Personal / User Information and Local Credentials
+.npmrc
+.pypirc
+.netrc
+.git-credentials
+.gitconfig
+.bash_history
+.zsh_history
+*.key
+*.pem
+*private_key*
+*credential*
+*credentials*
+*personal*
+*.private
 
 # Runtime / local state folders
 .memory/
 apps/secure-gateway/.memory/
 
 # End of .gitignore
+
