@@ -588,7 +588,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fidusgate-super-secure-dev-jwt-sec
 // Logger helper with security tagging
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, meta ? JSON.stringify(meta) : '');
+  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${message}${meta ? ' ' + JSON.stringify(meta) : ''}`;
+  if (process.argv.includes('--mcp')) {
+    console.error(formatted);
+  } else {
+    console.log(formatted);
+  }
 }
 
 // ==========================================

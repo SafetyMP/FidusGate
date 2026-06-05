@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": "req-test-1",
+    "createdAt": "2026-06-05T00:37:16.485Z",
+    "requestedAmount": 15000,
+    "reason": "Compliance run REQ-300",
+    "applicant": "dev-1",
+    "status": "approved",
+    "reviewer": "admin-reviewer",
+    "reviewedAt": "2026-06-05T00:37:16.486Z"
+  },
+  {
+    "id": "req-test-2",
+    "createdAt": "2026-06-05T00:37:16.486Z",
+    "requestedAmount": 20000,
+    "reason": "Testing rejection",
+    "applicant": "dev-2",
+    "status": "rejected",
+    "reviewer": "admin-reviewer",
+    "reviewedAt": "2026-06-05T00:37:16.486Z"
+  }
+]

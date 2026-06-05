@@ -171,13 +171,13 @@ export class FidusGateDatabase {
       try {
         this.prisma = new PrismaClient();
         this.usePostgres = true;
-        console.log('📡 FidusGateDatabase: Relational PostgreSQL mode enabled via Prisma ORM.');
+        console.error('📡 FidusGateDatabase: Relational PostgreSQL mode enabled via Prisma ORM.');
       } catch (e: any) {
         console.warn('⚠️  FidusGateDatabase: Failed to initialize Prisma client, falling back to JSON mock files:', e.message);
         this.usePostgres = false;
       }
     } else {
-      console.log('💾 FidusGateDatabase: Running in zero-dependency local JSON file store mode.');
+      console.error('💾 FidusGateDatabase: Running in zero-dependency local JSON file store mode.');
     }
   }
 

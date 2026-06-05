@@ -2,223 +2,10 @@
   {
     "payload": {
       "type": "protectmcp:decision",
-      "tool_name": "execute_command",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:19:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "commandLine": "git commit -m 'REQ-300: Core secure-gateway and admin-dashboard updates'"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "64c0010f662c641356de6171d197df46e4ff491cc47c01380580c538ce6a91a09affa599674a8f5b47ccd72e5a65cff3ecc33287cb3dd1b10f7c1c9707f1d904",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "ba3853be6463a95953fa70e21b665902fd8bc4fdb040b9108dc1f2d793d15a38",
-    "receiptHash": "012928ba4a3d693a51f145dcbaf2e8e682bdafcd6ffa74d4e965fc39822068ea"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "execute_command",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:18:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "commandLine": "bash scripts/ham-drift-watcher.sh ."
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "87c87bb44e74cf660777af988f4f36b1d42fa11090d1fc7e8bb27520139f02e1aa4bb6ec3606e375cd9652810eb2f99cd2f64263993113c4f62eae6c8d761705",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "7922b4920805fcd06e9d506116574da617887114281456ba858e844b952f9d0d",
-    "receiptHash": "ba3853be6463a95953fa70e21b665902fd8bc4fdb040b9108dc1f2d793d15a38"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "execute_command",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:17:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "commandLine": "bash scripts/ci-verify.sh"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "d23e40fa24c2040eb82d3dfc5d6908949b4959b785e67fb199251bd086d359c96f0616177c11e1ddfc0c95be3f0fc3ac341481dae76cf5e7ee314de6c7cbca0f",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "5d29013cb198c9c22f9b00b6b6367a9811d037ca9bf8d2bb8314e9ce4c71ec07",
-    "receiptHash": "7922b4920805fcd06e9d506116574da617887114281456ba858e844b952f9d0d"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "write_file",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:15:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "path": "policy.cedar",
-        "content": "// Content"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "2f765f843bbfed38b6370b8fb2c6c0dc7c23a0e07f8d5247226ed82c25c4a5309656e85a287bf622bd2febead2b912c50539af58ab5cd2385e2bb5e20090bf09",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "6e1d5f277cdee63193ac4ccf179a5876258425e1a1238c282bfe32a2660d1dc5",
-    "receiptHash": "5d29013cb198c9c22f9b00b6b6367a9811d037ca9bf8d2bb8314e9ce4c71ec07"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "write_file",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:15:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "path": "apps/secure-gateway/src/index.ts",
-        "content": "// Content"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "034be8a11053364795f31a0189905fa792b230f84af1baae7825ff21d155eb3079f3e2a655b393471799c4f87b2e529e00ae990139fb69a76b3a7fc185fca20f",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "8e95a0fd2e8917b0099b767e4e4b0691d161baf59a2169b78b4131962f67905f",
-    "receiptHash": "6e1d5f277cdee63193ac4ccf179a5876258425e1a1238c282bfe32a2660d1dc5"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "write_file",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:15:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "path": "apps/admin-dashboard/src/App.tsx",
-        "content": "// Content"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "a5471515675ac38d11e3807359c9d57f4aa79593447742e96cf26ab0ffe8435f547e0772944f1f25fff8bbea62fe25fd2721f0889278a0726a0a282566d73c00",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "cf6a31c87664f99afa0260693b43a8ccdfeb3b1825d87468c94242a2ebe9a529",
-    "receiptHash": "8e95a0fd2e8917b0099b767e4e4b0691d161baf59a2169b78b4131962f67905f"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "write_file",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:15:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "path": "apps/admin-dashboard/src/App.css",
-        "content": "// Content"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "a54110bc56f2df843a8f7725413fe2bb4c87276a6d227d05f99cbbffc167640580e3ca6b9e298ea5ce57f3dbad04c63e3adade2b68e35d76eaa5774e8ee95306",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "569a6d43e34b9f50ec3d943a755c594d6abcd146335e57bd4c9499ac19bcd0d3",
-    "receiptHash": "cf6a31c87664f99afa0260693b43a8ccdfeb3b1825d87468c94242a2ebe9a529"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
-      "tool_name": "write_file",
-      "decision": "allow",
-      "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T17:16:00.000Z",
-      "issuer_id": "sb:issuer:de073ae64e43",
-      "args": {
-        "path": "apps/secure-gateway/src/bypass-validation.test.ts",
-        "content": "// Modified test file content"
-      }
-    },
-    "signature": {
-      "alg": "EdDSA",
-      "kid": "sb:issuer:de073ae64e43",
-      "sig": "88d303f603bdbf585e1ecc9102d713f5c938d82ca664cecea855d83083efabaa15f0f763c6c33399ff583a1ff042d8e141bd88a07363291efa2b53d585115a08",
-      "attestation": {
-        "sessionPublicKey": "302a300506032b65700321009b56ad7d0d175b419157685ee544d6f1f9db8afca5eedc77fb62b56263a67a50",
-        "issuerId": "sb:issuer:de073ae64e43",
-        "expiresAt": "2026-06-05T01:29:29.813Z",
-        "attestationSignature": "78aa12fc336c9efa3e0ac9cf30f39b56a6748a02af355a04e81f5a5840e8feaf1f2e25b9ee35ed7a62d33386eb8b69b1d250447f1ad330dbb09a1e1d90c68704"
-      }
-    },
-    "previousReceiptHash": "",
-    "receiptHash": "569a6d43e34b9f50ec3d943a755c594d6abcd146335e57bd4c9499ac19bcd0d3"
-  },
-  {
-    "payload": {
-      "type": "protectmcp:decision",
       "tool_name": "read_file",
       "decision": "allow",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T23:29:09.130Z",
+      "issued_at": "2026-06-04T23:37:16.450Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 1 low-risk file read auto-approved",
       "claimed_issuer_tier": 1
@@ -235,7 +22,7 @@
       "tool_name": "write_file",
       "decision": "allow",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-04T23:59:09.130Z",
+      "issued_at": "2026-06-05T00:07:16.450Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 2 file modification in approved src/ directory allowed",
       "claimed_issuer_tier": 2
@@ -252,7 +39,7 @@
       "tool_name": "execute_command",
       "decision": "deny",
       "policy_digest": "sha256:8f413a9de010",
-      "issued_at": "2026-06-05T00:14:09.130Z",
+      "issued_at": "2026-06-05T00:22:16.450Z",
       "issuer_id": "sb:issuer:de073ae64e43",
       "reason": "Tier 3 command execution blocked: skill-creator requires explicit manual verification",
       "claimed_issuer_tier": 3
