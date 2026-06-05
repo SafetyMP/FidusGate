@@ -81,7 +81,7 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
     id: 'tx_039281',
     timestamp: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
     sender: 'Unknown Tor Node IP: 185.220.101.5',
-    recipient: 'SageHart Admin Wallet',
+    recipient: 'FidusGate Admin Wallet',
     amount: 50000.00,
     currency: 'EUR',
     status: 'flagged',

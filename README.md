@@ -16,7 +16,7 @@ Designed with an extensible, **risk-centric architecture**, FidusGate establishe
 FidusGate is designed as a capability showcase and educational reference. It combines real security mechanisms with simulated components for demonstration purposes:
 
 *   **Real Security Controls:**
-    *   **Cedar Access Policy Engine:** Active, file-level policy gating parsing permissions written in the [policy.cedar](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/policy.cedar) policy file.
+    *   **Cedar Access Policy Engine:** Active, file-level policy gating parsing permissions written in the [policy.cedar](./policy.cedar) policy file.
     *   **Cryptographic Receipts:** Signed transaction receipts verified on the client dashboard using real Ed25519 public-key cryptography. (Note: While the Ed25519 receipt signing itself is real, because keys are stored in the local datastore for demo purposes, the non-repudiation property is illustrative, not enforceable in this configuration.)
     *   **Filesystem Drift Detection:** Live tracking of untracked/modified files using Git plumbing commands, with rollback options.
 *   **Simulated Components & Mocks:**
@@ -55,9 +55,9 @@ FidusGate aims to defend against:
 ## 🔍 How to Review This
 
 To verify the governance model and containment controls:
-1.  **Cedar Policy Model:** Review the [policy.cedar](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/policy.cedar) file to evaluate the risk-tiered permission rules.
-2.  **Sandbox Boundaries:** Inspect [scripts/sandbox-execute.sh](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/scripts/sandbox-execute.sh) to evaluate how copy-on-write Docker runtime mounts isolate tool executions.
-3.  **Audit Log Verification:** Review the signature validation loop inside [packages/crypto-utils/src/index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/crypto-utils/src/index.ts) to verify the tamper-evident receipt verification.
+1.  **Cedar Policy Model:** Review the [policy.cedar](./policy.cedar) file to evaluate the risk-tiered permission rules.
+2.  **Sandbox Boundaries:** Inspect [scripts/sandbox-execute.sh](./scripts/sandbox-execute.sh) to evaluate how copy-on-write Docker runtime mounts isolate tool executions.
+3.  **Audit Log Verification:** Review the signature validation loop inside [packages/crypto-utils/src/index.ts](./packages/crypto-utils/src/index.ts) to verify the tamper-evident receipt verification.
 
 ---
 
@@ -77,10 +77,10 @@ FidusGate maps conceptually to control families in **NIST SP 800-53, ISO/IEC 270
 
 FidusGate includes documentation and playbooks to assist security officers and developers in managing agentic boundaries.
 
-* **[Documentation Portal](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/README.md):** The primary index mapping all guides and governance skills.
-* **[Monorepo Architecture Guide](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/ARCHITECTURE.md):** Deep dive into high-level topologies, component details, and Docker sandbox configurations.
-* **[Local CI/CD Emulation Manual](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/local-ci-emulation.md):** Offline pipeline execution using `act` and prompt injection verification checks.
-* **[Phase 3 Verification Walkthrough](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/docs/walkthrough.md):** Concrete operational runbooks for filesystem drift auto-reconciliation, Gemini Cedar Co-Pilots, and conventional commit tags.
+* **[Documentation Portal](./docs/README.md):** The primary index mapping all guides and governance skills.
+* **[Monorepo Architecture Guide](./docs/ARCHITECTURE.md):** Deep dive into high-level topologies, component details, and Docker sandbox configurations.
+* **[Local CI/CD Emulation Manual](./docs/local-ci-emulation.md):** Offline pipeline execution using `act` and prompt injection verification checks.
+* **[Phase 3 Verification Walkthrough](./docs/walkthrough.md):** Concrete operational runbooks for filesystem drift auto-reconciliation, Gemini Cedar Co-Pilots, and conventional commit tags.
 
 ---
 

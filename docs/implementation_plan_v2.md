@@ -45,12 +45,12 @@ Logical mappings of the upcoming Phase 2 code modifications separated by compone
 ### 🔑 Cryptographic Utilities (`packages/crypto-utils`)
 Implements official cloud providers for KMS Transit encryption.
 
-#### [NEW] [kms-provider.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/crypto-utils/src/kms-provider.ts)
+#### [NEW] [kms-provider.ts](../packages/crypto-utils/src/kms-provider.ts)
 * Create `KmsProvider` interface with `signDigest` and `verifySignature` signatures.
 * Implement `AwsKmsProvider` utilizing `@aws-sdk/client-kms` to dispatch KMS Transit signatures.
 * Implement `GcpKmsProvider` utilizing `@google-cloud/kms` to execute HSM-backed signatures.
 
-#### [MODIFY] [crypto.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/crypto-utils/src/crypto.ts)
+#### [MODIFY] [crypto.ts](../packages/crypto-utils/src/crypto.ts)
 * Integrate KMS provider resolution routing:
   ```typescript
   export function resolveKmsProvider(config: KmsConfig): KmsProvider {
@@ -65,7 +65,7 @@ Implements official cloud providers for KMS Transit encryption.
 ### 💾 Core Database Client (`packages/database`)
 Adapts schema tables to track pending multi-sig consensus requests and verified authorizations.
 
-#### [MODIFY] [schema.prisma](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/database/prisma/schema.prisma)
+#### [MODIFY] [schema.prisma](../packages/database/prisma/schema.prisma)
 * Add `ConsensusRequest` model:
   ```prisma
   model ConsensusRequest {
@@ -90,7 +90,7 @@ Adapts schema tables to track pending multi-sig consensus requests and verified 
   }
   ```
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/database/src/index.ts)
+#### [MODIFY] [index.ts](../packages/database/src/index.ts)
 * Add database client methods:
   * `createConsensusRequest(actionType, payload)`
   * `submitAttestation(requestId, smeRole, signature, kid)`
@@ -101,7 +101,7 @@ Adapts schema tables to track pending multi-sig consensus requests and verified 
 ### 🛡️ Secure Gateway Backend (`apps/secure-gateway`)
 Instruments native WASI unprivileged executors, native OTel exporters, and consensus routers.
 
-#### [NEW] [wasi-runner.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/wasi-runner.ts)
+#### [NEW] [wasi-runner.ts](../apps/secure-gateway/src/wasi-runner.ts)
 * Implement sub-millisecond unprivileged WASI compilation runner utilizing Node's built-in `node:wasi` classes:
   ```typescript
   import { WASI } from 'node:wasi';
@@ -118,7 +118,7 @@ Instruments native WASI unprivileged executors, native OTel exporters, and conse
   }
   ```
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/index.ts)
+#### [MODIFY] [index.ts](../apps/secure-gateway/src/index.ts)
 * **Wasm Route Integration:** In `/api/sandbox/execute`, inspect command targets. If targeting compilation tools (like TypeScript `tsc`), dynamically route execution through `wasi-runner.ts` instead of launching Docker containers.
 * **Consensus API Router:** Mount `/api/consensus/requests` (`GET`/`POST`) to query, request, and verify role signatures.
 * **OTel Integration:** Pipe native trace metrics into the `/metrics` Prometheus collector backend on port 3002.
@@ -128,7 +128,7 @@ Instruments native WASI unprivileged executors, native OTel exporters, and conse
 ### 🎨 Operations Dashboard (`apps/admin-dashboard`)
 Provides operations panels for multi-sig attestations and live OTel tracing metrics.
 
-#### [MODIFY] [App.tsx](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/admin-dashboard/src/App.tsx)
+#### [MODIFY] [App.tsx](../apps/admin-dashboard/src/App.tsx)
 * **Consensus Control Center:** Add a "Pending Approvals" alert grid next to active findings. Tapping "Approve" dispatches SME keypair signatures to the secure gateway backend consensus API.
 * **OTel Prometheus Integration:** Fetch active Prometheus performance stats directly from port 3002 in the data syncer, replacing simulated metrics with real traces.
 

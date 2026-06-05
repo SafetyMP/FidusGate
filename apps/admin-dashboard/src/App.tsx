@@ -689,7 +689,10 @@ export default function App() {
             wsEvent === 'budget_extension_created' ||
             wsEvent === 'budget_extension_approved' ||
             wsEvent === 'budget_extension_rejected' ||
-            wsEvent === 'ibp_state_updated'
+            wsEvent === 'ibp_state_updated' ||
+            wsEvent === 'plm_state_updated' ||
+            wsEvent === 'devops_state_updated' ||
+            wsEvent === 'findings_updated'
           ) {
             fetchData();
           }
@@ -1496,7 +1499,7 @@ export default function App() {
           '🚀 [PLAYBOOK] Booting cryptographic demonstrator inside Docker sandbox...',
           '🔒 [CRYPTO] Generating key pair, signing mock receipts, and testing tamper detection...'
         ]);
-        await executeSandboxCommand('node /Users/sagehart/.gemini/antigravity/brain/ad4f9c0a-c66d-4b32-baf8-336abc6f4410/scratch/demonstrate_tampering.js');
+        await executeSandboxCommand('node scripts/demonstrate_tampering.js');
       } else if (cmd === 'test-scanner') {
         if (authRole !== 'admin') {
           setConsoleLines(prev => [
@@ -1791,7 +1794,7 @@ export default function App() {
                     type="text" 
                     id="sender" 
                     className="form-control" 
-                    placeholder="e.g. sagehart@antigravity.io"
+                    placeholder="e.g. developer@fidusgate.internal"
                     value={txSender} 
                     onChange={e => setTxSender(e.target.value)}
                     required 

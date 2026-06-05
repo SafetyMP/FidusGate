@@ -8,6 +8,11 @@ import { FidusGateDatabase } from '@fidusgate/database';
 import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
 import { auditSandboxSyscalls } from './ebpf-monitor';
+import {
+  DevOpsComplianceTracker,
+  IBPComplianceTracker,
+  PLMComplianceTracker
+} from './compliance-trackers';
 
 test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => {
   // Load standard policy.cedar from repo root
@@ -1005,6 +1010,53 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
       assert.ok(rejectedReq);
       assert.strictEqual(rejectedReq.status, 'rejected');
       assert.strictEqual(rejectedReq.reviewer, 'admin-reviewer');
+    });
+  });
+
+  await t.test('Compliance Trackers and WebSocket Broadcast Integration', async (subT) => {
+    let wsBroadcasts: { event: string; data: any }[] = [];
+    const mockBroadcastWS = (event: string, data: any) => {
+      wsBroadcasts.push({ event, data });
+    };
+
+    const devops = new DevOpsComplianceTracker(mockBroadcastWS);
+    const ibp = new IBPComplianceTracker(mockBroadcastWS);
+    const plm = new PLMComplianceTracker(mockBroadcastWS);
+
+    await subT.test('DevOpsComplianceTracker should broadcast updates when file modified or tasks succeed', () => {
+      wsBroadcasts = [];
+      devops.onFileModified();
+      assert.strictEqual(wsBroadcasts.length, 1);
+      assert.strictEqual(wsBroadcasts[0].event, 'devops_state_updated');
+      assert.strictEqual(wsBroadcasts[0].data.pipelineVerified, false);
+
+      wsBroadcasts = [];
+      devops.onPipelineSuccess();
+      assert.strictEqual(wsBroadcasts.length, 1);
+      assert.strictEqual(wsBroadcasts[0].event, 'devops_state_updated');
+      assert.strictEqual(wsBroadcasts[0].data.pipelineVerified, true);
+    });
+
+    await subT.test('IBPComplianceTracker should broadcast updates on token usage or task log', () => {
+      wsBroadcasts = [];
+      const initialConsumed = ibp.getState().tokensConsumed;
+      ibp.recordTokenUsage(1500);
+      assert.strictEqual(wsBroadcasts.length, 1);
+      assert.strictEqual(wsBroadcasts[0].event, 'ibp_state_updated');
+      assert.strictEqual(wsBroadcasts[0].data.tokensConsumed, initialConsumed + 1500);
+
+      wsBroadcasts = [];
+      ibp.addTokenBudget(5000);
+      assert.strictEqual(wsBroadcasts.length, 1);
+      assert.strictEqual(wsBroadcasts[0].event, 'ibp_state_updated');
+    });
+
+    await subT.test('PLMComplianceTracker should broadcast updates on requirements or file modification', () => {
+      wsBroadcasts = [];
+      plm.setRequirement('REQ-999');
+      assert.strictEqual(wsBroadcasts.length, 1);
+      assert.strictEqual(wsBroadcasts[0].event, 'plm_state_updated');
+      assert.strictEqual(wsBroadcasts[0].data.activeRequirementId, 'REQ-999');
     });
   });
 });

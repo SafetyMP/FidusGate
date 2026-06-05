@@ -47,7 +47,7 @@ Separate changes are logically mapped by workspace components, ordering dependen
 
 Hardens signature routines, integrates cloud KMS wrappers, and supports hash-chain hashing.
 
-#### [MODIFY] [crypto.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/crypto-utils/src/crypto.ts)
+#### [MODIFY] [crypto.ts](../packages/crypto-utils/src/crypto.ts)
 * Add a `hashReceipt(payload: Omit<AuditReceipt, 'signature_sig'>): string` helper to compute cryptographically secure SHA-256 digests of receipts.
 * Refactor signing routes to accept a `KmsConfig` block, supporting transit calls targeting Google Cloud KMS `AsymmetricSign` or AWS KMS `Sign` endpoints when active, falling back to local `keypair` generation if unconfigured.
 
@@ -57,7 +57,7 @@ Hardens signature routines, integrates cloud KMS wrappers, and supports hash-cha
 
 Introduces schema fields for receipt hash-chaining, drift patch logging, and active circuit breaker states.
 
-#### [MODIFY] [schema.prisma](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/database/prisma/schema.prisma)
+#### [MODIFY] [schema.prisma](../packages/database/prisma/schema.prisma)
 * Update `AuditReceipt` model to add:
   * `receiptHash String @default("")`
   * `previousReceiptHash String @default("")`
@@ -66,7 +66,7 @@ Introduces schema fields for receipt hash-chaining, drift patch logging, and act
   * `circuitBreakerActive Boolean @default(false)`
   * `agentTokenBudget Float @default(1000.0)`
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/database/src/index.ts)
+#### [MODIFY] [index.ts](../packages/database/src/index.ts)
 * Update `addReceipt(receipt)`: Retrieve the latest recorded receipt in the DB, extract its `receiptHash`, inject it as `previousReceiptHash` in the new receipt, calculate the new cryptographic `receiptHash`, and write the tamper-evident receipt block to store.
 * Add stateful database helpers to toggle `circuitBreakerActive` and check state thresholds.
 
@@ -76,11 +76,11 @@ Introduces schema fields for receipt hash-chaining, drift patch logging, and act
 
 Integrates structured SDLC remediation hooks, hot-swaps active rules via co-pilot controllers, and instruments OpenTelemetry.
 
-#### [MODIFY] [command-auditor.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/command-auditor.ts)
+#### [MODIFY] [command-auditor.ts](../apps/secure-gateway/src/command-auditor.ts)
 * Update `AuditResult` structure to return `suggestedAutofix` as a structured object containing target tokens, parameters, and suggested replacements.
 * Add rules to detect dynamic package commands and inject explicit, safe workspace replacements.
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/index.ts)
+#### [MODIFY] [index.ts](../apps/secure-gateway/src/index.ts)
 * **OTel Instrumentation:** Mount OpenTelemetry APIs (`@opentelemetry/api`, `@opentelemetry/sdk-trace-node`) to trace latency across Express handlers, Rust-daemon authorization requests, and database persistence checks.
 * **Circuit Breaker Middleware:** Add a global gateway middleware that blocks all agent requests if `circuitBreakerActive === true` is queried in the DB.
 * **Auto-Fix Endpoint:** Return structured autofix suggestions inside `/api/sandbox/execute` and MCP tool-call JSON blocks.
@@ -92,7 +92,7 @@ Integrates structured SDLC remediation hooks, hot-swaps active rules via co-pilo
 
 Renders interactive circuit breaker kill switches, conversation-to-policy sandbox chat panels, and live tracing telemetry charts.
 
-#### [MODIFY] [App.tsx](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/admin-dashboard/src/App.tsx)
+#### [MODIFY] [App.tsx](../apps/admin-dashboard/src/App.tsx)
 * **Co-Pilot Playground Sidebar:** Add a collapsible sidebar drawer showing conversational prompts. Tapping "Apply" executes co-pilot translations and mounts draft rules inside the visual simulator.
 * **Emergency Kill-Switch UI:** Place a large, high-fidelity Obsidian Neon Red "Suspended" toggler inside the attestation grid to immediately trigger active circuit breakers.
 * **OTel Telemetry Grid:** Integrate micro-sparkline charts displaying gateway authorization latency metrics and tool-call transaction rates.

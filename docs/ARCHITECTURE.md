@@ -164,7 +164,7 @@ The **Execution Sandbox** manages runtime virtualization, guaranteeing that high
 * **Execution:** Spawns transparently whenever the dashboard console executes a command or sandbox playbook:
   ```bash
   # Execute an arbitrary shell script inside the secure sandbox
-  bash scripts/sandbox-execute.sh "npm run test" "/Users/sagehart/Documents/project"
+  bash scripts/sandbox-execute.sh "npm run test" "/absolute/path/to/project"
   ```
 
 ---

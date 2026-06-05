@@ -1,14 +1,1 @@
-[
-  {
-    "vector": "SEC-001",
-    "title": "Low Risk dependency check",
-    "severity": "Low",
-    "file": "package.json",
-    "step": "npm audit",
-    "impact": "Minimal dependency updates",
-    "evidence": "Audit returned clean results",
-    "dataFlow": "No public vectors",
-    "remediation": "Update minor versions when possible",
-    "amplifiedBy": "none"
-  }
-]
+[]

@@ -38,7 +38,7 @@ Logical mappings of the upcoming Phase 3 changes:
 ### 🔑 Cryptographic Utilities (`packages/crypto-utils`)
 Upgrades KMS wrappers to execute hardware-secured signature verification.
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/packages/crypto-utils/src/index.ts)
+#### [MODIFY] [index.ts](../packages/crypto-utils/src/index.ts)
 * **AWS KMS Verification:** Modify `AwsKMSProvider.verifyReceipt` to call AWS KMS `Verify` endpoint via synchronous curl commands, ensuring signature validation occurs strictly inside the HSM.
 * **GCP KMS Verification:** Modify `GcpKMSProvider.verifyReceipt` to dispatch to Google Cloud KMS `AsymmetricVerify` endpoint using the active project service token.
 
@@ -47,7 +47,7 @@ Upgrades KMS wrappers to execute hardware-secured signature verification.
 ### 🛡️ Secure Gateway Backend (`apps/secure-gateway`)
 Integrates static policy schema validations, background consensus expiry schedulers, and real OTel metrics streams.
 
-#### [NEW] [cron-worker.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/cron-worker.ts)
+#### [NEW] [cron-worker.ts](../apps/secure-gateway/src/cron-worker.ts)
 * Implement a lightweight, background cron timer that polls pending consensus actions:
   ```typescript
   import { FidusGateDatabase } from '@fidusgate/database';
@@ -73,7 +73,7 @@ Integrates static policy schema validations, background consensus expiry schedul
   }
   ```
 
-#### [MODIFY] [index.ts](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/secure-gateway/src/index.ts)
+#### [MODIFY] [index.ts](../apps/secure-gateway/src/index.ts)
 * **Static Schema Validation:** Modify `/api/policy/co-pilot` translation handler. When receivingtranslated Cedar code blocks from Gemini, programmatically execute a dry-run validate task calling `wasi-runner` on the `cedar.wasm` binary using `policy.cedarschema`. Block the transaction if static type validation fails.
 * **Background Worker Boot:** Trigger `startConsensusExpiryWorker` inside the HTTP server startup hook.
 * **OTel Prometheus Pipeline:** Bind Port 3002's Prometheus `/metrics` stream to dispatch telemetry spans to active local OpenTelemetry Daemon collectors.
@@ -83,7 +83,7 @@ Integrates static policy schema validations, background consensus expiry schedul
 ### 🎨 Operations Dashboard (`apps/admin-dashboard`)
 Injects real OTel metrics synchronization and expired action alerts.
 
-#### [MODIFY] [App.tsx](file:///Users/sagehart/Documents/Antigravity%20Test%20Project/antigravity-custom-dev/apps/admin-dashboard/src/App.tsx)
+#### [MODIFY] [App.tsx](../apps/admin-dashboard/src/App.tsx)
 * **Prometheus Metrics Polling:** Refactor `fetchData` to fetch actual Prometheus metric arrays directly from port 3002's `/metrics` exporter, feeding live Gateway latency and request rates directly into our dashboard sparkline elements.
 * **Consensus Expiry Notifications:** If a pending consensus action is marked as `'expired'` in the WS stream, render a glowing orange alert warning inside the attestation panel.
 
