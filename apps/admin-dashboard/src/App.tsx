@@ -89,6 +89,7 @@ export default function App() {
     '📡 Standing by for live sandbox command execution. Type "help" to list workflows.'
   ]);
   const [consoleInput, setConsoleInput] = useState('');
+  const [latestAutofix, setLatestAutofix] = useState<{ target: string, replacement: string } | null>(null);
   const [activePlaybook, setActivePlaybook] = useState<string | null>(null);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const [showArchPanel, setShowArchPanel] = useState(false);
@@ -1211,6 +1212,7 @@ export default function App() {
 
   // Live Unprivileged Sandbox Command Execution API Caller
   const executeSandboxCommand = async (fullCmd: string) => {
+    setLatestAutofix(null);
     setConsoleLines(prev => [
       ...prev,
       `🛡️ [SANDBOX] Spawning unprivileged Docker container sandbox (gVisor optional)...`
@@ -1259,6 +1261,19 @@ export default function App() {
           ...logLines,
           `❌ [SANDBOX] Sandboxed command execution failed.`
         ]);
+        if (data.remediationSuggestion) {
+          setConsoleLines(prev => [
+            ...prev,
+            `👉 Remediation Suggestion: ${data.remediationSuggestion}`
+          ]);
+        }
+        if (data.suggestedAutofix) {
+          setLatestAutofix(data.suggestedAutofix);
+          setConsoleLines(prev => [
+            ...prev,
+            `💡 FidusGate detected a safe auto-fix. Apply it below: "${data.suggestedAutofix.replacement}"`
+          ]);
+        }
       }
     } catch (err: any) {
       setConsoleLines(prev => [
@@ -1270,6 +1285,7 @@ export default function App() {
 
   // Unified playbook and manual command execution engine
   const executePlaybook = async (fullCmd: string) => {
+    setLatestAutofix(null);
     const cmd = fullCmd.toLowerCase().trim();
     setActivePlaybook(cmd);
 
@@ -2033,6 +2049,9 @@ export default function App() {
             selectedArchComp={selectedArchComp}
             setSelectedArchComp={setSelectedArchComp}
             syscalls={syscalls}
+            latestAutofix={latestAutofix}
+            setLatestAutofix={setLatestAutofix}
+            executeSandboxCommand={executeSandboxCommand}
           />
         )}
       </div>

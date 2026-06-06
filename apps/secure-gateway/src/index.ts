@@ -1255,7 +1255,8 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 
       res.status(403).json({ 
         error: `Command execution forbidden. Reason: ${auditResult.reason}`,
-        remediationSuggestion: auditResult.remediationSuggestion
+        remediationSuggestion: auditResult.remediationSuggestion,
+        suggestedAutofix: auditResult.suggestedAutofix
       });
       return;
     }

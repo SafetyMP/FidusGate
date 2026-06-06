@@ -1090,4 +1090,23 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
       assert.strictEqual(wsBroadcasts[0].data.activeRequirementId, 'REQ-999');
     });
   });
+
+  await t.test('Structured Autofix and Remediation Verification', async (subT) => {
+    await subT.test('isCommandLineSecure should return suggestedAutofix for python/pip commands', () => {
+      const pythonAudit = isCommandLineSecure('pip install cryptography');
+      assert.strictEqual(pythonAudit.secure, false);
+      assert.ok(pythonAudit.remediationSuggestion);
+      assert.ok(pythonAudit.suggestedAutofix);
+      assert.ok(pythonAudit.suggestedAutofix.replacement.includes('sandbox-execute.sh'));
+      assert.strictEqual(pythonAudit.suggestedAutofix.target, 'pip install cryptography');
+    });
+
+    await subT.test('isCommandLineSecure should return suggestedAutofix for invalid npm install attempts', () => {
+      const npmAudit = isCommandLineSecure('npm install lodash');
+      assert.strictEqual(npmAudit.secure, false);
+      assert.ok(npmAudit.remediationSuggestion);
+      assert.ok(npmAudit.suggestedAutofix);
+      assert.strictEqual(npmAudit.suggestedAutofix.replacement, 'npm run bootstrap');
+    });
+  });
 });

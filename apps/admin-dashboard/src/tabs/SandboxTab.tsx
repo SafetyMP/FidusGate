@@ -12,6 +12,9 @@ interface SandboxTabProps {
   selectedArchComp: string | null;
   setSelectedArchComp: (v: string) => void;
   syscalls: any[];
+  latestAutofix: { target: string, replacement: string } | null;
+  setLatestAutofix: (v: { target: string, replacement: string } | null) => void;
+  executeSandboxCommand: (fullCmd: string) => Promise<void>;
 }
 
 export function SandboxTab({
@@ -28,6 +31,9 @@ export function SandboxTab({
   selectedArchComp,
   setSelectedArchComp,
   syscalls,
+  latestAutofix,
+  setLatestAutofix,
+  executeSandboxCommand,
 }: SandboxTabProps) {
   return (
     <div className="terminal-grid-section animate-fade-in" style={{ marginTop: 0 }}>
@@ -545,6 +551,42 @@ export function SandboxTab({
           <div ref={consoleEndRef} />
         </div>
         
+        {latestAutofix && (
+          <div className="console-autofix-banner" style={{
+            background: 'rgba(59, 130, 246, 0.15)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '6px',
+            padding: '0.6rem 1rem',
+            margin: '0.5rem 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.75rem',
+            color: '#93c5fd'
+          }}>
+            <span>💡 FidusGate detected a safe auto-fix: <code>{latestAutofix.replacement}</code></span>
+            <button
+              type="button"
+              onClick={() => {
+                executeSandboxCommand(latestAutofix.replacement);
+                setLatestAutofix(null);
+              }}
+              style={{
+                background: 'hsl(var(--primary))',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '0.25rem 0.75rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.72rem'
+              }}
+            >
+              Apply Fix
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleConsoleSubmit} className="console-input">
           <span className="console-prompt">fidusgate-sandbox $</span>
           <input 
