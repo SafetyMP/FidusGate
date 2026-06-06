@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/SafetyMP/FidusGate/compare/v1.3.1...v1.4.0) (2026-06-06)
+
+
+### Features
+
+* decompose App.tsx and integrate FidusGate MCP secure tool routing ([ec87ad6](https://github.com/SafetyMP/FidusGate/commit/ec87ad6434ed27f86c942cf0b8c6b9e76013d5ba))
+
 ## [1.3.1](https://github.com/SafetyMP/FidusGate/compare/v1.3.0...v1.3.1) (2026-06-04)
 
 
