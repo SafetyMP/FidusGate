@@ -83,6 +83,7 @@ FidusGate includes documentation and playbooks to assist security officers and d
 * **[Monorepo Architecture Guide](./docs/ARCHITECTURE.md):** Deep dive into high-level topologies, component details, and Docker sandbox configurations.
 * **[Local CI/CD Emulation Manual](./docs/local-ci-emulation.md):** Offline pipeline execution using `act` and prompt injection verification checks.
 * **[Phase 3 Verification Walkthrough](./docs/walkthrough.md):** Concrete operational runbooks for filesystem drift auto-reconciliation, Gemini Cedar Co-Pilots, and conventional commit tags.
+* **[Phase 4 & 5 Verification Walkthrough](./docs/walkthrough_v2.md):** Detailed runbook for the sub-millisecond WASI Sandbox runtime, Cloud KMS (AWS/GCP) transit integrations, and Multi-Agent Consensus Gating.
 
 ---
 
@@ -155,14 +156,18 @@ graph TD
 
 ## 🔒 The Risk-Tiered Governance Framework
 
-FidusGate establishes a four-tier risk classification for tools available to autonomous agents. These categories map directly to Cedar access-control policies parsed at the gateway:
+FidusGate establishes an eight-tier risk and compliance classification framework. These categories map directly to Cedar access-control policies parsed statefully at the gateway:
 
-| Risk Tier | Scope of Actions | Cedar Permission Rule | Enforcement Strategy |
+| Risk Tier / Guard | Scope of Actions | Cedar Policy Rule | Enforcement Strategy |
 | :--- | :--- | :--- | :--- |
 | **Tier 1 (Low)** | File reads, directory listing, regex searches | `permit` tool call globally | **Auto-Approved:** Read-only tasks run without blockages to prevent developer friction. |
 | **Tier 2 (Medium)** | Source directory file modifications (`apps/*`, `packages/*`) | `permit` for source directories | **Shadow-Enforced:** Permitted in source paths, but forbidden from editing configuration files (`policy.cedar`, `protect-mcp.config.json`). |
 | **Tier 3 (High)** | Terminal scripting, execution of compilation tasks | `permit` strictly within sandbox wrappers | **Sandboxed Execution:** Requires script-spawning to happen inside secure, isolated sandboxes (`sandbox-execute.sh`). Raw host access is blocked. |
 | **Tier 4 (Critical)** | Global networking, arbitrary package installations (`npm i`, `curl`) | `forbid` globally | **Strict Interdiction:** Blocked at the gateway level to prevent supply chain attacks and untrusted package pollution. |
+| **Tier 5 (DevOps)** | Branch commits (`git commit`) and publishing (`npm publish`) | `forbid` unless pipeline checks pass | **Stateful Pipelines:** Enforces execution of `ci-verify.sh`, HAM drift checks, and static security auditing before commits can proceed. |
+| **Tier 6 (IBP)** | Running high-cost sandbox executions or remote scripts | `forbid` if token budget exhausted | **Financial Control:** Monitors token consumption, triggering a circuit breaker block if estimated token burn exceeds 95% of the sprint allocation. |
+| **Tier 7 (PLM)** | Any write/modify action in source directories | `forbid` unless active PLM requirement registered | **Traceability Gates:** Restricts codebase changes to authorized Jira/linear-style Requirement IDs and requires associated unit tests to be written. |
+| **Tier 8 (SME Roles)** | Specialized source paths (DB migrations, UI layouts, etc.) | `forbid` unless signed by matching SME | **Role Gating:** Restricts folder segments to specific cryptographic role signatures (e.g. `backend-sme` for schemas, `devops-sme` for Docker). |
 
 ---
 
@@ -264,6 +269,17 @@ npm run dev
 ```
 *   **Admin Dashboard:** [http://localhost:3000](http://localhost:3000)
 *   **Secure Gateway:** [http://localhost:3001](http://localhost:3001)
+
+### 📡 2.5. Running the Rust Cedar Policy Daemon (Optional)
+To enable the high-speed, Rust-native Cedar authorization engine on Port 50051:
+```bash
+# Build the daemon Docker image
+npm run build --workspace=packages/cedar-daemon
+
+# Start the container
+npm run start --workspace=packages/cedar-daemon
+```
+*If the daemon is offline, the Secure Gateway backend automatically falls back to using the TypeScript-native AST evaluator.*
 
 ### 🛡️ 3. Simulating a Sandboxed Security Audit
 You can execute a secure static audit of your workflows or local compilation within the unprivileged Docker container:
