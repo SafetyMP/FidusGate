@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/SafetyMP/FidusGate/compare/v1.4.0...v1.5.0) (2026-06-06)
+
+
+### Features
+
+* complete FidusGate optimizations and integration updates ([1c6be38](https://github.com/SafetyMP/FidusGate/commit/1c6be38a989e94a8630b1e787b2b7d49044b3606))
+
 # [1.4.0](https://github.com/SafetyMP/FidusGate/compare/v1.3.1...v1.4.0) (2026-06-06)
 
 
