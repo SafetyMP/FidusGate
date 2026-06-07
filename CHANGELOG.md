@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/SafetyMP/FidusGate/compare/v1.5.0...v1.6.0) (2026-06-07)
+
+
+### Features
+
+* **security:** Phase 2 Enterprise Hardening - WASM fallback, egress proxy, KMS signing, eBPF enforcer ([c920e02](https://github.com/SafetyMP/FidusGate/commit/c920e02bb14eebcf28ebb370f8caa11f9a6bda94))
+
 # [1.5.0](https://github.com/SafetyMP/FidusGate/compare/v1.4.0...v1.5.0) (2026-06-06)
 
 
