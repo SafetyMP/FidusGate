@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { FidusGateDatabase, CommandLogEntry, FilesystemDriftEntry } from '@fidusgate/database';
 import * as http from 'node:http';
-import { verifyReceipt, generateKeyPair, createAttestedSession } from '@fidusgate/crypto-utils';
+import { verifyReceipt, generateKeyPair, createAttestedSession, verifyAuditChain } from '@fidusgate/crypto-utils';
 import { startMcpServer } from './mcp-server';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
@@ -861,6 +861,18 @@ app.get('/api/receipts', requireAuth(['developer', 'admin', 'auditor']), async (
   } catch (error) {
     log('error', 'Failed to retrieve audit receipts', error);
     res.status(500).json({ error: 'Failed to retrieve receipts' });
+  }
+});
+
+// 3b. GET /api/receipts/verify-chain - Verify the integrity of the cryptographic hash chain (Role: developer, admin, auditor)
+app.get('/api/receipts/verify-chain', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
+  try {
+    const receipts = await db.getAuditReceipts();
+    const isValid = verifyAuditChain(receipts);
+    res.json({ valid: isValid, count: receipts.length });
+  } catch (error) {
+    log('error', 'Failed to verify receipt hash chain', error);
+    res.status(500).json({ error: 'Failed to verify hash chain' });
   }
 });
 

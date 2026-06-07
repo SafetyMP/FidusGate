@@ -43,6 +43,8 @@ export interface AuditReceiptSignature {
 export interface AuditReceipt {
   payload: AuditReceiptPayload;
   signature: AuditReceiptSignature;
+  previousReceiptHash?: string;
+  receiptHash?: string;
 }
 
 export interface SecurityFinding {

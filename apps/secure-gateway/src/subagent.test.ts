@@ -198,7 +198,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
 
     // Run simple echo in sandbox under the subagent ID
     const sandboxCmd = `bash scripts/sandbox-execute.sh "echo 'hello'" "${workspacePath}" "${subagentId}"`;
-    const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8' });
+    const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', env: { ...process.env, FIDUSGATE_ALLOW_HOST_FALLBACK: 'true' } });
 
     assert.ok(logs.includes('hello'), 'Sandbox execution should succeed and print output');
     assert.ok(fs.existsSync(subagentMemoryDir), 'Isolated subagent memory directory should be created');

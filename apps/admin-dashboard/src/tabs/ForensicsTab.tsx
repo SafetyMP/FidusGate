@@ -9,6 +9,7 @@ interface VerificationResult {
 interface ForensicsTabProps {
   forensicLogs: any[];
   receipts: AuditReceipt[];
+  isChainValid: boolean | null;
   forensicSearch: string;
   setForensicSearch: (v: string) => void;
   forensicStatusFilter: 'all' | 'success' | 'failed' | 'denied';
@@ -24,6 +25,7 @@ interface ForensicsTabProps {
 export function ForensicsTab({
   forensicLogs,
   receipts,
+  isChainValid,
   forensicSearch,
   setForensicSearch,
   forensicStatusFilter,
@@ -64,7 +66,23 @@ export function ForensicsTab({
               </svg>
               Verifiable Cedar Policy Receipts
             </h2>
-            <span className="status-badge status-completed">Tamper-Proof Ledger</span>
+            {isChainValid === true ? (
+              <span className="status-badge status-completed" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', borderColor: 'hsla(var(--success), 0.3)', background: 'hsla(var(--success), 0.1)', color: 'hsl(var(--success))' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Hash Chain Intact
+              </span>
+            ) : isChainValid === false ? (
+              <span className="status-badge status-failed" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', borderColor: 'hsla(var(--danger), 0.3)', background: 'hsla(var(--danger), 0.1)', color: 'hsl(var(--danger))' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                Hash Chain Corrupted!
+              </span>
+            ) : (
+              <span className="status-badge status-pending">Checking Chain...</span>
+            )}
           </div>
 
           <div className="card-body">

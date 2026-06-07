@@ -426,6 +426,39 @@ export function verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): bool
   return getKMSProvider().verifyReceipt(receipt, publicKeyHex);
 }
 
+export function verifyAuditChain(receipts: AuditReceipt[]): boolean {
+  if (!receipts || receipts.length === 0) return true;
+  for (let i = 0; i < receipts.length; i++) {
+    const current = receipts[i];
+    const prevHash = current.previousReceiptHash || '';
+    
+    const calculatedHash = crypto.createHash('sha256').update(JSON.stringify({
+      payload: current.payload,
+      signature: current.signature,
+      previousReceiptHash: prevHash
+    })).digest('hex');
+
+    if (current.receiptHash !== calculatedHash) {
+      console.warn(`[verifyAuditChain] Hash mismatch at index ${i}: stored ${current.receiptHash}, calculated ${calculatedHash}`);
+      return false;
+    }
+
+    if (i < receipts.length - 1) {
+      const next = receipts[i + 1];
+      if (current.previousReceiptHash !== next.receiptHash) {
+        console.warn(`[verifyAuditChain] Chain link broken: current.previousReceiptHash ${current.previousReceiptHash} !== next.receiptHash ${next.receiptHash}`);
+        return false;
+      }
+    } else {
+      if (current.previousReceiptHash !== '') {
+        console.warn(`[verifyAuditChain] Oldest receipt has non-empty previousReceiptHash: ${current.previousReceiptHash}`);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // ==========================================
 // CLI Execution Handler (Offline verification/keygen)
 // ==========================================

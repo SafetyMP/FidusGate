@@ -13,6 +13,7 @@ export default function App() {
   // State variables
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [receipts, setReceipts] = useState<AuditReceipt[]>([]);
+  const [isChainValid, setIsChainValid] = useState<boolean | null>(null);
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   
   // PLM Feedback & Gate Alignment States
@@ -294,7 +295,7 @@ export default function App() {
   // Fetch all data from backend
   const fetchData = useCallback(async () => {
     try {
-      const [txRes, receiptsRes, findingsRes, plmRes, ibpRes, claimsRes, patchRes, driftRes, logsRes, policyRes, configRes, consensusRes, budgetExtensionsRes] = await Promise.all([
+      const [txRes, receiptsRes, findingsRes, plmRes, ibpRes, claimsRes, patchRes, driftRes, logsRes, policyRes, configRes, consensusRes, budgetExtensionsRes, verifyChainRes] = await Promise.all([
         fetch(`${API_BASE}/transactions`, { headers: getHeaders() }),
         fetch(`${API_BASE}/receipts`, { headers: getHeaders() }),
         fetch(`${API_BASE}/findings`, { headers: getHeaders() }),
@@ -307,11 +308,16 @@ export default function App() {
         fetch(`${API_BASE}/policy/active`, { headers: getHeaders() }),
         fetch(`${API_BASE}/system/config`, { headers: getHeaders() }),
         fetch(`${API_BASE}/consensus/requests`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/ibp/budget/extensions`, { headers: getHeaders() })
+        fetch(`${API_BASE}/ibp/budget/extensions`, { headers: getHeaders() }),
+        fetch(`${API_BASE}/receipts/verify-chain`, { headers: getHeaders() })
       ]);
 
       if (txRes.ok) setTransactions(await txRes.json());
       if (receiptsRes.ok) setReceipts(await receiptsRes.json());
+      if (verifyChainRes.ok) {
+        const chainData = await verifyChainRes.json();
+        setIsChainValid(chainData.valid);
+      }
       if (findingsRes.ok) setFindings(await findingsRes.json());
       if (plmRes.ok) setPlmState(await plmRes.json());
       if (ibpRes.ok) setIbpState(await ibpRes.json());
@@ -2022,6 +2028,7 @@ export default function App() {
           <ForensicsTab
             forensicLogs={forensicLogs}
             receipts={receipts}
+            isChainValid={isChainValid}
             forensicSearch={forensicSearch}
             setForensicSearch={setForensicSearch}
             forensicStatusFilter={forensicStatusFilter}
