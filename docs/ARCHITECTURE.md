@@ -46,6 +46,7 @@ graph TD
 | Component Name | Workspace Path | Package Identifier | Purpose & Value |
 | :--- | :--- | :--- | :--- |
 | **Secure Gateway Backend** | `apps/secure-gateway` | `@fidusgate/secure-gateway` | The security gatekeeper that intercepts tool calls, evaluates Cedar policies, and signs transaction receipts. |
+| **Interview Engine** | `apps/secure-gateway/src/interview-engine.ts` | *N/A* | Forensic dossier builder and log sanitizer that manages quarantined agent diagnostic interviews. |
 | **Operations Dashboard** | `apps/admin-dashboard` | `@fidusgate/admin-dashboard` | The interactive administrative console for monitoring evaluations, auditing logs, and simulating policies. |
 | **Rust Cedar Policy Daemon** | `packages/cedar-daemon` | `@fidusgate/cedar-daemon` | High-speed, Rust-native daemon executing schema-guided Cedar authorization decisions in a secure container. |
 | **Cryptographic Utilities** | `packages/crypto-utils` | `@fidusgate/crypto-utils` | Encapsulates Ed25519 signature flows, offline CLI verifiers, and interfaces to remote HSM providers (Vault/GCP). |
@@ -65,6 +66,7 @@ graph TD
 #### 🔹 Value & Function
 The **Secure Gateway Backend** is the high-security core of FidusGate. It acts as the intermediary proxy through which all autonomous agent operations (such as command execution, file writes, and ledger transactions) must flow.
 * **Access Control Gatekeeping:** Evaluates incoming actions against the active Cedar policy file using both a local TypeScript fallback verifier and a high-speed Rust-native gRPC daemon.
+* **Agent Quarantine & Interview System:** Automatically tracks principal violations, auto-quarantines agents after 3 consecutive Cedar denials, and invokes the **Interview Engine** (`interview-engine.ts`) to build forensic dossiers and sanitize logs.
 * **PII Redaction Engine:** Intercepts outgoing data packages and utilizes regex-based masking to redact sensitive data (e.g., credit card numbers, JWT tokens, private keys) before storage.
 * **Operational Webhooks:** Dispatches incident alerts to Slack and Microsoft Teams whenever high-risk actions are blocked or CI/CD static security issues are found.
 
@@ -221,8 +223,14 @@ FidusGate implements several reference modules designed for governance and audit
 * **Stateful Fallbacks:** Spawns a local pattern-based mock parser in the event `GEMINI_API_KEY` is not present, ensuring that local developer test cycles for key administrative or pm roles return syntactically valid Cedar permit policies instantly without offline failure.
 
 ### 7. Conventional Commits & Semantic Release Workflow
-* **Deterministic Versioning:** Integrates semantic-release libraries inside the workspace, configuring conventional commit analyzers that scan commit formats (`feat(...)`, `fix(...)`, `docs(...)`) to determine version iterations automatically.
+* **Deterministic Versioning:** Integrates semantic-release libraries inside the workspace, configuring conventional commit signatures that scan commit formats (`feat(...)`, `fix(...)`, `docs(...)`) to determine version iterations automatically.
 * **Changelog Compilers:** Auto-compiles markdown files summarizing development contributions and patches on successful trunk pushes, drafting release archives entirely via automated actions.
+
+### 8. Agent Quarantine System & Interview Engine
+* **Violation Gating:** Tracks per-principal Cedar validation results. If an agent principal triggers three consecutive Cedar policy violations, the gateway auto-quarantines the principal. Under quarantine (governed by Tier 0 Cedar rules), all write and execution tools are forbidden.
+* **Forensic Dossier Building:** Spawns an interactive diagnostic routing inside `interview-engine.ts` when a quarantined agent is interviewed. The engine compiles a forensic dossier summarizing the principal's recent transaction history, active violation counts, and execution logs.
+* **Prompt Injection Gating:** Interview transcripts and user responses are statefully evaluated and sanitized to prevent indirect prompt injection attacks from hijacking the verification session.
+* **Database State Sync:** Interfaces with `@fidusgate/database` to manage agent status (`quarantinePrincipal`, `releaseQuarantine`, `getQuarantineRecord`) and record detailed interview sessions (`addInterviewLog`).
 
 ---
 

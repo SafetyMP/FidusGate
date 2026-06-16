@@ -17,6 +17,7 @@ FidusGate is designed as a capability showcase and educational reference. It com
 
 *   **Real Security Controls:**
     *   **Cedar Access Policy Engine:** Active, file-level policy gating parsing permissions written in the [policy.cedar](./policy.cedar) policy file.
+    *   **Native Tool Interception & Gating:** Strict blocking of native client-side IDE actions (such as `run_command`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `view_file`, `list_dir`, and `grep_search`) to guarantee agents only execute commands and edits through FidusGate MCP proxy APIs.
     *   **Cryptographic Receipts:** Signed transaction receipts verified on the client dashboard using real Ed25519 public-key cryptography. (Note: While the Ed25519 receipt signing itself is real, because keys are stored in the local datastore for demo purposes, the non-repudiation property is illustrative, not enforceable in this configuration.)
     *   **WASI Sandbox Runtime:** Direct execution of compiled `.wasm` modules inside the gateway process using Node's native `node:wasi` library, bypassing Docker VM startup latency and reducing tool execution overhead by 98% (under 50ms).
     *   **KMS Transit Signing Providers:** Enterprise-grade cryptographic key routing integrations supporting GCP KMS, AWS KMS, and HashiCorp Vault asymmetric signature providers, dynamically fallback-routing to local Ed25519 keys during offline development.
@@ -156,10 +157,11 @@ graph TD
 
 ## 🔒 The Risk-Tiered Governance Framework
 
-FidusGate establishes an eight-tier risk and compliance classification framework. These categories map directly to Cedar access-control policies parsed statefully at the gateway:
+FidusGate establishes a ten-tier risk and compliance classification framework. These categories map directly to Cedar access-control policies parsed statefully at the gateway:
 
 | Risk Tier / Guard | Scope of Actions | Cedar Policy Rule | Enforcement Strategy |
 | :--- | :--- | :--- | :--- |
+| **Tier 0 (Quarantine)** | Deny write/execute for quarantined agents | `forbid` write/execute globally | **Containment Gating:** Principals with active quarantine status are blocked from all modifications and terminal scripts, but retain read-only tool access to respond during interviews. |
 | **Tier 1 (Low)** | File reads, directory listing, regex searches | `permit` tool call globally | **Auto-Approved:** Read-only tasks run without blockages to prevent developer friction. |
 | **Tier 2 (Medium)** | Source directory file modifications (`apps/*`, `packages/*`) | `permit` for source directories | **Shadow-Enforced:** Permitted in source paths, but forbidden from editing configuration files (`policy.cedar`, `protect-mcp.config.json`). |
 | **Tier 3 (High)** | Terminal scripting, execution of compilation tasks | `permit` strictly within sandbox wrappers | **Sandboxed Execution:** Requires script-spawning to happen inside secure, isolated sandboxes (`sandbox-execute.sh`). Raw host access is blocked. |
@@ -168,6 +170,7 @@ FidusGate establishes an eight-tier risk and compliance classification framework
 | **Tier 6 (IBP)** | Running high-cost sandbox executions or remote scripts | `forbid` if token budget exhausted | **Financial Control:** Monitors token consumption, triggering a circuit breaker block if estimated token burn exceeds 95% of the sprint allocation. |
 | **Tier 7 (PLM)** | Any write/modify action in source directories | `forbid` unless active PLM requirement registered | **Traceability Gates:** Restricts codebase changes to authorized Jira/linear-style Requirement IDs and requires associated unit tests to be written. |
 | **Tier 8 (SME Roles)** | Specialized source paths (DB migrations, UI layouts, etc.) | `forbid` unless signed by matching SME | **Role Gating:** Restricts folder segments to specific cryptographic role signatures (e.g. `backend-sme` for schemas, `devops-sme` for Docker). |
+| **Tier 9 (Native Tool Block)** | Native client/IDE actions (`run_command`, `write_to_file`, etc.) | `forbid` native tools globally | **MCP Enforcement:** Explicitly intercepts and blocks direct native environment actions, forcing all agent tool usage through FidusGate proxy APIs. |
 
 ---
 
@@ -247,6 +250,13 @@ FidusGate includes a suite of security policy simulation and observability tools
 ### 🔑 11. Cloud-Backed KMS Transit Providers
 * **HSM Integrations:** Connects directly with enterprise HSM and cloud key management providers including AWS KMS, GCP KMS, and HashiCorp Vault.
 * **Dynamic key routing:** Automatically routes cryptographic signing requests to active KMS providers when credentials are configured, falling back to local Ed25519 keys for offline local development.
+
+### 🚨 12. Agent Quarantine System & Interview Engine
+* **Auto-Quarantine Trigger:** Automatically quarantines agent principals that register three consecutive Cedar policy violations, blocking them from executing any write or run commands.
+* **Interview Gating:** Retains read-only capability (Tier 1 tools like `read_file`, `list_directory`, `search_code`) for quarantined agents, enabling them to answer diagnostic questions during a human-conducted forensic interview.
+* **Forensic Dossier Builder (`interview-engine.ts`):** Automatically compiles a dossier of the agent's recent command timelines, violations, and context data when an interview is initiated.
+* **Sanitization:** Sanitizes interview logs to strip prompt injection phrases and prevent quarantined agents from utilizing the interview interaction to execute indirect injection attacks.
+* **Database Management:** Provides dedicated API routes and DB methods (`quarantinePrincipal`, `releaseQuarantine`, `getQuarantineRecord`, `addInterviewLog`) to manage quarantine states and log interview histories.
 
 ---
 
