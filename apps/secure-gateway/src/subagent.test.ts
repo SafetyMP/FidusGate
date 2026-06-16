@@ -62,7 +62,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
     const contextA = {
       subagentId: subagentA,
       subagentMaxBudget: 1000,
-      path: 'apps/secure-gateway/src/index.ts',
+      path: 'apps/other-app/src/index.ts',
       commandLine: '',
       devops: { pipeline_passed: true, security_audited: true, ham_drift_checked: true },
       ibp: {
@@ -79,7 +79,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
     const decisionA = evaluator.isAuthorized(
       'sb:issuer:test',
       'write_file',
-      { path: 'apps/secure-gateway/src/index.ts' },
+      { path: 'apps/other-app/src/index.ts' },
       contextA
     );
     assert.strictEqual(decisionA, 'deny', 'Policy should deny tool calls for subagent with exceeded budget');
@@ -88,7 +88,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
     const contextB = {
       subagentId: subagentB,
       subagentMaxBudget: 5000,
-      path: 'apps/secure-gateway/src/index.ts',
+      path: 'apps/other-app/src/index.ts',
       commandLine: '',
       devops: { pipeline_passed: true, security_audited: true, ham_drift_checked: true },
       ibp: {
@@ -105,7 +105,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
     const decisionB = evaluator.isAuthorized(
       'sb:issuer:test',
       'write_file',
-      { path: 'apps/secure-gateway/src/index.ts' },
+      { path: 'apps/other-app/src/index.ts' },
       contextB
     );
     assert.strictEqual(decisionB, 'allow', 'Policy should permit tool calls for subagent within budget');
@@ -234,7 +234,7 @@ test('FidusGate Subagent Orchestration & Isolation Tests', async (t) => {
 
     // 2. patch_file permit verification (Tier 2 source dirs)
     const patchAllowedDecision = evaluator.isAuthorized(
-      'mcp-agent@fidusgate.internal',
+      'sb:issuer:security-sme',
       'patch_file',
       { path: 'apps/secure-gateway/src/mcp-server.ts' },
       plmCompliantContext

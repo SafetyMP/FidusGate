@@ -4,6 +4,27 @@
 // Evaluates AI Agent tool calls against strict, risk-tiered development rules.
 
 // ------------------------------------------
+// TIER 0: Quarantined Principals
+// ------------------------------------------
+// Deny all write and execute actions for quarantined agents.
+// Quarantine status is hydrated into context.quarantine by the gateway middleware.
+// Read-only Tier 1 tools remain permitted so quarantined agents can still respond
+// during a human-conducted interview.
+forbid(
+  principal,
+  action == Action::"call_tool",
+  resource
+) when {
+  context has quarantine
+  && context.quarantine.active == true
+  && !(
+    resource.tool_name == "read_file"
+    || resource.tool_name == "list_directory"
+    || resource.tool_name == "search_code"
+  )
+};
+
+// ------------------------------------------
 // TIER 1: Low Risk - Read-Only File Tools
 // ------------------------------------------
 // Auto-approved. No restrictions on reads to prevent yak-shaving loops.
@@ -14,8 +35,6 @@ permit(
 ) when {
   resource.tool_name == "read_file"
   || resource.tool_name == "list_directory"
-  || resource.tool_name == "grep_search"
-  || resource.tool_name == "view_file"
   || resource.tool_name == "search_code"
 };
 
@@ -31,8 +50,6 @@ permit(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -51,8 +68,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -253,8 +268,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -346,8 +359,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -366,8 +377,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -383,8 +392,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -403,8 +410,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -423,8 +428,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -435,6 +438,22 @@ forbid(
   && !(principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
 };
 
+// Enforce security-sme role for secure-gateway source code
+forbid(
+  principal,
+  action == Action::"call_tool",
+  resource
+) when {
+  (
+    resource.tool_name == "write_file"
+    || resource.tool_name == "patch_file"
+  )
+  && resource has args
+  && resource.args.path like "apps/secure-gateway/*"
+  && !(principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
+};
+
+
 // Enforce pm-sme role for change log records
 forbid(
   principal,
@@ -443,8 +462,6 @@ forbid(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -462,8 +479,6 @@ permit(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -482,8 +497,6 @@ permit(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -502,8 +515,6 @@ permit(
 ) when {
   (
     resource.tool_name == "write_file"
-    || resource.tool_name == "replace_file_content"
-    || resource.tool_name == "multi_replace_file_content"
     || resource.tool_name == "patch_file"
   )
   && resource has args
@@ -526,8 +537,24 @@ permit(
   && (
     resource.tool_name == "read_file"
     || resource.tool_name == "list_directory"
-    || resource.tool_name == "grep_search"
-    || resource.tool_name == "view_file"
     || resource.tool_name == "search_code"
   )
+};
+
+// ==========================================
+// TIER 9: Strict Native Tool Interception & Block
+// ==========================================
+// Explicitly forbid native client tools to ensure agents only use FidusGate MCP tools
+forbid(
+  principal,
+  action == Action::"call_tool",
+  resource
+) when {
+  resource.tool_name == "run_command"
+  || resource.tool_name == "write_to_file"
+  || resource.tool_name == "replace_file_content"
+  || resource.tool_name == "multi_replace_file_content"
+  || resource.tool_name == "view_file"
+  || resource.tool_name == "list_dir"
+  || resource.tool_name == "grep_search"
 };

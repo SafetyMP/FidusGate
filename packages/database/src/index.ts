@@ -9,6 +9,25 @@ function calculateReceiptHash(payload: any): string {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 
+export interface QuarantineRecord {
+  principalId: string;
+  quarantinedAt: string;
+  reason: string;
+  evidence: string[]; // commit SHAs, command log IDs, or violation descriptions
+  status: 'active' | 'released' | 'escalated';
+  releasedAt?: string | null;
+  releasedBy?: string | null;
+}
+
+export interface InterviewLog {
+  interviewId: string;
+  principalId: string;
+  questionBy: string;
+  question: string;
+  agentResponse: string;
+  timestamp: string;
+}
+
 export interface BudgetExtensionRequest {
   id: string;
   createdAt: string;
@@ -47,6 +66,8 @@ const FINDINGS_FILE = path.join(DATA_DIR, 'findings.json');
 const COMMAND_LOGS_FILE = path.join(DATA_DIR, 'command-logs.json');
 const DRIFTS_FILE = path.join(DATA_DIR, 'drifts.json');
 const BUDGET_EXTENSIONS_FILE = path.join(DATA_DIR, 'budget-extensions.json');
+const QUARANTINE_FILE = path.join(DATA_DIR, 'quarantine-records.json');
+const INTERVIEW_LOGS_FILE = path.join(DATA_DIR, 'interview-logs.json');
 
 function sleepSync(ms: number) {
   try {
@@ -95,7 +116,6 @@ function releaseLock(lockPath: string) {
   } catch (e) {}
 }
 
-// POSIX-compliant atomic file writer helper to prevent JSON database file corruption
 function writeJsonAtomic(filePath: string, data: any) {
   const dir = path.dirname(filePath);
   const tempPath = path.join(dir, `${path.basename(filePath)}.${Math.random().toString(36).substring(2)}.tmp`);
@@ -119,6 +139,75 @@ function lockAndModify(filePath: string, modifyFn: (currentData: any) => any, de
     writeJsonAtomic(filePath, updatedData);
   } finally {
     releaseLock(lockPath);
+  }
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function acquireLockAsync(lockPath: string): Promise<void> {
+  const start = Date.now();
+  const timeout = 5000;
+  while (true) {
+    try {
+      await fs.promises.writeFile(lockPath, process.pid.toString(), { flag: 'wx' });
+      return;
+    } catch (e: any) {
+      if (e.code === 'EEXIST') {
+        try {
+          const stat = await fs.promises.stat(lockPath);
+          if (Date.now() - stat.mtimeMs > 10000) {
+            await fs.promises.unlink(lockPath);
+            continue;
+          }
+        } catch (err) {}
+
+        if (Date.now() - start > timeout) {
+          throw new Error(`Timeout acquiring lock on: ${lockPath}`);
+        }
+        await sleep(50);
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
+async function releaseLockAsync(lockPath: string): Promise<void> {
+  try {
+    const exists = await fs.promises.stat(lockPath).then(() => true).catch(() => false);
+    if (exists) {
+      await fs.promises.unlink(lockPath);
+    }
+  } catch (e) {}
+}
+
+async function writeJsonAtomicAsync(filePath: string, data: any): Promise<void> {
+  const dir = path.dirname(filePath);
+  const tempPath = path.join(dir, `${path.basename(filePath)}.${Math.random().toString(36).substring(2)}.tmp`);
+  await fs.promises.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+  await fs.promises.rename(tempPath, filePath);
+}
+
+async function lockAndModifyAsync(filePath: string, modifyFn: (currentData: any) => any, defaultValue: any = []): Promise<void> {
+  const lockPath = `${filePath}.lock`;
+  await acquireLockAsync(lockPath);
+  try {
+    let currentData = defaultValue;
+    const exists = await fs.promises.stat(filePath).then(() => true).catch(() => false);
+    if (exists) {
+      try {
+        const fileContent = await fs.promises.readFile(filePath, 'utf-8');
+        currentData = JSON.parse(fileContent);
+      } catch (e) {
+        currentData = defaultValue;
+      }
+    }
+    const updatedData = modifyFn(currentData);
+    await writeJsonAtomicAsync(filePath, updatedData);
+  } finally {
+    await releaseLockAsync(lockPath);
   }
 }
 
@@ -262,7 +351,7 @@ export class FidusGateDatabase {
           return;
         } catch (e) {}
       }
-      writeJsonAtomic(filePath, defaultContent);
+      fs.writeFileSync(filePath, JSON.stringify(defaultContent, null, 2), 'utf-8');
     };
     
     copyTemplateOrWriteDefault(TX_FILE, INITIAL_TRANSACTIONS);
@@ -271,7 +360,9 @@ export class FidusGateDatabase {
     copyTemplateOrWriteDefault(COMMAND_LOGS_FILE, []);
     copyTemplateOrWriteDefault(DRIFTS_FILE, []);
     copyTemplateOrWriteDefault(BUDGET_EXTENSIONS_FILE, []);
-    
+    copyTemplateOrWriteDefault(QUARANTINE_FILE, []);
+    copyTemplateOrWriteDefault(INTERVIEW_LOGS_FILE, []);
+
     const systemConfigFile = path.join(DATA_DIR, 'system-config.json');
     copyTemplateOrWriteDefault(systemConfigFile, { circuitBreakerActive: false, agentTokenBudget: 1000.0 });
 
@@ -285,10 +376,9 @@ export class FidusGateDatabase {
   // ==========================================
   // Transactions Management
   // ==========================================
-  private getTransactionsJson(): Transaction[] {
-    this.ensureInitialized();
+  private async getTransactionsJson(): Promise<Transaction[]> {
     try {
-      const data = fs.readFileSync(TX_FILE, 'utf-8');
+      const data = await fs.promises.readFile(TX_FILE, 'utf-8');
       return JSON.parse(data);
     } catch (e) {
       return INITIAL_TRANSACTIONS;
@@ -315,7 +405,7 @@ export class FidusGateDatabase {
         console.warn('⚠️  Prisma Transaction query failed, falling back to JSON storage:', err.message);
       }
     }
-    return this.getTransactionsJson();
+    return await this.getTransactionsJson();
   }
 
   public async addTransaction(tx: Transaction): Promise<void> {
@@ -339,7 +429,7 @@ export class FidusGateDatabase {
       }
     }
     
-    lockAndModify(TX_FILE, (list: Transaction[]) => {
+    await lockAndModifyAsync(TX_FILE, (list: Transaction[]) => {
       list.unshift(tx);
       return list;
     });
@@ -348,10 +438,9 @@ export class FidusGateDatabase {
   // ==========================================
   // Signed Receipts Management
   // ==========================================
-  private getAuditReceiptsJson(): AuditReceipt[] {
-    this.ensureInitialized();
+  private async getAuditReceiptsJson(): Promise<AuditReceipt[]> {
     try {
-      const data = fs.readFileSync(RECEIPTS_FILE, 'utf-8');
+      const data = await fs.promises.readFile(RECEIPTS_FILE, 'utf-8');
       return JSON.parse(data);
     } catch (e) {
       return INITIAL_RECEIPTS;
@@ -392,7 +481,7 @@ export class FidusGateDatabase {
         console.warn('⚠️  Prisma Receipt query failed, falling back to JSON storage:', err.message);
       }
     }
-    return this.getAuditReceiptsJson();
+    return await this.getAuditReceiptsJson();
   }
 
   public async addAuditReceipt(receipt: AuditReceipt): Promise<void> {
@@ -439,7 +528,7 @@ export class FidusGateDatabase {
       }
     }
     
-    lockAndModify(RECEIPTS_FILE, (list: AuditReceipt[]) => {
+    await lockAndModifyAsync(RECEIPTS_FILE, (list: AuditReceipt[]) => {
       let previousHash = '';
       if (list.length > 0) {
         previousHash = (list[0] as any).receiptHash || '';
@@ -462,10 +551,9 @@ export class FidusGateDatabase {
   // ==========================================
   // Security Findings Management
   // ==========================================
-  private getFindingsJson(): SecurityFinding[] {
-    this.ensureInitialized();
+  private async getFindingsJson(): Promise<SecurityFinding[]> {
     try {
-      const data = fs.readFileSync(FINDINGS_FILE, 'utf-8');
+      const data = await fs.promises.readFile(FINDINGS_FILE, 'utf-8');
       return JSON.parse(data);
     } catch (e) {
       return [];
@@ -492,7 +580,7 @@ export class FidusGateDatabase {
         console.warn('⚠️  Prisma Findings query failed, falling back to JSON storage:', err.message);
       }
     }
-    return this.getFindingsJson();
+    return await this.getFindingsJson();
   }
 
   public async setFindings(findings: SecurityFinding[]): Promise<void> {
@@ -522,8 +610,7 @@ export class FidusGateDatabase {
       }
     }
     
-    this.ensureInitialized();
-    lockAndModify(FINDINGS_FILE, () => findings);
+    await lockAndModifyAsync(FINDINGS_FILE, () => findings);
   }
 
   public async addFinding(finding: SecurityFinding): Promise<void> {
@@ -549,7 +636,7 @@ export class FidusGateDatabase {
       }
     }
     
-    lockAndModify(FINDINGS_FILE, (list: SecurityFinding[]) => {
+    await lockAndModifyAsync(FINDINGS_FILE, (list: SecurityFinding[]) => {
       list.push(finding);
       return list;
     });
@@ -1201,6 +1288,77 @@ export class FidusGateDatabase {
     return returnedReq;
   }
 
+  // ==========================================
+  // Quarantine Management
+  // ==========================================
+  public async quarantinePrincipal(record: Omit<QuarantineRecord, 'status' | 'releasedAt' | 'releasedBy'>): Promise<QuarantineRecord> {
+    const newRecord: QuarantineRecord = {
+      ...record,
+      status: 'active',
+      releasedAt: null,
+      releasedBy: null
+    };
+    lockAndModify(QUARANTINE_FILE, (list: QuarantineRecord[]) => {
+      // Upsert — replace existing record for the same principal if present
+      const idx = list.findIndex(r => r.principalId === record.principalId);
+      if (idx >= 0) { list[idx] = newRecord; } else { list.unshift(newRecord); }
+      return list;
+    });
+    return newRecord;
+  }
+
+  public async releaseQuarantine(principalId: string, releasedBy: string): Promise<QuarantineRecord | null> {
+    const releasedAt = new Date().toISOString();
+    let result: QuarantineRecord | null = null;
+    lockAndModify(QUARANTINE_FILE, (list: QuarantineRecord[]) => {
+      const record = list.find(r => r.principalId === principalId);
+      if (record) {
+        record.status = 'released';
+        record.releasedAt = releasedAt;
+        record.releasedBy = releasedBy;
+        result = record;
+      }
+      return list;
+    });
+    return result;
+  }
+
+  public async getQuarantineRecord(principalId: string): Promise<QuarantineRecord | null> {
+    this.ensureInitialized();
+    try {
+      const data = JSON.parse(fs.readFileSync(QUARANTINE_FILE, 'utf-8')) as QuarantineRecord[];
+      return data.find(r => r.principalId === principalId && r.status === 'active') || null;
+    } catch { return null; }
+  }
+
+  public async getQuarantinedPrincipals(): Promise<QuarantineRecord[]> {
+    this.ensureInitialized();
+    try {
+      return JSON.parse(fs.readFileSync(QUARANTINE_FILE, 'utf-8')) as QuarantineRecord[];
+    } catch { return []; }
+  }
+
+  // ==========================================
+  // Interview Log Management
+  // ==========================================
+  public async addInterviewLog(entry: Omit<InterviewLog, 'interviewId' | 'timestamp'>): Promise<InterviewLog> {
+    const newEntry: InterviewLog = {
+      interviewId: `iv_${Math.random().toString(36).substring(2, 10)}`,
+      timestamp: new Date().toISOString(),
+      ...entry
+    };
+    lockAndModify(INTERVIEW_LOGS_FILE, (list: InterviewLog[]) => { list.push(newEntry); return list; });
+    return newEntry;
+  }
+
+  public async getInterviewLogs(principalId: string): Promise<InterviewLog[]> {
+    this.ensureInitialized();
+    try {
+      const all = JSON.parse(fs.readFileSync(INTERVIEW_LOGS_FILE, 'utf-8')) as InterviewLog[];
+      return all.filter(l => l.principalId === principalId);
+    } catch { return []; }
+  }
+
   public async healthCheck(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs: number; error?: string }> {
     if (!this.usePostgres || !this.prisma) {
       return { status: 'healthy', latencyMs: 0 };
@@ -1252,5 +1410,7 @@ export class FidusGateDatabase {
     const CONFIG_FILE = path.join(DATA_DIR, 'system-config.json');
     writeJsonAtomic(CONFIG_FILE, { circuitBreakerActive: false, agentTokenBudget: 1000.0 });
     writeJsonAtomic(BUDGET_EXTENSIONS_FILE, []);
+    writeJsonAtomic(QUARANTINE_FILE, []);
+    writeJsonAtomic(INTERVIEW_LOGS_FILE, []);
   }
 }

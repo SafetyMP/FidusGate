@@ -6,7 +6,8 @@ import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { FidusGateDatabase, CommandLogEntry, FilesystemDriftEntry } from '@fidusgate/database';
+import { FidusGateDatabase, CommandLogEntry, FilesystemDriftEntry, QuarantineRecord } from '@fidusgate/database';
+import { buildDossier, conductInterview } from './interview-engine';
 import * as http from 'node:http';
 import { verifyReceipt, generateKeyPair, createAttestedSession, verifyAuditChain } from '@fidusgate/crypto-utils';
 import { startMcpServer } from './mcp-server';
@@ -68,6 +69,33 @@ export function handleViolation() {
       reason: '3 consecutive Cedar policy violations'
     });
   }
+}
+
+// Per-principal consecutive Cedar deny counter for auto-quarantine
+// Separate from the global circuit breaker — this targets a specific agent.
+const principalViolationCounts: Record<string, number> = {};
+
+export async function recordPrincipalViolation(principal: string): Promise<void> {
+  if (!principal || principal === 'sb:issuer:test' || principal === 'mcp-agent@fidusgate.internal') return;
+  principalViolationCounts[principal] = (principalViolationCounts[principal] || 0) + 1;
+  if (principalViolationCounts[principal] >= 3) {
+    const existing = await db.getQuarantineRecord(principal);
+    if (!existing) {
+      await db.quarantinePrincipal({
+        principalId: principal,
+        quarantinedAt: new Date().toISOString(),
+        reason: `Auto-quarantined: 3 consecutive Cedar policy denials`,
+        evidence: [`${principalViolationCounts[principal]} consecutive Cedar denials`]
+      });
+      log('security', `🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${principal}`);
+      broadcastWS('principal_quarantined', { principalId: principal, reason: 'consecutive_violations' });
+    }
+    delete principalViolationCounts[principal];
+  }
+}
+
+export function resetPrincipalViolations(principal: string): void {
+  delete principalViolationCounts[principal];
 }
 
 export function handleSuccessfulExecution() {
@@ -189,7 +217,21 @@ const autoThrottleMiddleware = (req: any, res: any, next: any) => {
 
 
 // Load FidusGate MCP Configuration and policies
-const configPath = path.resolve(process.cwd(), 'protect-mcp.config.json');
+function findRootPath(filename: string): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 4; i++) {
+    const fullPath = path.resolve(dir, filename);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.resolve(process.cwd(), filename);
+}
+
+const configPath = findRootPath('protect-mcp.config.json');
 let config: any = { mode: 'enforce' }; // default
 if (fs.existsSync(configPath)) {
   try {
@@ -199,7 +241,7 @@ if (fs.existsSync(configPath)) {
   }
 }
 
-const policyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
+const policyPath = findRootPath(config.policy || 'policy.cedar');
 let cedarEvaluator = new CedarEvaluator(policyPath);
 log('info', `Loaded TS Cedar Policy Parser with ${cedarEvaluator.getRulesCount()} rules. Enforcing mode: ${config.mode.toUpperCase()}`);
 
@@ -508,6 +550,32 @@ app.post('/api/auth/token', (req, res) => {
       return;
     }
 
+    // Secure the admin role generation
+    if (role === 'admin') {
+      const bootstrapKey = req.headers['x-fidusgate-bootstrap-key'];
+      const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY;
+      
+      if (process.env.NODE_ENV === 'production') {
+        if (!expectedKey) {
+          log('security', 'CRITICAL JWT SIGNER ERROR: FIDUSGATE_BOOTSTRAP_KEY is not defined in production. Denying all admin token requests.');
+          res.status(500).json({ error: 'System configuration error: Admin token generation is disabled.' });
+          return;
+        }
+        if (!bootstrapKey || bootstrapKey !== expectedKey) {
+          log('security', `UNAUTHORIZED ADMIN TOKEN REQUEST: ${email} attempted admin token generation without valid bootstrap key in production.`);
+          res.status(403).json({ error: 'Unauthorized: Admin role generation requires a valid bootstrap key.' });
+          return;
+        }
+      } else {
+        const devExpectedKey = expectedKey || 'fidusgate-bootstrap-dev-key';
+        if (!bootstrapKey || bootstrapKey !== devExpectedKey) {
+          log('security', `UNAUTHORIZED ADMIN TOKEN REQUEST: ${email} attempted admin token generation without valid bootstrap key in development.`);
+          res.status(403).json({ error: 'Unauthorized: Admin role generation requires a valid bootstrap key.' });
+          return;
+        }
+      }
+    }
+
     const token = jwt.sign(
       { id: `usr_${Math.floor(1000 + Math.random() * 9000)}`, role, email },
       JWT_SECRET,
@@ -637,8 +705,13 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
   // Inject stateful PLM indicators
   const plmState = plmTracker.getState();
 
+  // Hydrate quarantine context — checked by Tier 0 Cedar rule
+  const quarantineRecord = principal ? await db.getQuarantineRecord(principal) : null;
+  const quarantineContext = quarantineRecord ? { active: true } : { active: false };
+
   const fullContext = {
     ...context,
+    quarantine: quarantineContext,
     devops: {
       pipeline_passed: devopsState.pipelineVerified,
       security_audited: devopsState.securityAudited,
@@ -702,9 +775,11 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
   if (decision === 'allow') {
     fidusgatePolicyEvaluationsAllow++;
     handleSuccessfulExecution();
+    resetPrincipalViolations(principal);
   } else {
     fidusgatePolicyEvaluationsDeny++;
     handleViolation();
+    await recordPrincipalViolation(principal);
   }
 
   return decision;
@@ -937,7 +1012,7 @@ app.post('/api/receipts', requireAuth(['developer', 'admin']), async (req, res) 
 
     // Stateful DevOps, IBP, and PLM compliance checks
     if (decision === 'allow') {
-      if (['write_file', 'replace_file_content', 'multi_replace_file_content'].includes(payload.tool_name)) {
+      if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'patch_file'].includes(payload.tool_name)) {
         devopsTracker.onFileModified();
         ibpTracker.logTask('specialized', payload.tool_name);
         plmTracker.onFileModified(payload.args?.path || '');
@@ -2965,6 +3040,116 @@ const metricsServer = http.createServer(async (req, res) => {
   }
 });
 
+// ==========================================
+// QUARANTINE & INTERVIEW SYSTEM ENDPOINTS
+// ==========================================
+
+// GET /api/quarantine — List all quarantine records (Role: admin)
+app.get('/api/quarantine', requireAuth(['admin']), async (req, res) => {
+  try {
+    const records = await db.getQuarantinedPrincipals();
+    res.json(records);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to list quarantine records', message: err.message });
+  }
+});
+
+// POST /api/quarantine/:principalId — Manually quarantine a principal (Role: admin)
+app.post('/api/quarantine/:principalId', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { principalId } = req.params;
+    const { reason, evidence } = req.body;
+    if (!reason) {
+      res.status(400).json({ error: 'Missing required parameter: reason' });
+      return;
+    }
+    const record = await db.quarantinePrincipal({
+      principalId,
+      quarantinedAt: new Date().toISOString(),
+      reason,
+      evidence: evidence || []
+    });
+    log('security', `🔒 PRINCIPAL MANUALLY QUARANTINED: ${principalId}. Reason: ${reason}`);
+    broadcastWS('principal_quarantined', { principalId, reason });
+    res.json({ message: 'Principal successfully quarantined', record });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to quarantine principal', message: err.message });
+  }
+});
+
+// DELETE /api/quarantine/:principalId — Release quarantine (Role: admin)
+app.delete('/api/quarantine/:principalId', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { principalId } = req.params;
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
+    const record = await db.releaseQuarantine(principalId, userEmail);
+    if (!record) {
+      res.status(404).json({ error: `No active quarantine record found for principal ${principalId}` });
+      return;
+    }
+    log('security', `🔓 PRINCIPAL RELEASED FROM QUARANTINE: ${principalId} by ${userEmail}`);
+    broadcastWS('principal_released', { principalId, releasedBy: userEmail });
+    res.json({ message: 'Quarantine released successfully', record });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to release quarantine', message: err.message });
+  }
+});
+
+// GET /api/quarantine/:principalId/dossier — Compile forensic dossier (Role: admin)
+app.get('/api/quarantine/:principalId/dossier', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { principalId } = req.params;
+    const allRecords = await db.getQuarantinedPrincipals();
+    const record = allRecords.find(r => r.principalId === principalId);
+    if (!record) {
+      res.status(404).json({ error: `Quarantine record not found for principal ${principalId}` });
+      return;
+    }
+    const dossier = await buildDossier(db as any, record, process.cwd());
+    res.json(dossier);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to build dossier', message: err.message });
+  }
+});
+
+// POST /api/quarantine/:principalId/interview — Conduct interview turn (Role: admin)
+app.post('/api/quarantine/:principalId/interview', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { principalId } = req.params;
+    const { question } = req.body;
+    if (!question) {
+      res.status(400).json({ error: 'Missing required parameter: question' });
+      return;
+    }
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
+    const allRecords = await db.getQuarantinedPrincipals();
+    let record = allRecords.find(r => r.principalId === principalId && r.status === 'active');
+    if (!record) {
+      record = allRecords.find(r => r.principalId === principalId);
+    }
+    if (!record) {
+      res.status(404).json({ error: `Quarantine record not found for principal ${principalId}` });
+      return;
+    }
+    const dossier = await buildDossier(db as any, record, process.cwd());
+    const result = await conductInterview(db as any, dossier, question, userEmail);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to conduct interview', message: err.message });
+  }
+});
+
+// GET /api/quarantine/:principalId/interview — Get interview transcript (Role: admin)
+app.get('/api/quarantine/:principalId/interview', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { principalId } = req.params;
+    const logs = await db.getInterviewLogs(principalId);
+    res.json(logs);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve interview transcript', message: err.message });
+  }
+});
+
 // Fix 5: GET /health — unauthenticated liveness/readiness probe for Docker and k8s.
 // Returns gate states and circuit breaker status so orchestrators can assess health.
 app.get('/health', (_req: express.Request, res: express.Response) => {
@@ -2991,7 +3176,7 @@ app.get('/health', (_req: express.Request, res: express.Response) => {
 
 if (process.argv.includes('--mcp')) {
   startMcpServer();
-} else {
+} else if (process.env.FIDUSGATE_TEST !== 'true' && process.env.NODE_ENV !== 'test') {
   const server = app.listen(port, () => {
     log('info', `FidusGate Security Gateway API listening on Port ${port}`);
     // Boot background worker to periodically check and statefully expire consensus requests

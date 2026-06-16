@@ -55,8 +55,13 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
     );
     assert.strictEqual(
       evaluator.isAuthorized(principal, 'view_file', { path: 'policy.cedar' }),
+      'deny',
+      'view_file (native tool) must be forbidden'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized(principal, 'search_code', { query: 'test' }),
       'allow',
-      'view_file should be auto-approved'
+      'search_code should be auto-approved'
     );
     assert.strictEqual(
       evaluator.isAuthorized(principal, 'list_directory', {}),
@@ -70,14 +75,19 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
     const principal = 'sb:issuer:test';
 
     assert.strictEqual(
-      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/secure-gateway/src/index.ts' }, defaultCompliantContext),
+      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/other-app/src/index.ts' }, defaultCompliantContext),
       'allow',
       'write_file inside apps/ should be allowed'
     );
     assert.strictEqual(
-      evaluator.isAuthorized(principal, 'replace_file_content', { path: 'packages/crypto-utils/src/index.ts' }, defaultCompliantContext),
+      evaluator.isAuthorized(principal, 'patch_file', { path: 'packages/crypto-utils/src/index.ts' }, defaultCompliantContext),
       'allow',
-      'replace_file_content inside packages/ should be allowed'
+      'patch_file inside packages/ should be allowed'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized(principal, 'replace_file_content', { path: 'packages/crypto-utils/src/index.ts' }, defaultCompliantContext),
+      'deny',
+      'replace_file_content (native tool) must be forbidden'
     );
   });
 
@@ -90,9 +100,24 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
       'Modifying policy.cedar must be forbidden'
     );
     assert.strictEqual(
+      evaluator.isAuthorized(principal, 'patch_file', { path: 'policy.cedar' }),
+      'deny',
+      'Modifying policy.cedar must be forbidden'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized(principal, 'patch_file', { path: 'protect-mcp.config.json' }),
+      'deny',
+      'Modifying protect-mcp.config.json must be forbidden'
+    );
+    assert.strictEqual(
       evaluator.isAuthorized(principal, 'replace_file_content', { path: 'protect-mcp.config.json' }),
       'deny',
       'Modifying protect-mcp.config.json must be forbidden'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized(principal, 'patch_file', { path: 'scripts/bootstrap.sh' }),
+      'deny',
+      'Modifying deployment scripts must be forbidden'
     );
     assert.strictEqual(
       evaluator.isAuthorized(principal, 'multi_replace_file_content', { path: 'scripts/bootstrap.sh' }),
@@ -170,8 +195,10 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
 
   await t.test('Command Line Auditor - Verify allowed commands under allowlist schemas', () => {
     assert.ok(isCommandLineSecure('bash scripts/bootstrap.sh').secure, 'bootstrap.sh script should be allowed');
-    assert.ok(isCommandLineSecure('npm run build').secure, 'npm run build should be allowed');
-    assert.ok(isCommandLineSecure('npm install').secure, 'bare npm install bootstrap should be allowed');
+    assert.ok(isCommandLineSecure('npm run build --ignore-scripts').secure, 'npm run build with ignore-scripts should be allowed');
+    assert.ok(isCommandLineSecure('npm install --ignore-scripts').secure, 'npm install with ignore-scripts should be allowed');
+    assert.strictEqual(isCommandLineSecure('npm run build').secure, false, 'npm run build without ignore-scripts should be blocked');
+    assert.strictEqual(isCommandLineSecure('npm install').secure, false, 'npm install without ignore-scripts should be blocked');
     assert.ok(isCommandLineSecure('node packages/crypto-utils/dist/index.js --verify receipt.json').secure, 'crypto-utils offline receipt verification should be allowed');
   });
 
@@ -392,7 +419,7 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
     };
 
     assert.strictEqual(
-      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/secure-gateway/src/index.ts' }, missingReqContext),
+      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/other-app/src/index.ts' }, missingReqContext),
       'deny',
       'Should forbid modifying files if no active requirement ID is set'
     );
@@ -473,7 +500,7 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
     };
 
     assert.strictEqual(
-      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/secure-gateway/src/index.ts' }, plmCompliantContext),
+      evaluator.isAuthorized(principal, 'write_file', { path: 'apps/other-app/src/index.ts' }, plmCompliantContext),
       'allow',
       'Should permit writing files under compliant PLM state'
     );
@@ -588,12 +615,12 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
 
     // 3. QA SME test suite boundary
     assert.strictEqual(
-      evaluator.isAuthorized('sb:issuer:qa-sme', 'write_file', { path: 'apps/secure-gateway/src/cedar.test.ts' }, defaultPLMCompliant),
+      evaluator.isAuthorized('sb:issuer:qa-sme', 'write_file', { path: 'apps/other-app/src/other.test.ts' }, defaultPLMCompliant),
       'allow',
       'qa-sme principal should be permitted to modify test files'
     );
     assert.strictEqual(
-      evaluator.isAuthorized('sb:issuer:pm-sme', 'write_file', { path: 'apps/secure-gateway/src/cedar.test.ts' }, defaultPLMCompliant),
+      evaluator.isAuthorized('sb:issuer:pm-sme', 'write_file', { path: 'apps/other-app/src/other.test.ts' }, defaultPLMCompliant),
       'deny',
       'pm-sme principal must be blocked from modifying test files'
     );

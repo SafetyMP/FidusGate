@@ -197,7 +197,8 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
 
     // Restrict dynamic package downloads
     if (['install', 'i', 'add', 'update', 'upgrade'].includes(npmCommand)) {
-      if (args.length > 2) {
+      const packageArgs = args.slice(2).filter(arg => !arg.startsWith('-'));
+      if (packageArgs.length > 0) {
         return {
           secure: false,
           reason: 'Dynamic package installation is forbidden at runtime to prevent supply chain contamination.',
@@ -211,9 +212,8 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
     }
 
     // Enforce --ignore-scripts to prevent package lifecycle hook execution
-    // Exceptions allowed for bootstrap, build, and bare install to pass standard pipelines
-    const isException = args.includes('build') || args.includes('bootstrap') || (args.length === 2 && npmCommand === 'install');
-    if (!isException && !args.includes('--ignore-scripts')) {
+    const isSafeRunScript = npmCommand === 'run' && (args[2] === 'memory:context' || args[2] === 'policy:dry-run');
+    if (!args.includes('--ignore-scripts') && !isSafeRunScript) {
       return {
         secure: false,
         reason: "npm commands must include the '--ignore-scripts' flag to prevent execution of un-vetted lifecycle scripts.",
@@ -236,7 +236,7 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
       }
       
       const scriptTarget = args[2];
-      const allowedRunScripts = ['build', 'dev', 'test', 'lint', 'bootstrap', 'sandbox', 'ci'];
+      const allowedRunScripts = ['build', 'dev', 'test', 'lint', 'bootstrap', 'sandbox', 'ci', 'memory:context', 'policy:dry-run'];
       
       if (!allowedRunScripts.includes(scriptTarget)) {
         return {

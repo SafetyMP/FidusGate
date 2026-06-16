@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "tsc && node dist/index.js",
     "start": "node dist/index.js",
-    "test": "npm run build && node --test dist/cedar.test.js && node --test dist/subagent.test.js"
+    "test": "npm run build && node --test dist/cedar.test.js && node --test dist/subagent.test.js && node --test dist/bypass-validation.test.js"
   },
   "dependencies": {
     "@fidusgate/core-types": "1.0.0",

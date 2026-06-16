@@ -23,6 +23,17 @@ const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:devops-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de87'
 };
 
+// Check if we have a cached dev keypair in packages/database/data/test-keys.json to avoid breaking signatures across restarts
+const devKeysPath = path.resolve(process.cwd(), 'packages/database/data/test-keys.json');
+if (fs.existsSync(devKeysPath)) {
+  try {
+    const cachedKeys = JSON.parse(fs.readFileSync(devKeysPath, 'utf8'));
+    if (cachedKeys && cachedKeys.publicKeyHex) {
+      PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'] = cachedKeys.publicKeyHex;
+    }
+  } catch (e) {}
+}
+
 function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
   const principal = args.principal;
   if (!principal || !principal.startsWith('sb:issuer:')) {
@@ -77,7 +88,46 @@ function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
 }
 
 const db = new FidusGateDatabase();
-const configPath = path.resolve(process.cwd(), 'protect-mcp.config.json');
+
+const principalViolationCounts: Record<string, number> = {};
+
+export async function recordPrincipalViolation(principal: string): Promise<void> {
+  if (!principal || principal === 'sb:issuer:test' || principal === 'mcp-agent@fidusgate.internal') return;
+  principalViolationCounts[principal] = (principalViolationCounts[principal] || 0) + 1;
+  if (principalViolationCounts[principal] >= 3) {
+    const existing = await db.getQuarantineRecord(principal);
+    if (!existing) {
+      await db.quarantinePrincipal({
+        principalId: principal,
+        quarantinedAt: new Date().toISOString(),
+        reason: `Auto-quarantined: 3 consecutive Cedar policy denials`,
+        evidence: [`${principalViolationCounts[principal]} consecutive Cedar denials`]
+      });
+      console.error(`[FidusGate] 🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${principal}`);
+    }
+    delete principalViolationCounts[principal];
+  }
+}
+
+export function resetPrincipalViolations(principal: string): void {
+  delete principalViolationCounts[principal];
+}
+
+function findRootPath(filename: string): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 4; i++) {
+    const fullPath = path.resolve(dir, filename);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.resolve(process.cwd(), filename);
+}
+
+const configPath = findRootPath('protect-mcp.config.json');
 let config: any = { mode: 'enforce' };
 if (fs.existsSync(configPath)) {
   try {
@@ -87,7 +137,7 @@ if (fs.existsSync(configPath)) {
   }
 }
 
-const policyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
+const policyPath = findRootPath(config.policy || 'policy.cedar');
 const evaluator = new CedarEvaluator(policyPath);
 
 // Instantiate trackers with a dummy WebSocket broadcaster
@@ -96,7 +146,7 @@ const devopsTracker = new DevOpsComplianceTracker(dummyWS);
 const ibpTracker = new IBPComplianceTracker(dummyWS);
 const plmTracker = new PLMComplianceTracker(dummyWS);
 
-function getFullContext(additional?: Record<string, any>) {
+async function getFullContext(principal: string, additional?: Record<string, any>) {
   const isDevopsBypass = process.env.DISABLE_DEVOPS_GATE === 'true';
   const devopsState = isDevopsBypass ? {
     pipelineVerified: true,
@@ -108,8 +158,12 @@ function getFullContext(additional?: Record<string, any>) {
   const isBudgetAligned = ibpTracker.isBudgetAligned();
   const plmState = plmTracker.getState();
 
+  const quarantineRecord = principal ? await db.getQuarantineRecord(principal) : null;
+  const quarantineContext = quarantineRecord ? { active: true } : { active: false };
+
   return {
     ...additional,
+    quarantine: quarantineContext,
     devops: {
       pipeline_passed: devopsState.pipelineVerified,
       security_audited: devopsState.securityAudited,
@@ -269,7 +323,7 @@ export function startMcpServer() {
   });
 }
 
-async function handleMcpRequest(req: any): Promise<any> {
+export async function handleMcpRequest(req: any): Promise<any> {
   const { jsonrpc, method, id, params } = req;
   
   if (jsonrpc !== '2.0') {
@@ -538,9 +592,10 @@ async function handleMcpRequest(req: any): Promise<any> {
 
       // 2. Cedar Policy Check
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
-      const contextObj = getFullContext({ commandLine });
+      const contextObj = await getFullContext(callerPrincipal, { commandLine });
       const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'execute_command', { commandLine }, contextObj);
       if (evaluation.decision === 'deny') {
+        await recordPrincipalViolation(callerPrincipal);
         await db.addCommandLog({
           id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
           timestamp: new Date().toISOString(),
@@ -566,6 +621,8 @@ async function handleMcpRequest(req: any): Promise<any> {
           id
         };
       }
+
+      resetPrincipalViolations(callerPrincipal);
 
       // 3. Execution inside sandbox
       const workspacePath = path.resolve(__dirname, '..', '..', '..');
@@ -644,9 +701,10 @@ async function handleMcpRequest(req: any): Promise<any> {
 
       // Cedar Policy Check
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
-      const contextObj = getFullContext({ path: filePath });
+      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
       const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'write_file', { path: filePath }, contextObj);
       if (evaluation.decision === 'deny') {
+        await recordPrincipalViolation(callerPrincipal);
         return {
           jsonrpc: '2.0',
           result: {
@@ -661,6 +719,8 @@ async function handleMcpRequest(req: any): Promise<any> {
           id
         };
       }
+
+      resetPrincipalViolations(callerPrincipal);
 
       try {
         const workspacePath = path.resolve(__dirname, '..', '..', '..');
@@ -741,7 +801,7 @@ async function handleMcpRequest(req: any): Promise<any> {
 
       // Secret path check
       const filename = path.basename(resolvedPath);
-      if (filename.includes('.env') || resolvedPath.endsWith('.key') || resolvedPath.endsWith('.pem')) {
+      if (filename.includes('.env') || filename.includes('test-keys') || resolvedPath.endsWith('.key') || resolvedPath.endsWith('.pem')) {
         return {
           jsonrpc: '2.0',
           result: {
@@ -752,9 +812,10 @@ async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
+      const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = getFullContext({ path: filePath });
-      const evaluation = evaluator.evaluateSimulator('mcp-agent@fidusgate.internal', 'read_file', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'read_file', { path: filePath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
@@ -838,9 +899,10 @@ async function handleMcpRequest(req: any): Promise<any> {
       }
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
-      const contextObj = getFullContext({ path: filePath });
+      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
       const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'patch_file', { path: filePath }, contextObj);
       if (evaluation.decision === 'deny') {
+        await recordPrincipalViolation(callerPrincipal);
         return {
           jsonrpc: '2.0',
           result: {
@@ -855,6 +917,8 @@ async function handleMcpRequest(req: any): Promise<any> {
           id
         };
       }
+
+      resetPrincipalViolations(callerPrincipal);
 
       try {
         const workspacePath = path.resolve(__dirname, '..', '..', '..');
@@ -931,9 +995,10 @@ async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
+      const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = getFullContext({ query, searchPath });
-      const evaluation = evaluator.evaluateSimulator('mcp-agent@fidusgate.internal', 'search_code', { query, searchPath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { query, searchPath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'search_code', { query, searchPath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
@@ -995,9 +1060,10 @@ async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
+      const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = getFullContext({ path: filePath });
-      const evaluation = evaluator.evaluateSimulator('mcp-agent@fidusgate.internal', 'list_directory', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'list_directory', { path: filePath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
