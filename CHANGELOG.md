@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/SafetyMP/FidusGate/compare/v1.7.0...v1.8.0) (2026-06-16)
+
+
+### Features
+
+* **security:** agent quarantine system, Tier 0/9 Cedar policies, async DB refactor, interview engine ([2167a84](https://github.com/SafetyMP/FidusGate/commit/2167a842e421dc60f2d7cb6010c16570bac50836))
+
 # [1.7.0](https://github.com/SafetyMP/FidusGate/compare/v1.6.0...v1.7.0) (2026-06-07)
 
 
