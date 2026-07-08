@@ -33,7 +33,7 @@
     "playwright": "^1.52.0",
     "pngjs": "^7.0.0",
     "semantic-release": "^23.0.8",
-    "turbo": "^2.0.4",
+    "turbo": "^2.10.4",
     "typescript": "^5.4.5"
   }
 }
