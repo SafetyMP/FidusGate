@@ -1,0 +1,48 @@
+name: Bug report
+description: Report unexpected behavior in the gateway, dashboard, or policy engine.
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for improving FidusGate. Use synthetic repro steps only — no production credentials, customer data, or live signing keys.
+
+        For security vulnerabilities, use [SECURITY.md](../../SECURITY.md) instead of this template.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can we reproduce it?
+      placeholder: |
+        1. npm run bootstrap && npm run dev
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        OS:
+        Node:
+        Branch / SHA:
+  - type: textarea
+    id: extras
+    attributes:
+      label: Logs / screenshots
+      render: markdown

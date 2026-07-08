@@ -1,17 +1,44 @@
-# ⚖️ FidusGate
+# FidusGate
 
-### Reference Implementation for Zero-Trust Governance & Runtime Verification for AI Agents
+**Evergreen open-source reference** for zero-trust governance and runtime verification of **autonomous AI agent operations** — Cedar policy gates, Ed25519 receipts, MCP proxy enforcement, and a runnable admin console demo.
 
-FidusGate is an **open-source reference implementation and capability showcase** for zero-trust repository governance and runtime verification for **Autonomous AI-Agent Operations**. It shifts security left—enforcing programmatic access controls, signature verification (Ed25519), and simulated seccomp auditing directly on active agentic workflows.
+FidusGate shifts security left: programmatic access controls, signature verification, and sandboxed command auditing on active agentic workflows. It establishes explicit, policy-enforced boundaries around AI tool execution to reduce unauthorized modifications, privilege escalation, and prompt-injection-driven compromise.
 
-Designed with an extensible, **risk-centric architecture**, FidusGate establishes explicit, policy-enforced boundaries around AI tool execution, serving as a reference for securing agent execution to prevent unauthorized system modifications, privilege escalation, and prompt-injection-driven compromise.
+> **Scope:** Reference implementation and capability showcase — **not** a production-hardened security product. See [Status, Maturity & Mocks](#-status-maturity--mocks).
+
+[![Docker Publish](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml)
+[![Release](https://img.shields.io/github/v/release/SafetyMP/FidusGate)](https://github.com/SafetyMP/FidusGate/releases)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/SafetyMP/FidusGate/badge)](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate)
+[![License](https://img.shields.io/github/license/SafetyMP/FidusGate)](LICENSE)
+
+**Jump to:** [Demo](#demo) · [Quick start](#-quick-start--execution-guide) · [Architecture](#-unified-monorepo-architecture) · [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+---
+
+## Demo
+
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="FidusGate admin console — ledger, compliance, Cedar simulator, and sandbox (synthetic demo data)" width="900" />
+</p>
+
+### Screenshots
+
+| Ledger & transactions | Compliance & attestation | Cedar policy simulator |
+|-----------------------|--------------------------|-------------------------|
+| ![Ledger](docs/assets/ledger.png) | ![Compliance](docs/assets/compliance.png) | ![Policy simulator](docs/assets/policy-simulator.png) |
+
+| Forensics & verifier | Interactive sandbox |
+|----------------------|---------------------|
+| ![Forensics](docs/assets/forensics.png) | ![Sandbox](docs/assets/sandbox.png) |
+
+- **Local demo:** `npm run bootstrap && npm run dev` → [http://localhost:3000](http://localhost:3000) (dashboard) · gateway API on `:3001`
+- **Container images:** `ghcr.io/safetymp/fidusgate-gateway` and `ghcr.io/safetymp/fidusgate-dashboard` (see [Docker publish workflow](.github/workflows/docker-publish.yml))
+- **Regenerate GIF/PNGs:** `npm run screenshots` after the dev stack is running — [maintainer playbook](docs/community/github-presentation.md)
+
+---
 
 > [!IMPORTANT]
 > FidusGate is a reference implementation, not a production-hardened product.
-
-[![CI](https://github.com/SafetyMP/FidusGate/actions/workflows/ci-agent-pipeline.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/ci-agent-pipeline.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/SafetyMP/FidusGate/badge)](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate)
-[![License](https://img.shields.io/github/license/SafetyMP/FidusGate)](LICENSE)
 
 ---
 
@@ -389,3 +416,16 @@ FidusGate is designed as an evergreen, evolving reference implementation of runt
 * **Secrets Check**: 100% Secure. Absolutely no passwords, raw private keys, or actual developer credentials are committed.
 * **Lockfile Fidelity**: Standardized with an `npm` lockfile (`package-lock.json`).
 * **Test Coverage**: Tested and verified with a built-in zero-dependency Node.js test runner covering Ed25519 cryptography, Cedar dynamic AST parser evaluation, and shell command allowlist audits.
+
+---
+
+## Contributing, security, and license
+
+| Resource | Link |
+|----------|------|
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Security | [SECURITY.md](SECURITY.md) |
+| Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Support | [SUPPORT.md](SUPPORT.md) |
+| Maintainer storefront | [docs/community/github-presentation.md](docs/community/github-presentation.md) |
+| License | [Apache 2.0](LICENSE) |

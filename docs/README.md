@@ -10,10 +10,14 @@ Use the links below to navigate our primary documentation suite:
 
 | Document Guide | Path | Focus & Target Audience |
 | :--- | :--- | :--- |
-| **⚖️ FidusGate Monorepo Architecture** | [ARCHITECTURE.md](./ARCHITECTURE.md) | High-level topologies, component details, Dockerized profiles, database setups, and core feature architectures. |
-| **🚀 Local CI/CD Pipeline Emulation** | [local-ci-emulation.md](./local-ci-emulation.md) | Offline testing using `act`, secret provisioning, and pipeline prompt injection auditing with `agentic-actions-auditor`. |
-| **📡 Phase 3 Feature Walkthrough** | [walkthrough.md](./walkthrough.md) | Active filesystem drift auto-reconciliation models, Gemini policy co-pilots, and trunk-based semantic versioning releases. |
-| **📝 Enterprise Hardening Plan** | [implementation_plan.md](./implementation_plan.md) | Technical blueprint and database schema migrations for structured agent auto-fixes, KMS HSM signing, and WASI sandboxes. |
+| **GitHub storefront (maintainers)** | [community/github-presentation.md](./community/github-presentation.md) | About panel, demo GIF regen, badges, social preview, community-health target |
+| **Branch protection (maintainers)** | [community/github-branch-protection.md](./community/github-branch-protection.md) | Optional required checks on `main` |
+| **Marketing assets index** | [assets/README.md](./assets/README.md) | `demo.gif`, screenshots, social preview source |
+| **FidusGate Monorepo Architecture** | [ARCHITECTURE.md](./ARCHITECTURE.md) | High-level topologies, component details, Dockerized profiles, database setups, and core feature architectures. |
+| **Local CI/CD Pipeline Emulation** | [local-ci-emulation.md](./local-ci-emulation.md) | Offline testing using `act`, secret provisioning, and pipeline prompt injection auditing with `agentic-actions-auditor`. |
+| **Phase 3 Feature Walkthrough** | [walkthrough.md](./walkthrough.md) | Active filesystem drift auto-reconciliation models, Gemini policy co-pilots, and trunk-based semantic versioning releases. |
+| **Phase 4 & 5 Walkthrough** | [walkthrough_v2.md](./walkthrough_v2.md) | Extended verification flows and enterprise simulator features. |
+| **Enterprise Hardening Plan** | [implementation_plan.md](./implementation_plan.md) | Technical blueprint and database schema migrations for structured agent auto-fixes, KMS HSM signing, and WASI sandboxes. |
 
 ---
 
@@ -66,3 +70,5 @@ FidusGate models security boundaries by mapping available operations to dedicate
 ---
 
 *Manual maintained and verified by the Antigravity Security Engineering Team.*
+
+Community: [CONTRIBUTING.md](../CONTRIBUTING.md) · [SECURITY.md](../SECURITY.md) · [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) · [SUPPORT.md](../SUPPORT.md)

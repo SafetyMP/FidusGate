@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SafetyMP/FidusGate/blob/main/SECURITY.md
+    about: Use private advisory reporting — never post undisclosed vulnerabilities as public issues.
+  - name: Documentation / Q&A
+    url: https://github.com/SafetyMP/FidusGate/issues/new?template=documentation.yml
+    about: Setup, architecture, Cedar policy, or contributor questions.

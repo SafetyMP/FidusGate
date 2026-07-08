@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="FidusGate  zero-trust governance for AI agents">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="55%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="72" y="72" width="1136" height="496" rx="24" fill="rgba(255,255,255,0.04)" stroke="rgba(148,163,184,0.25)" stroke-width="2"/>
+  <text x="120" y="170" fill="#e2e8f0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="56" font-weight="700">FidusGate</text>
+  <text x="120" y="240" fill="#94a3b8" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30">Zero-trust governance &amp; runtime verification for AI agents</text>
+  <rect x="120" y="290" width="420" height="10" rx="5" fill="url(#accent)"/>
+  <text x="120" y="360" fill="#cbd5e1" font-family="ui-sans-serif, system-ui, sans-serif" font-size="24">Cedar policy gates · Ed25519 receipts · MCP sandbox console</text>
+  <text x="120" y="410" fill="#64748b" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20">Open-source reference implementation  SafetyMP/FidusGate</text>
+  <g transform="translate(860,150)">
+    <rect x="0" y="0" width="280" height="320" rx="18" fill="rgba(15,23,42,0.85)" stroke="rgba(56,189,248,0.35)" stroke-width="2"/>
+    <text x="24" y="48" fill="#38bdf8" font-family="ui-monospace, monospace" font-size="18">policy.cedar</text>
+    <text x="24" y="92" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="16">permit(</text>
+    <text x="24" y="122" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="16">  principal, action, resource</text>
+    <text x="24" y="152" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="16">);</text>
+    <rect x="24" y="190" width="232" height="44" rx="8" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.45)"/>
+    <text x="40" y="219" fill="#86efac" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Signed receipt verified</text>
+    <rect x="24" y="252" width="232" height="44" rx="8" fill="rgba(248,113,113,0.12)" stroke="rgba(248,113,113,0.4)"/>
+    <text x="40" y="281" fill="#fca5a5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Native tool blocked</text>
+  </g>
+</svg>

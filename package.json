@@ -21,11 +21,17 @@
     "sandbox": "bash scripts/sandbox-execute.sh",
     "memory:context": "node scripts/get-learning-context.js",
     "policy:dry-run": "node scripts/dry-run-policy.js",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "screenshots:rebuild-gif": "node scripts/capture-screenshots.mjs --from-existing"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
+    "@playwright/test": "^1.52.0",
+    "gifenc": "^1.0.3",
+    "playwright": "^1.52.0",
+    "pngjs": "^7.0.0",
     "semantic-release": "^23.0.8",
     "turbo": "^2.0.4",
     "typescript": "^5.4.5"

@@ -1,5 +1,7 @@
 # Contributing to FidusGate
 
+> **Canonical copy:** [`CONTRIBUTING.md`](../CONTRIBUTING.md) at the repository root (GitHub Community Standards). This file mirrors that document for `.github/` discovery.
+
 Thank you for your interest in contributing to FidusGate! As a zero-trust governance platform for AI-agent workflows, we maintain high standards for system integrity, code validation, and security auditing.
 
 ## 📐 Monorepo Workspace Structure
