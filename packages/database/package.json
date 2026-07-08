@@ -10,7 +10,7 @@
     "test": "echo \"No database tests defined.\""
   },
   "dependencies": {
-    "@prisma/client": "^5.20.0",
+    "@prisma/client": "^7.8.0",
     "@fidusgate/core-types": "1.0.0"
   },
   "devDependencies": {
