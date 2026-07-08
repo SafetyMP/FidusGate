@@ -9,6 +9,10 @@ Designed with an extensible, **risk-centric architecture**, FidusGate establishe
 > [!IMPORTANT]
 > FidusGate is a reference implementation, not a production-hardened product.
 
+[![CI](https://github.com/SafetyMP/FidusGate/actions/workflows/ci-agent-pipeline.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/ci-agent-pipeline.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/SafetyMP/FidusGate/badge)](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate)
+[![License](https://img.shields.io/github/license/SafetyMP/FidusGate)](LICENSE)
+
 ---
 
 ## 🛠️ Status, Maturity & Mocks
