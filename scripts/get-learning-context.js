@@ -102,7 +102,7 @@ if (topLessons.length === 0) {
 
 function printLesson(lesson, number) {
   const prefix = number ? `[Lesson #${number}] ` : '';
-  console.log(`   📅 Date       : ${lesson.timestamp}`);
+  console.log(`   ${prefix}📅 Date       : ${lesson.timestamp}`);
   console.log(`   🎯 Requirement: ${lesson.requirementId}`);
   console.log(`   👥 Roles      : ${lesson.sourceRole} ➔ ${lesson.targetRole}`);
   console.log(`   ⚠️  Critique   : ${lesson.critique}`);
