@@ -95,7 +95,11 @@ export class CedarEvaluator {
         const ast = this.parseExpression(tokens);
         this.rules.push({ effect, conditionStr, ast });
       } catch (err: any) {
-        console.error(`[CedarEvaluator] Error parsing rule when-condition: "${sanitizeLogValue(conditionStr)}". Error: ${sanitizeLogValue(err.message)}`);
+        console.error(
+          '[CedarEvaluator] Error parsing rule when-condition:',
+          sanitizeLogValue(conditionStr),
+          sanitizeLogValue(err.message),
+        );
       }
     }
   }
