@@ -18,6 +18,7 @@ import { runWasmCommand } from './wasi-runner';
 import { startConsensusExpiryWorker } from './cron-worker';
 import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
+import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
 import * as ws from 'ws';
@@ -296,11 +297,16 @@ app.use(async (req, res, next) => {
   next();
 });
 
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  log('error', '❌ FATAL: JWT_SECRET environment variable is required in production mode!');
-  process.exit(1);
-}
-const JWT_SECRET = process.env.JWT_SECRET || 'fidusgate-super-secure-dev-jwt-secret';
+const JWT_SECRET: string = (() => {
+  const secret =
+    process.env.JWT_SECRET ||
+    (process.env.NODE_ENV === 'production' ? undefined : 'fidusgate-dev-jwt-secret-local-only');
+  if (!secret) {
+    console.error('❌ FATAL: JWT_SECRET environment variable is required in production mode!');
+    process.exit(1);
+  }
+  return secret;
+})();
 
 // Logger helper with security tagging
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
@@ -536,9 +542,22 @@ app.use((req: express.Request, _res: express.Response, next: express.NextFunctio
   next();
 });
 
-// OIDC Simulated JWT Token Signer Endpoint
+// OIDC Simulated JWT Token Signer Endpoint — bootstrap key required (no unauthenticated minting).
 app.post('/api/auth/token', (req, res) => {
   try {
+    const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY?.trim();
+    if (!expectedKey) {
+      log('security', 'CRITICAL JWT SIGNER ERROR: FIDUSGATE_BOOTSTRAP_KEY is not configured. Token minting disabled.');
+      res.status(503).json({ error: 'Token minting is disabled until FIDUSGATE_BOOTSTRAP_KEY is configured.' });
+      return;
+    }
+    const bootstrapKey = req.headers['x-fidusgate-bootstrap-key'];
+    if (!bootstrapKey || bootstrapKey !== expectedKey) {
+      log('security', 'UNAUTHORIZED TOKEN REQUEST: missing or invalid bootstrap key.');
+      res.status(403).json({ error: 'Unauthorized: token minting requires a valid bootstrap key.' });
+      return;
+    }
+
     const { role, email } = req.body;
     if (!role || !email) {
       res.status(400).json({ error: 'Missing required parameters: role, email' });
@@ -548,32 +567,6 @@ app.post('/api/auth/token', (req, res) => {
     if (!['developer', 'admin', 'auditor'].includes(role)) {
       res.status(400).json({ error: 'Invalid role. Supported roles: developer, admin, auditor' });
       return;
-    }
-
-    // Secure the admin role generation
-    if (role === 'admin') {
-      const bootstrapKey = req.headers['x-fidusgate-bootstrap-key'];
-      const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY;
-      
-      if (process.env.NODE_ENV === 'production') {
-        if (!expectedKey) {
-          log('security', 'CRITICAL JWT SIGNER ERROR: FIDUSGATE_BOOTSTRAP_KEY is not defined in production. Denying all admin token requests.');
-          res.status(500).json({ error: 'System configuration error: Admin token generation is disabled.' });
-          return;
-        }
-        if (!bootstrapKey || bootstrapKey !== expectedKey) {
-          log('security', `UNAUTHORIZED ADMIN TOKEN REQUEST: ${email} attempted admin token generation without valid bootstrap key in production.`);
-          res.status(403).json({ error: 'Unauthorized: Admin role generation requires a valid bootstrap key.' });
-          return;
-        }
-      } else {
-        const devExpectedKey = expectedKey || 'fidusgate-bootstrap-dev-key';
-        if (!bootstrapKey || bootstrapKey !== devExpectedKey) {
-          log('security', `UNAUTHORIZED ADMIN TOKEN REQUEST: ${email} attempted admin token generation without valid bootstrap key in development.`);
-          res.status(403).json({ error: 'Unauthorized: Admin role generation requires a valid bootstrap key.' });
-          return;
-        }
-      }
     }
 
     const token = jwt.sign(
@@ -1415,10 +1408,16 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 // 8. POST /api/authorize - Real-time pre-execution tool validation (Role: developer, admin)
 app.post('/api/authorize', requireAuth(['developer', 'admin']), async (req, res) => {
   try {
-    const { principal, tool_name, args, actualTokensInput, actualTokensOutput, actualTokensCached, subagentId, subagentMaxBudget } = req.body;
+    const { principal, tool_name, args, actualTokensInput, actualTokensOutput, actualTokensCached, subagentId, subagentMaxBudget, signature } = req.body;
     
     if (!principal || !tool_name) {
       res.status(400).json({ error: 'Missing required parameters: principal, tool_name' });
+      return;
+    }
+
+    if (!verifyAuthorizePrincipalSignature(principal, tool_name, args, signature)) {
+      log('security', `AUTHORIZE DENIED: principal signature verification failed for ${principal}`);
+      res.status(403).json({ error: 'Principal signature verification failed.' });
       return;
     }
 
@@ -2690,6 +2689,18 @@ app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
       tester.parse(policyCode);
     } catch (syntaxErr: any) {
       res.status(400).json({ error: 'Cedar policy syntax validation failed.', message: syntaxErr.message });
+      return;
+    }
+
+    const safety = policyCodePassesSafetyChecks(policyCode);
+    if (!safety.ok) {
+      res.status(400).json({ error: 'Policy safety validation failed.', message: safety.reason });
+      return;
+    }
+
+    const policyAudit = auditConsensusRequest(policyCode.slice(0, 512));
+    if (policyAudit.rating === 'dangerous') {
+      res.status(400).json({ error: 'Policy safety audit rejected the draft.', message: policyAudit.reason });
       return;
     }
     

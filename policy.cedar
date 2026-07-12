@@ -77,7 +77,7 @@ forbid(
     || resource.args.path like "scripts/*"
     || resource.args.path.contains(".env")
   )
-  && !(principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:security-sme")
 };
 
 // ------------------------------------------
@@ -96,16 +96,6 @@ permit(
     resource.args.commandLine like "bash scripts/sandbox-execute.sh *"
     || resource.args.commandLine like "bash scripts/ci-verify.sh*"
   )
-};
-
-// Permit developer de073ae64e43 to execute command line scripts on host
-permit(
-  principal,
-  action == Action::"call_tool",
-  resource
-) when {
-  resource.tool_name == "execute_command"
-  && principal == "sb:issuer:de073ae64e43"
 };
 
 // Permit memory retrieval and feedback assimilation commands for all agents.
@@ -134,7 +124,6 @@ forbid(
   && resource has args
   && !resource.args.commandLine.contains("sandbox-execute.sh")
   && !resource.args.commandLine.contains("ci-verify.sh")
-  && !(principal == "sb:issuer:de073ae64e43")
 };
 
 // ------------------------------------------
@@ -366,7 +355,7 @@ forbid(
     resource.args.path like "packages/database/*"
     || resource.args.path == "packages/database/prisma/schema.prisma"
   )
-  && !(principal == "sb:issuer:backend-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:backend-sme")
 };
 
 // Enforce frontend-sme role for screen and visual component updates
@@ -381,7 +370,7 @@ forbid(
   )
   && resource has args
   && resource.args.path like "apps/admin-dashboard/*"
-  && !(principal == "sb:issuer:frontend-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:frontend-sme")
 };
 
 // Enforce qa-sme role for test suites
@@ -399,7 +388,7 @@ forbid(
     resource.args.path.contains(".test.")
     || resource.args.path.contains(".spec.")
   )
-  && !(principal == "sb:issuer:qa-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:qa-sme")
 };
 
 // Enforce devops-sme role for workflows and docker configurations
@@ -417,7 +406,7 @@ forbid(
     resource.args.path like ".github/workflows/*"
     || resource.args.path.contains("Dockerfile")
   )
-  && !(principal == "sb:issuer:devops-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:devops-sme")
 };
 
 // Enforce security-sme role for policies and configuration
@@ -435,7 +424,7 @@ forbid(
     resource.args.path == "policy.cedar"
     || resource.args.path == "protect-mcp.config.json"
   )
-  && !(principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:security-sme")
 };
 
 // Enforce security-sme role for secure-gateway source code
@@ -450,7 +439,7 @@ forbid(
   )
   && resource has args
   && resource.args.path like "apps/secure-gateway/*"
-  && !(principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:security-sme")
 };
 
 
@@ -466,7 +455,7 @@ forbid(
   )
   && resource has args
   && resource.args.path == "CHANGELOG.md"
-  && !(principal == "sb:issuer:pm-sme" || principal == "sb:issuer:de073ae64e43")
+  && !(principal == "sb:issuer:pm-sme")
 };
 
 
@@ -504,7 +493,7 @@ permit(
     resource.args.path == "policy.cedar"
     || resource.args.path == "protect-mcp.config.json"
   )
-  && (principal == "sb:issuer:security-sme" || principal == "sb:issuer:de073ae64e43")
+  && (principal == "sb:issuer:security-sme")
 };
 
 // Permit pm-sme or de073ae64e43 to modify changelogs in the root
@@ -519,7 +508,7 @@ permit(
   )
   && resource has args
   && resource.args.path == "CHANGELOG.md"
-  && (principal == "sb:issuer:pm-sme" || principal == "sb:issuer:de073ae64e43")
+  && (principal == "sb:issuer:pm-sme")
 };
 
 // ------------------------------------------
