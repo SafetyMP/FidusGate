@@ -145,7 +145,6 @@ function main() {
   }
 
   // Hit the secure gateway API to align feedback if running
-  const gatewayUrl = 'http://localhost:3001/api/plm/feedback-align';
   if (process.env.DISABLE_AUTH !== 'true') {
     // We can attempt to notify the running server, but since this runs in a git hook,
     // updating the state file directly is sufficient for local validation.

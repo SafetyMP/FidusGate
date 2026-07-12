@@ -2,11 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { routeModel } from './model-router';
 import jwt from 'jsonwebtoken';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { performance } from 'node:perf_hooks';
-import { FidusGateDatabase, CommandLogEntry, FilesystemDriftEntry, QuarantineRecord } from '@fidusgate/database';
+import { FidusGateDatabase } from '@fidusgate/database';
 import { buildDossier, conductInterview } from './interview-engine';
 import * as http from 'node:http';
 import { verifyReceipt, generateKeyPair, createAttestedSession, verifyAuditChain } from '@fidusgate/crypto-utils';
@@ -19,6 +18,13 @@ import { startConsensusExpiryWorker } from './cron-worker';
 import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
+import {
+  assertSafeRelativePath,
+  assertSafeResourceId,
+  assertSafeSubagentId,
+  safeRecordKey,
+  sanitizeLogValue,
+} from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
 import * as ws from 'ws';
@@ -78,25 +84,26 @@ const principalViolationCounts: Record<string, number> = {};
 
 export async function recordPrincipalViolation(principal: string): Promise<void> {
   if (!principal || principal === 'sb:issuer:test' || principal === 'mcp-agent@fidusgate.internal') return;
-  principalViolationCounts[principal] = (principalViolationCounts[principal] || 0) + 1;
-  if (principalViolationCounts[principal] >= 3) {
+  const principalKey = safeRecordKey(principal, 'principal');
+  principalViolationCounts[principalKey] = (principalViolationCounts[principalKey] || 0) + 1;
+  if (principalViolationCounts[principalKey] >= 3) {
     const existing = await db.getQuarantineRecord(principal);
     if (!existing) {
       await db.quarantinePrincipal({
         principalId: principal,
         quarantinedAt: new Date().toISOString(),
         reason: `Auto-quarantined: 3 consecutive Cedar policy denials`,
-        evidence: [`${principalViolationCounts[principal]} consecutive Cedar denials`]
+        evidence: [`${principalViolationCounts[principalKey]} consecutive Cedar denials`]
       });
       log('security', `🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${principal}`);
       broadcastWS('principal_quarantined', { principalId: principal, reason: 'consecutive_violations' });
     }
-    delete principalViolationCounts[principal];
+    delete principalViolationCounts[principalKey];
   }
 }
 
 export function resetPrincipalViolations(principal: string): void {
-  delete principalViolationCounts[principal];
+  delete principalViolationCounts[safeRecordKey(principal, 'principal')];
 }
 
 export function handleSuccessfulExecution() {
@@ -311,7 +318,9 @@ const JWT_SECRET: string = (() => {
 // Logger helper with security tagging
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${message}${meta ? ' ' + JSON.stringify(meta) : ''}`;
+  const safeMessage = sanitizeLogValue(message);
+  const safeMeta = meta !== undefined ? sanitizeLogValue(meta) : '';
+  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`;
   if (process.argv.includes('--mcp')) {
     console.error(formatted);
   } else {
@@ -2056,13 +2065,24 @@ app.get('/api/auth/attested-claims', requireAuth(['developer', 'admin', 'auditor
   }
 });
 
+function resolveSandboxPatchPath(subagentId: unknown): string {
+  if (subagentId === undefined || subagentId === null || subagentId === '') {
+    return path.resolve(process.cwd(), '.memory/pending-sandbox.patch');
+  }
+  const safeId = assertSafeSubagentId(subagentId);
+  const baseDir = path.resolve(process.cwd(), '.memory/subagents');
+  const patchPath = path.resolve(baseDir, safeId, 'pending-sandbox.patch');
+  if (!patchPath.startsWith(baseDir + path.sep)) {
+    throw new Error('Invalid subagentId: path traversal blocked.');
+  }
+  return patchPath;
+}
+
 // 16. GET /api/sandbox/patch - Retrieve pending sandbox overlay patch (Role: developer, admin, auditor)
 app.get('/api/sandbox/patch', requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
   try {
     const { subagentId } = req.query;
-    const patchPath = subagentId
-      ? path.resolve(process.cwd(), `.memory/subagents/${subagentId}/pending-sandbox.patch`)
-      : path.resolve(process.cwd(), '.memory/pending-sandbox.patch');
+    const patchPath = resolveSandboxPatchPath(subagentId);
 
     if (fs.existsSync(patchPath)) {
       const patch = fs.readFileSync(patchPath, 'utf8');
@@ -2079,9 +2099,7 @@ app.get('/api/sandbox/patch', requireAuth(['developer', 'admin', 'auditor']), (r
 app.post('/api/sandbox/apply', requireAuth(['admin']), async (req, res) => {
   try {
     const { subagentId } = req.body;
-    const patchPath = subagentId
-      ? path.resolve(process.cwd(), `.memory/subagents/${subagentId}/pending-sandbox.patch`)
-      : path.resolve(process.cwd(), '.memory/pending-sandbox.patch');
+    const patchPath = resolveSandboxPatchPath(subagentId);
 
     if (!fs.existsSync(patchPath)) {
       res.status(404).json({ error: 'No pending sandbox patch found to apply.' });
@@ -2094,8 +2112,7 @@ app.post('/api/sandbox/apply', requireAuth(['admin']), async (req, res) => {
     log('info', `Administrator applying sandbox patch: ${patchPath}`);
     
     try {
-      // Use git apply to merge patch cleanly
-      execSync(`git apply --whitespace=nowarn "${patchPath}"`, { cwd: process.cwd() });
+      execFileSync('git', ['apply', '--whitespace=nowarn', patchPath], { cwd: process.cwd() });
       
       // Delete patch file after successful merge
       fs.unlinkSync(patchPath);
@@ -2116,7 +2133,7 @@ app.post('/api/sandbox/apply', requireAuth(['admin']), async (req, res) => {
       await db.addCommandLog({
         id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
         timestamp: new Date().toISOString(),
-        command: `git apply ${subagentId ? `.memory/subagents/${subagentId}/pending-sandbox.patch` : '.memory/pending-sandbox.patch'}`,
+        command: `git apply ${subagentId ? `.memory/subagents/${assertSafeSubagentId(subagentId)}/pending-sandbox.patch` : '.memory/pending-sandbox.patch'}`,
         user: userEmail,
         role: userRole,
         status: 'success',

@@ -4,6 +4,8 @@
  * and measures cosine similarity against known adversarial injection profiles.
  */
 
+import { sanitizeLogValue } from './security-sanitize';
+
 export interface FirewallResult {
   secure: boolean;
   reason?: string;
@@ -145,7 +147,7 @@ export function isPromptSecure(prompt: string): FirewallResult {
       if (decoded.length >= 6 && isPrintableText(decoded)) {
         const decodedResult = isPromptSecure(decoded);
         if (!decodedResult.secure) {
-          console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Obfuscated Base64 injection detected: "${candidate}" -> "${decoded}"`);
+          console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Obfuscated Base64 injection detected: "${sanitizeLogValue(candidate)}" -> "${sanitizeLogValue(decoded)}"`);
           return {
             secure: false,
             reason: `Adversarial obfuscated input blocked: Base64 payload contains blocked pattern.`,

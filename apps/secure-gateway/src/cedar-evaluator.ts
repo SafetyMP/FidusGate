@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { sanitizeLogValue } from './security-sanitize';
 
 export type ASTNode =
   | { type: 'AND'; left: ASTNode; right: ASTNode }
@@ -94,7 +95,7 @@ export class CedarEvaluator {
         const ast = this.parseExpression(tokens);
         this.rules.push({ effect, conditionStr, ast });
       } catch (err: any) {
-        console.error(`[CedarEvaluator] Error parsing rule when-condition: "${conditionStr}". Error: ${err.message}`);
+        console.error(`[CedarEvaluator] Error parsing rule when-condition: "${sanitizeLogValue(conditionStr)}". Error: ${sanitizeLogValue(err.message)}`);
       }
     }
   }

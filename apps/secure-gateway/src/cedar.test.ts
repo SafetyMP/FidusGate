@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure, parseShellCommand } from './command-auditor';
 import { FidusGateDatabase } from '@fidusgate/database';
@@ -1063,7 +1062,7 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
       assert.strictEqual(approved.status, 'approved');
       assert.strictEqual(approved.reviewer, 'admin-reviewer');
 
-      const req2 = await db.createBudgetExtensionRequest('req-test-2', 20000, 'Testing rejection', 'dev-2');
+      await db.createBudgetExtensionRequest('req-test-2', 20000, 'Testing rejection', 'dev-2');
       const rejectedReq = await db.rejectBudgetExtensionRequest('req-test-2', 'admin-reviewer');
       assert.ok(rejectedReq);
       assert.strictEqual(rejectedReq.status, 'rejected');
