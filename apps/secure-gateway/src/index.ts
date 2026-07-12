@@ -2077,7 +2077,7 @@ function resolveSandboxPatchPath(subagentId: unknown): string {
 }
 
 // 16. GET /api/sandbox/patch - Retrieve pending sandbox overlay patch (Role: developer, admin, auditor)
-app.get('/api/sandbox/patch', requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
+app.get('/api/sandbox/patch', autoThrottleMiddleware, requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
   try {
     const { subagentId } = req.query;
     const patchPath = resolveSandboxPatchPath(subagentId);
@@ -2094,7 +2094,7 @@ app.get('/api/sandbox/patch', requireAuth(['developer', 'admin', 'auditor']), (r
 });
 
 // 17. POST /api/sandbox/apply - Apply/Merge sandbox diff patch (Role: admin)
-app.post('/api/sandbox/apply', requireAuth(['admin']), async (req, res) => {
+app.post('/api/sandbox/apply', autoThrottleMiddleware, requireAuth(['admin']), async (req, res) => {
   try {
     const { subagentId } = req.body;
     const patchPath = resolveSandboxPatchPath(subagentId);
