@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/SafetyMP/FidusGate/compare/v1.8.0...v1.8.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* **security:** lock down token minting, authorize signatures, and policy apply ([#18](https://github.com/SafetyMP/FidusGate/issues/18)) ([911f9de](https://github.com/SafetyMP/FidusGate/commit/911f9de29514390ae661397b2fe5b916f1c0c713))
+
 # [1.8.0](https://github.com/SafetyMP/FidusGate/compare/v1.7.0...v1.8.0) (2026-06-16)
 
 
