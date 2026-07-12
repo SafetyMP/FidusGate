@@ -10,6 +10,6 @@
     "test": "echo \"No core-types tests defined.\""
   },
   "devDependencies": {
-    "typescript": "^5.4.5"
+    "typescript": "^7.0.2"
   }
 }
