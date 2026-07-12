@@ -48,7 +48,6 @@ jobs:
           gemini_model: "gemini-1.5-pro"
           settings: |
             {
-              # SECURED: Strict workspace-read sandbox configuration with no shell command access
               "sandbox": "workspace-read",
               "allowed_tools": ["read_file", "list_directory"]
             }
