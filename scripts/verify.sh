@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
+# Definition of Done — turbo lint + test (mirrors .github/workflows/ci.yml).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ! -d node_modules ]]; then
-  echo "Run npm run bootstrap first" >&2
-  exit 1
+if command -v corepack >/dev/null 2>&1; then
+  corepack enable >/dev/null 2>&1 || true
+  corepack prepare npm@10.9.2 --activate >/dev/null 2>&1 || true
 fi
 
-echo "== verify: build + test =="
-npm run build
+echo "==> npm ci (expect packageManager npm@10.9.2)"
+npm ci
+
+echo "==> lint + test"
+npm run lint
 npm run test
 
-echo "verify: ok"
+echo "verify: ok (ci/web parity)"
