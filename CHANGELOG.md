@@ -1,3 +1,10 @@
+## [1.8.3](https://github.com/SafetyMP/FidusGate/compare/v1.8.2...v1.8.3) (2026-07-12)
+
+
+### Bug Fixes
+
+* **security:** repair Scorecard and add CodeQL workflow ([c246302](https://github.com/SafetyMP/FidusGate/commit/c24630294c8f3cb75822ecd793b185d2d018f170))
+
 ## [1.8.2](https://github.com/SafetyMP/FidusGate/compare/v1.8.1...v1.8.2) (2026-07-12)
 
 
