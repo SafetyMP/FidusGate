@@ -369,14 +369,18 @@ export class PLMComplianceTracker {
       // version-bump gate — only an explicit version bump should.
       if (filePath.endsWith('package.json')) {
         try {
-            const safeFilePath = assertSafeRelativePath(filePath, 'filePath');
-            const absPath = path.resolve(process.cwd(), safeFilePath);
-            if (fs.existsSync(absPath)) {
-              const pkg = JSON.parse(fs.readFileSync(absPath, 'utf8'));
-              const version: string = pkg.version || '';
-              const prevVersion: string = this._lastKnownPackageVersion[safeFilePath] || '';
-              if (!prevVersion || version !== prevVersion) {
-                this._lastKnownPackageVersion[safeFilePath] = version;
+          const safeFilePath = assertSafeRelativePath(filePath, 'filePath');
+          const baseDir = path.resolve(process.cwd());
+          const absPath = path.resolve(baseDir, safeFilePath);
+          if (!absPath.startsWith(baseDir + path.sep)) {
+            return;
+          }
+          if (fs.existsSync(absPath)) {
+            const pkg = JSON.parse(fs.readFileSync(absPath, 'utf8'));
+            const version: string = pkg.version || '';
+            const prevVersion: string = this._lastKnownPackageVersion[safeFilePath] || '';
+            if (!prevVersion || version !== prevVersion) {
+              this._lastKnownPackageVersion[safeFilePath] = version;
               // Only mark updated if version actually changed (not on first write)
               if (prevVersion && version !== prevVersion) {
                 this.state.releaseVersionUpdated = true;

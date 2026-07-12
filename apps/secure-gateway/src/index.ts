@@ -19,8 +19,6 @@ import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
-  assertSafeRelativePath,
-  assertSafeResourceId,
   assertSafeSubagentId,
   safeRecordKey,
   sanitizeLogValue,
