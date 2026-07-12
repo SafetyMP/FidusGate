@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { routeModel } from './model-router';
 import jwt from 'jsonwebtoken';
 import { execFileSync, execSync } from 'node:child_process';
@@ -219,6 +220,13 @@ const autoThrottleMiddleware = (req: any, res: any, next: any) => {
   }
   next();
 };
+
+const sandboxPatchRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 
 
@@ -2077,7 +2085,7 @@ function resolveSandboxPatchPath(subagentId: unknown): string {
 }
 
 // 16. GET /api/sandbox/patch - Retrieve pending sandbox overlay patch (Role: developer, admin, auditor)
-app.get('/api/sandbox/patch', autoThrottleMiddleware, requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
+app.get('/api/sandbox/patch', sandboxPatchRateLimiter, autoThrottleMiddleware, requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
   try {
     const { subagentId } = req.query;
     const patchPath = resolveSandboxPatchPath(subagentId);
@@ -2094,7 +2102,7 @@ app.get('/api/sandbox/patch', autoThrottleMiddleware, requireAuth(['developer', 
 });
 
 // 17. POST /api/sandbox/apply - Apply/Merge sandbox diff patch (Role: admin)
-app.post('/api/sandbox/apply', autoThrottleMiddleware, requireAuth(['admin']), async (req, res) => {
+app.post('/api/sandbox/apply', sandboxPatchRateLimiter, autoThrottleMiddleware, requireAuth(['admin']), async (req, res) => {
   try {
     const { subagentId } = req.body;
     const patchPath = resolveSandboxPatchPath(subagentId);
