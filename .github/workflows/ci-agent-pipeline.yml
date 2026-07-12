@@ -18,6 +18,8 @@ jobs:
   agent-review:
     name: Codebase Agent Review
     runs-on: ubuntu-latest
+    env:
+      HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
     
     steps:
       # Step 1: Secure Checkout (Only check out base branch in pull_request event)
@@ -34,12 +36,17 @@ jobs:
           echo "Verifying actor and branch criteria..."
 
       # Step 3: Run the AI Agent inside a strict read-only sandbox
+      - name: Skip Gemini Review Agent when secret is unavailable
+        if: env.HAS_GEMINI_API_KEY != 'true'
+        run: echo "GEMINI_API_KEY is not configured or not available for this PR; skipping Gemini review."
+
       - name: Run Antigravity Review Agent
-        uses: google-github-actions/run-gemini-cli@v1
+        if: env.HAS_GEMINI_API_KEY == 'true'
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           # SECURED: Clean prompt with ZERO dynamically interpolated untrusted variables
           prompt: |
             You are a senior security engineer. Please review the codebase for compliance and quality.
@@ -48,7 +55,6 @@ jobs:
           gemini_model: "gemini-1.5-pro"
           settings: |
             {
-              # SECURED: Strict workspace-read sandbox configuration with no shell command access
               "sandbox": "workspace-read",
               "allowed_tools": ["read_file", "list_directory"]
             }
