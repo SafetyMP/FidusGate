@@ -13,7 +13,7 @@
     "@fidusgate/crypto-utils": "1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.12.12",
+    "@types/node": "^26.1.1",
     "typescript": "^5.4.5"
   }
 }
