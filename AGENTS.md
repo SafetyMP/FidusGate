@@ -6,7 +6,8 @@ Harness profile: **solo** (v4 scaffold — fill commands from CI).
 
 | Command | Purpose |
 |---------|---------|
-| `./scripts/verify.sh` | Definition of Done |
+| `./scripts/verify.sh` | Hermetic Definition of Done (stop hook) |
+| `./scripts/integration-smoke.sh` | Integration E2E (CI + main root; not worktrees) |
 
 ## Definition of Done
 
@@ -15,4 +16,10 @@ npx npm@10.9.2 ci
 ./scripts/verify.sh
 ```
 
-CI also runs `npm run lint` and `npm run test` via `.github/workflows/ci.yml`.
+When touching HAM memory drift or integration paths, also run from **main repo root**:
+
+```bash
+./scripts/integration-smoke.sh
+```
+
+CI runs hermetic verify plus `./scripts/integration-smoke.sh` via `.github/workflows/ci.yml`.
