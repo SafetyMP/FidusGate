@@ -33,7 +33,7 @@
     "gifenc": "^1.0.3",
     "playwright": "^1.52.0",
     "pngjs": "^7.0.0",
-    "semantic-release": "^23.0.8",
+    "semantic-release": "^25.0.7",
     "turbo": "^2.0.4",
     "typescript": "^5.4.5"
   }
