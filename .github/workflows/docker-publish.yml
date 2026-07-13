@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Set up QEMU for multi-architecture compilations (x86_64 and arm64 support)
       - name: Set up QEMU

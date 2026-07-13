@@ -24,7 +24,7 @@ jobs:
     steps:
       # Step 1: Secure Checkout (Only check out base branch in pull_request event)
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # SECURED: Checkout the target branch (default), not the untrusted PR branch
           persist-credentials: false
