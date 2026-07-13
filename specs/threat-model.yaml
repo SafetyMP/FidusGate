@@ -1,0 +1,21 @@
+schema: threat-model/v1
+product: FidusGate
+updated: "2026-07-13"
+
+cells:
+  - id: integration_smoke_main_root
+    method: EXEC
+    path: ./scripts/integration-smoke.sh
+    principals: [parent_on_main_root]
+    auth_mechanism: cwd_main_root
+    trust_boundary: not_from_worktree
+    establishment_failure: "exit 1 from worktree cwd"
+
+deny_cases:
+  - id: integration_from_worktree_denied
+    cell: integration_smoke_main_root
+    principal: agent_worktree
+    fixture:
+      cwd: .worktrees
+    expect:
+      status: 1
