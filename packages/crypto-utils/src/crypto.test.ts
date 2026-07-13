@@ -169,13 +169,16 @@ test('Ed25519 Public-Key Cryptography Tests', async (t) => {
     assert.strictEqual(isValid, true, 'Attested receipt should be successfully verified via master root public key');
 
     // 4. Reject if attestation certificate signature is tampered
+    const origSig = attestedReceipt.signature.attestation.attestationSignature;
+    const lastNibble = origSig.slice(-1);
+    const flippedNibble = lastNibble === 'a' ? 'b' : 'a';
     const tamperedAttestationReceipt = {
       ...attestedReceipt,
       signature: {
         ...attestedReceipt.signature,
         attestation: {
           ...attestedReceipt.signature.attestation,
-          attestationSignature: attestedReceipt.signature.attestation.attestationSignature.replace(/^[0-9a-f]/, '0')
+          attestationSignature: origSig.slice(0, -1) + flippedNibble
         }
       }
     };
