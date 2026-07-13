@@ -35,6 +35,6 @@
     "pngjs": "^7.0.0",
     "semantic-release": "^23.0.8",
     "turbo": "^2.0.4",
-    "typescript": "^5.4.5"
+    "typescript": "^7.0.2"
   }
 }
