@@ -44,4 +44,4 @@ jobs:
         run: ./scripts/integration-smoke.sh
 
       - name: Adversarial tier
-        run: ./scripts/adversarial.sh
+        run: bash ./scripts/adversarial.sh
