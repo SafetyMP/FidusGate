@@ -71,6 +71,10 @@ test('FidusGate Advanced Bypass Validation Tests', async (t) => {
 
     // 4. Test outbound egress mitigation inside standard sandbox
     await subT.test('Step D: Egress Validation inside Docker network namespace vs. host fallback', () => {
+      if (process.env.CI === 'true') {
+        console.log('Skipping Docker egress probe in CI (sandbox integration covers isolation).');
+        return;
+      }
       // Outbound egress payload to a safe endpoint (httpbin.org)
       const egressPayload = 'node -e "const http = require(\'https\'); http.get(\'https://httpbin.org/status/200\', (r) => console.log(\'Egress success:\', r.statusCode)).on(\'error\', (e) => console.error(\'Egress blocked:\', e.message))"';
       
@@ -80,7 +84,13 @@ test('FidusGate Advanced Bypass Validation Tests', async (t) => {
       const sandboxCmd = `bash scripts/sandbox-execute.sh "${egressPayload}" "${workspacePath}"`;
       
       try {
-        const output = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        const output = execSync(sandboxCmd, {
+          cwd: workspacePath,
+          encoding: 'utf8',
+          stdio: 'pipe',
+          timeout: 45_000,
+          env: { ...process.env, SANDBOX_TIMEOUT: '15' },
+        });
         
         // If Docker is running, the sandbox has --network none. It should block egress.
         if (output.includes('Egress success:')) {
