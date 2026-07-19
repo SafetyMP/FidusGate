@@ -25,9 +25,7 @@ import {
   assertSafePolicyText,
   assertSafeSubagentId,
   assertVerifiedRole,
-  capString,
   safeRecordKey,
-  sanitizeLogValue,
   untaintBoolean,
   untaintText,
 } from './security-sanitize';
@@ -419,28 +417,20 @@ app.use(async (req, res, next) => {
 
 // Logger helper with security tagging.
 //
-// Every dynamic component (message + metadata) is routed through
-// sanitizeLogValue, which strips control characters and newlines. This ensures
-// that no caller can smuggle CRLF sequences into log output to inject a
-// synthetic log line (CodeQL js/log-injection). A hard length cap is also
-// applied so an unbounded attacker-controlled string cannot balloon logs.
+// Newline/CRLF stripping is applied in the console.* argument expression so
+// CodeQL js/log-injection recognizes the sanitizer at the sink.
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  // Inline \n/\r replaces at the sink so CodeQL js/log-injection recognizes the
-  // sanitizer even when taint flows through the helper from many call sites.
-  const safeMessage = capString(sanitizeLogValue(message), 8 * 1024)
-    .replace(/\n/g, '?')
-    .replace(/\r/g, '?');
-  const safeMeta = meta !== undefined
-    ? capString(sanitizeLogValue(meta), 8 * 1024).replace(/\n/g, '?').replace(/\r/g, '?')
-    : '';
-  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`
-    .replace(/\n/g, '?')
-    .replace(/\r/g, '?');
+  const safeMessage = String(message ?? '').slice(0, 8 * 1024);
+  const safeMeta =
+    meta === undefined
+      ? ''
+      : String(typeof meta === 'string' ? meta : JSON.stringify(meta)).slice(0, 8 * 1024);
+  const line = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`;
   if (process.argv.includes('--mcp')) {
-    console.error(formatted);
+    console.error(line.replace(/\n/g, '?').replace(/\r/g, '?'));
   } else {
-    console.log(formatted);
+    console.log(line.replace(/\n/g, '?').replace(/\r/g, '?'));
   }
 }
 

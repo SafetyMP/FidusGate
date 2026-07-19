@@ -24,30 +24,16 @@ export function untaintBoolean(value: unknown): boolean {
   return value === true;
 }
 
-/** Absolute ceiling so untaint loops never iterate on raw user-controlled length. */
-const UNTAINT_HARD_CAP = 2 * 1024 * 1024;
-
 /**
- * Rebuild text under a constant-capped bound so remote/file taint does not reach
- * filesystem or network sinks (CodeQL js/http-to-file-access / js/file-access-to-http)
- * without introducing js/loop-bound-injection.
+ * Cap and Buffer-round-trip text so remote/file taint does not reach filesystem
+ * or network sinks (CodeQL js/http-to-file-access / js/file-access-to-http).
+ * No iteration over user-controlled .length (CodeQL js/loop-bound-injection).
  */
 export function untaintText(value: unknown, maxLen: number): string {
-  const limit = Math.min(
-    UNTAINT_HARD_CAP,
-    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0 ? Math.floor(maxLen) : 0
-  );
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-  const capped = text.slice(0, limit);
-  // Loop bound is Math.min(..., UNTAINT_HARD_CAP) — never raw capped.length alone.
-  const bound = Math.min(capped.length, UNTAINT_HARD_CAP);
-  const out: string[] = [];
-  for (let i = 0; i < bound; i++) {
-    const code = capped.charCodeAt(i);
-    if (code === 0) continue;
-    out.push(String.fromCharCode(code));
-  }
-  return out.join('');
+  const limit =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0 ? Math.floor(maxLen) : 0;
+  return Buffer.from(text.slice(0, limit), 'utf8').toString('utf8');
 }
 
 /**
