@@ -8,6 +8,14 @@ import { SandboxTab } from './tabs/SandboxTab';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 
 const API_BASE = '/api';
+const SAFE_RESOURCE_ID = /^[a-zA-Z0-9._@-]{1,128}$/;
+
+function assertSafeResourceId(value: string, label: string): string {
+  if (!SAFE_RESOURCE_ID.test(value)) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return value;
+}
 
 export default function App() {
   // State variables
@@ -464,7 +472,8 @@ export default function App() {
 
   const handleDownloadComplianceReceipt = async (logId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/logs/compliance/${logId}/export`, {
+      const safeLogId = assertSafeResourceId(logId, 'logId');
+      const res = await fetch(`${API_BASE}/logs/compliance/${encodeURIComponent(safeLogId)}/export`, {
         headers: getHeaders()
       });
 
@@ -473,7 +482,7 @@ export default function App() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `fidusgate-compliance-receipt-${logId}.json`;
+        a.download = `fidusgate-compliance-receipt-${safeLogId}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -900,7 +909,8 @@ export default function App() {
 
     setConsensusLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/consensus/requests/${actionId}/override`, {
+      const safeActionId = assertSafeResourceId(actionId, 'actionId');
+      const res = await fetch(`${API_BASE}/consensus/requests/${encodeURIComponent(safeActionId)}/override`, {
         method: 'POST',
         headers: getHeaders()
       });

@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { assertSafeRelativePath, assertSafeSubagentId } from './security-sanitize';
 
 export type BroadcastWSFn = (event: string, data: any) => void;
 
@@ -200,19 +201,20 @@ export class IBPComplianceTracker {
   }
 
   public recordSubagentTokenUsage(subagentId: string, estimatedTokens: number, maxBudget?: number) {
+    const safeSubagentId = assertSafeSubagentId(subagentId);
     if (!this.state.subagentBudgets) {
       this.state.subagentBudgets = {};
     }
-    if (!this.state.subagentBudgets[subagentId]) {
-      this.state.subagentBudgets[subagentId] = {
+    if (!this.state.subagentBudgets[safeSubagentId]) {
+      this.state.subagentBudgets[safeSubagentId] = {
         tokenBudget: maxBudget || 20000,
         tokensConsumed: 0
       };
     } else if (maxBudget !== undefined) {
-      this.state.subagentBudgets[subagentId].tokenBudget = maxBudget;
+      this.state.subagentBudgets[safeSubagentId].tokenBudget = maxBudget;
     }
     
-    this.state.subagentBudgets[subagentId].tokensConsumed += estimatedTokens;
+    this.state.subagentBudgets[safeSubagentId].tokensConsumed += estimatedTokens;
     this.state.tokensConsumed += estimatedTokens;
     this.saveState();
     this.broadcastWS('ibp_state_updated', this.getState());
@@ -367,13 +369,18 @@ export class PLMComplianceTracker {
       // version-bump gate — only an explicit version bump should.
       if (filePath.endsWith('package.json')) {
         try {
-          const absPath = path.resolve(process.cwd(), filePath);
+          const safeFilePath = assertSafeRelativePath(filePath, 'filePath');
+          const baseDir = path.resolve(process.cwd());
+          const absPath = path.resolve(baseDir, safeFilePath);
+          if (!absPath.startsWith(baseDir + path.sep)) {
+            return;
+          }
           if (fs.existsSync(absPath)) {
             const pkg = JSON.parse(fs.readFileSync(absPath, 'utf8'));
             const version: string = pkg.version || '';
-            const prevVersion: string = this._lastKnownPackageVersion[filePath] || '';
+            const prevVersion: string = this._lastKnownPackageVersion[safeFilePath] || '';
             if (!prevVersion || version !== prevVersion) {
-              this._lastKnownPackageVersion[filePath] = version;
+              this._lastKnownPackageVersion[safeFilePath] = version;
               // Only mark updated if version actually changed (not on first write)
               if (prevVersion && version !== prevVersion) {
                 this.state.releaseVersionUpdated = true;
