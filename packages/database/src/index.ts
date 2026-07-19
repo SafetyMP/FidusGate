@@ -195,14 +195,18 @@ async function lockAndModifyAsync(filePath: string, modifyFn: (currentData: any)
   await acquireLockAsync(lockPath);
   try {
     let currentData = defaultValue;
-    const exists = await fs.promises.stat(filePath).then(() => true).catch(() => false);
-    if (exists) {
+    // Read directly and treat any read/parse error as "no state yet" — matches
+    // legacy behavior and removes the prior stat-then-read TOCTOU race
+    // (CodeQL js/file-system-race).
+    try {
+      const fileContent = await fs.promises.readFile(filePath, 'utf-8');
       try {
-        const fileContent = await fs.promises.readFile(filePath, 'utf-8');
         currentData = JSON.parse(fileContent);
-      } catch (e) {
+      } catch {
         currentData = defaultValue;
       }
+    } catch {
+      currentData = defaultValue;
     }
     const updatedData = modifyFn(currentData);
     await writeJsonAtomicAsync(filePath, updatedData);
@@ -342,16 +346,21 @@ export class FidusGateDatabase {
     }
 
     const copyTemplateOrWriteDefault = (filePath: string, defaultContent: any) => {
-      if (fs.existsSync(filePath)) return;
+      // Use O_CREAT|O_EXCL ('wx') so the seed write is atomic and races with
+      // another process/thread trying to seed the same file cannot clobber it
+      // (CodeQL js/file-system-race).
       const filename = path.basename(filePath);
       const templatePath = path.join(DATA_DIR, 'templates', filename);
-      if (fs.existsSync(templatePath)) {
-        try {
-          fs.copyFileSync(templatePath, filePath);
-          return;
-        } catch (e) {}
+      const payload = fs.existsSync(templatePath)
+        ? (() => { try { return fs.readFileSync(templatePath); } catch { return null; } })()
+        : null;
+      const contents = payload ?? Buffer.from(JSON.stringify(defaultContent, null, 2), 'utf-8');
+      try {
+        fs.writeFileSync(filePath, contents, { flag: 'wx' });
+      } catch (err: any) {
+        if (err && err.code === 'EEXIST') return;
+        throw err;
       }
-      fs.writeFileSync(filePath, JSON.stringify(defaultContent, null, 2), 'utf-8');
     };
     
     copyTemplateOrWriteDefault(TX_FILE, INITIAL_TRANSACTIONS);

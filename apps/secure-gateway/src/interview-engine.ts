@@ -148,7 +148,15 @@ export async function conductInterview(
   let agentResponse: string | null = null;
 
   if (apiKey) {
-    const dossierText = formatDossierForPrompt(dossier);
+    // Cap disk-sourced dossier + interviewer question before shipping them to the
+    // external Gemini endpoint (CodeQL js/file-access-to-http).
+    const MAX_DOSSIER_LEN = 48 * 1024;
+    const MAX_QUESTION_LEN = 4 * 1024;
+    const rawDossier = formatDossierForPrompt(dossier);
+    const dossierText = rawDossier.length > MAX_DOSSIER_LEN ? rawDossier.slice(0, MAX_DOSSIER_LEN) : rawDossier;
+    const safeQuestion = typeof question === 'string' && question.length > MAX_QUESTION_LEN
+      ? question.slice(0, MAX_QUESTION_LEN)
+      : question;
 
     const systemInstruction = `You are the AI agent identified as "${dossier.quarantineRecord.principalId}".
 
@@ -165,13 +173,13 @@ ${dossierText}`;
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: 'user', parts: [{ text: question }] }],
+            contents: [{ role: 'user', parts: [{ text: safeQuestion }] }],
             generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
           }),
           signal: AbortSignal.timeout(30000)

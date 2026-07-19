@@ -1,6 +1,22 @@
 import * as path from 'node:path';
 
 /**
+ * Hard upper bound on the command-line length we're willing to tokenize.
+ * Prevents user-controlled loops (CodeQL js/loop-bound-injection) and generic
+ * pathological inputs from consuming CPU inside the auditor.
+ */
+export const MAX_COMMAND_LINE_LENGTH = 8 * 1024;
+
+/**
+ * Escape a value so it is safe to embed inside a double-quoted shell literal.
+ * Backslashes MUST be escaped before quotes; otherwise the sanitization is
+ * incomplete (CodeQL js/incomplete-sanitization).
+ */
+export function escapeForDoubleQuotedShell(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
  * Tokenizes a raw shell command line string into its argument components,
  * respecting double quotes, single quotes, and backslash escaping.
  */
@@ -11,8 +27,14 @@ export function parseShellCommand(commandLine: string): string[] {
   let inSingleQuotes = false;
   let escaped = false;
 
-  for (let i = 0; i < commandLine.length; i++) {
-    const char = commandLine[i];
+  // Cap the loop bound so a user-controlled string can never drive an unbounded
+  // scan (CodeQL js/loop-bound-injection).
+  const bounded = commandLine.length > MAX_COMMAND_LINE_LENGTH
+    ? commandLine.slice(0, MAX_COMMAND_LINE_LENGTH)
+    : commandLine;
+
+  for (let i = 0; i < bounded.length; i++) {
+    const char = bounded[i];
 
     if (escaped) {
       current += char;
@@ -69,10 +91,24 @@ export interface AuditResult {
  * Audits a tokenized command line against a strict, zero-trust binary allowlist schema.
  */
 export function isCommandLineSecure(commandLine: string): AuditResult {
+  if (typeof commandLine !== 'string') {
+    return {
+      secure: false,
+      reason: 'Command line must be a string.',
+      remediationSuggestion: 'Pass the raw command as a UTF-8 string.'
+    };
+  }
+  if (commandLine.length > MAX_COMMAND_LINE_LENGTH) {
+    return {
+      secure: false,
+      reason: `Command line exceeds maximum length of ${MAX_COMMAND_LINE_LENGTH} characters.`,
+      remediationSuggestion: 'Split the command or wrap the workload into a pre-approved script.'
+    };
+  }
   const cleanCmd = commandLine.trim();
   if (cleanCmd.length === 0) {
-    return { 
-      secure: false, 
+    return {
+      secure: false,
       reason: 'Command line is empty.',
       remediationSuggestion: 'Ensure a valid non-empty utility or shell script path is specified.'
     };
@@ -123,10 +159,13 @@ export function isCommandLineSecure(commandLine: string): AuditResult {
     if (binaryName === 'curl' || binaryName === 'wget') {
       suggestion = "Network downloads via curl/wget are forbidden. Retrieve dependencies via pre-approved package files or utilize the secure proxy gateway.";
     } else if (['pip', 'pip3', 'python', 'python3', 'go', 'cargo', 'rustc'].includes(binaryName)) {
-      suggestion = `Dynamic compilation with '${binaryName}' is blocked on the host. Please execute tool chains inside the sandboxed overlay via 'scripts/sandbox-execute.sh "${cleanCmd.replace(/"/g, '\\"')}"'.`;
+      // Escape backslashes first, then double quotes — order matters or the
+      // sanitization is incomplete (CodeQL js/incomplete-sanitization).
+      const escapedCmd = escapeForDoubleQuotedShell(cleanCmd);
+      suggestion = `Dynamic compilation with '${binaryName}' is blocked on the host. Please execute tool chains inside the sandboxed overlay via 'scripts/sandbox-execute.sh "${escapedCmd}"'.`;
       fix = {
         target: cleanCmd,
-        replacement: `bash scripts/sandbox-execute.sh "${cleanCmd.replace(/"/g, '\\"')}" "${process.cwd()}"`
+        replacement: `bash scripts/sandbox-execute.sh "${escapedCmd}" "${escapeForDoubleQuotedShell(process.cwd())}"`
       };
     }
     
