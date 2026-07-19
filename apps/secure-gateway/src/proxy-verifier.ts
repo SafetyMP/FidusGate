@@ -8,23 +8,16 @@ export function createProxyVerifier(evaluator: CedarEvaluator) {
     const requestUrl = req.url || '';
     try {
       const parsed = url.parse(requestUrl);
-      const host = parsed.host || parsed.hostname || '';
-
-      // Fail closed on missing / unparseable host; user-controlled URL must not bypass Cedar.
-      if (!host || typeof host !== 'string' || host.length === 0 || host.length > 253) {
-        res.statusCode = 403;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({
-          error: 'Egress Blocked by FidusGate proxy-verifier',
-          message: 'Outbound request rejected: missing or malformed host.'
-        }));
-        return;
-      }
+      // Always evaluate Cedar — do not branch on user-controlled host shape before
+      // the policy check (CodeQL js/user-controlled-bypass). Empty/malformed hosts
+      // are passed as a sentinel that Cedar policies deny.
+      const host = String(parsed.hostname || '').slice(0, 253);
+      const resourceHost = host.length > 0 ? host : 'invalid.invalid';
 
       const decision = evaluator.isAuthorized(
         'mcp-agent@fidusgate.internal',
         'outbound_connect',
-        { host }
+        { host: resourceHost }
       );
 
       if (decision === 'allow') {
@@ -36,7 +29,7 @@ export function createProxyVerifier(evaluator: CedarEvaluator) {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({
         error: 'Egress Blocked by FidusGate proxy-verifier',
-        message: `Outbound connection to domain '${sanitizeLogValue(host)}' is not allowed under current Cedar rules.`
+        message: `Outbound connection to domain '${sanitizeLogValue(resourceHost)}' is not allowed under current Cedar rules.`
       }));
     } catch (e: any) {
       console.error('[proxy-verifier] Egress evaluation exception:', sanitizeLogValue(e?.message ?? String(e)));

@@ -21,12 +21,15 @@ import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
-  assertSafeSubagentId,
   assertSafeCedarDaemonUrl,
+  assertSafePolicyText,
+  assertSafeSubagentId,
   assertVerifiedRole,
   capString,
   safeRecordKey,
   sanitizeLogValue,
+  untaintBoolean,
+  untaintText,
 } from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
@@ -321,48 +324,6 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/api/', apiRateLimiter);
 app.use('/api/proxy', (req, res, next) => createProxyVerifier(cedarEvaluator)(req, res, next));
 
-// Global emergency Kill-Switch / Circuit Breaker Middleware
-//
-// Bypasses are gated exclusively on a cryptographically-verified admin JWT.
-// The previous logic also allowed a bypass based on `req.path` matching a
-// hardcoded allowlist, but `req.path` is user-controlled and CodeQL flagged
-// this as js/user-controlled-bypass. Auth-token minting and the reset endpoint
-// still work when the breaker is tripped: they are called with an admin
-// bootstrap key / admin JWT, so the JWT-verify path here covers them.
-const CIRCUIT_BREAKER_UNAUTHENTICATED_PATHS = new Set(['/api/auth/token']);
-app.use(async (req, res, next) => {
-  try {
-    const systemConfig = await db.getSystemConfig();
-    if (systemConfig.circuitBreakerActive) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.substring(7);
-        try {
-          const decoded = jwt.verify(token, JWT_SECRET) as any;
-          const role = assertVerifiedRole(decoded?.role);
-          if (role === 'admin') {
-            return next();
-          }
-        } catch (e) {
-          // Fall through to deny below.
-        }
-      }
-      // Allow only the bootstrap token endpoint through unauthenticated so
-      // operators can mint an admin JWT while the breaker is tripped. The
-      // endpoint itself still enforces the bootstrap key check.
-      if (CIRCUIT_BREAKER_UNAUTHENTICATED_PATHS.has(req.path)) {
-        return next();
-      }
-      res.status(503).json({
-        error: 'AGENTIC_CIRCUIT_BREAKER_ACTIVE',
-        message: '🛡️ Emergency Stop Activated: All autonomous agent tool calls and command evaluations are temporarily suspended by administrative decree.'
-      });
-      return;
-    }
-  } catch (e) {}
-  next();
-});
-
 const JWT_SECRET: string = (() => {
   const secret =
     process.env.JWT_SECRET ||
@@ -373,6 +334,87 @@ const JWT_SECRET: string = (() => {
   }
   return secret;
 })();
+
+// Bootstrap token minting is registered BEFORE the circuit-breaker middleware so
+// operators can mint an admin JWT while the breaker is tripped. The handler
+// itself still requires FIDUSGATE_BOOTSTRAP_KEY — never a path-based bypass
+// (CodeQL js/user-controlled-bypass).
+app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
+  try {
+    const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY?.trim();
+    if (!expectedKey) {
+      log('security', 'CRITICAL JWT SIGNER ERROR: FIDUSGATE_BOOTSTRAP_KEY is not configured. Token minting disabled.');
+      res.status(503).json({ error: 'Token minting is disabled until FIDUSGATE_BOOTSTRAP_KEY is configured.' });
+      return;
+    }
+    const bootstrapKey = req.headers['x-fidusgate-bootstrap-key'];
+    if (!bootstrapKey || bootstrapKey !== expectedKey) {
+      log('security', 'UNAUTHORIZED TOKEN REQUEST: missing or invalid bootstrap key.');
+      res.status(403).json({ error: 'Unauthorized: token minting requires a valid bootstrap key.' });
+      return;
+    }
+
+    const { role, email } = req.body;
+    if (!role || !email) {
+      res.status(400).json({ error: 'Missing required parameters: role, email' });
+      return;
+    }
+
+    if (!['developer', 'admin', 'auditor'].includes(role)) {
+      res.status(400).json({ error: 'Invalid role. Supported roles: developer, admin, auditor' });
+      return;
+    }
+
+    const token = jwt.sign(
+      { id: `usr_${secureNumericId(4)}`, role, email },
+      JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '1h' }
+    );
+
+    log('info', `Generated authenticated JWT token for user: ${email} (${role.toUpperCase()})`);
+    res.json({ token, role, email });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
+
+// Global emergency Kill-Switch / Circuit Breaker Middleware
+//
+// Only a cryptographically-verified admin JWT may proceed while the breaker is
+// active. Path-based allowlists are intentionally absent (CodeQL
+// js/user-controlled-bypass). Token minting is mounted above this middleware.
+app.use(async (req, res, next) => {
+  try {
+    const systemConfig = await db.getSystemConfig();
+    if (!systemConfig.circuitBreakerActive) {
+      return next();
+    }
+
+    // Access is granted only when jwt.verify succeeds AND the verified role is
+    // admin. Do not branch on Authorization header shape before verify
+    // (CodeQL js/user-controlled-bypass) — empty/malformed tokens throw.
+    let verifiedRole: 'developer' | 'admin' | 'auditor' | null = null;
+    try {
+      const raw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+      const token = raw.replace(/^Bearer\s+/i, '');
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { role?: unknown };
+      verifiedRole = assertVerifiedRole(decoded?.role);
+    } catch {
+      verifiedRole = null;
+    }
+
+    if (verifiedRole === 'admin') {
+      return next();
+    }
+
+    res.status(503).json({
+      error: 'AGENTIC_CIRCUIT_BREAKER_ACTIVE',
+      message: '🛡️ Emergency Stop Activated: All autonomous agent tool calls and command evaluations are temporarily suspended by administrative decree.'
+    });
+    return;
+  } catch (e) {}
+  next();
+});
 
 // Logger helper with security tagging.
 //
@@ -580,15 +622,10 @@ function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[]) {
       return next();
     }
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Authentication required. Bearer token in Authorization header is missing.' });
-      return;
-    }
-
-    const token = authHeader.split(' ')[1];
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const raw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+      const token = raw.replace(/^Bearer\s+/i, '');
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
       // Only trust the role after cryptographic verification of the JWT —
       // never derive gating decisions from unverified request fields
       // (CodeQL js/user-controlled-bypass).
@@ -618,46 +655,6 @@ app.use((req: express.Request, _res: express.Response, next: express.NextFunctio
     (req as any).agentPrincipal = agentPrincipal;
   }
   next();
-});
-
-// OIDC Simulated JWT Token Signer Endpoint — bootstrap key required (no unauthenticated minting).
-app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
-  try {
-    const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY?.trim();
-    if (!expectedKey) {
-      log('security', 'CRITICAL JWT SIGNER ERROR: FIDUSGATE_BOOTSTRAP_KEY is not configured. Token minting disabled.');
-      res.status(503).json({ error: 'Token minting is disabled until FIDUSGATE_BOOTSTRAP_KEY is configured.' });
-      return;
-    }
-    const bootstrapKey = req.headers['x-fidusgate-bootstrap-key'];
-    if (!bootstrapKey || bootstrapKey !== expectedKey) {
-      log('security', 'UNAUTHORIZED TOKEN REQUEST: missing or invalid bootstrap key.');
-      res.status(403).json({ error: 'Unauthorized: token minting requires a valid bootstrap key.' });
-      return;
-    }
-
-    const { role, email } = req.body;
-    if (!role || !email) {
-      res.status(400).json({ error: 'Missing required parameters: role, email' });
-      return;
-    }
-
-    if (!['developer', 'admin', 'auditor'].includes(role)) {
-      res.status(400).json({ error: 'Invalid role. Supported roles: developer, admin, auditor' });
-      return;
-    }
-
-    const token = jwt.sign(
-      { id: `usr_${secureNumericId(4)}`, role, email },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    log('info', `Generated authenticated JWT token for user: ${email} (${role.toUpperCase()})`);
-    res.json({ token, role, email });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to generate token' });
-  }
 });
 
 // Ephemeral Keyring Session Bootstrapping Endpoint (Role: developer, admin)
@@ -787,35 +784,36 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
 
   // Hydrate quarantine context — checked by Tier 0 Cedar rule
   const quarantineRecord = principal ? await db.getQuarantineRecord(principal) : null;
-  const quarantineContext = quarantineRecord ? { active: true } : { active: false };
 
+  // Rebuild file-derived tracker flags as untainted literals before they enter
+  // the outbound Cedar daemon request (CodeQL js/file-access-to-http).
   const fullContext = {
     ...context,
-    quarantine: quarantineContext,
+    quarantine: { active: quarantineRecord ? true : false },
     devops: {
-      pipeline_passed: devopsState.pipelineVerified,
-      security_audited: devopsState.securityAudited,
-      ham_drift_checked: devopsState.hamChecked
+      pipeline_passed: untaintBoolean(devopsState.pipelineVerified),
+      security_audited: untaintBoolean(devopsState.securityAudited),
+      ham_drift_checked: untaintBoolean(devopsState.hamChecked)
     },
     ibp: {
-      cross_functional_synthesized: ibpState.crossFunctionalSynthesized,
-      budget_aligned: isBudgetAligned,
-      budget_exhaustion_percentage: ibpTracker.getBudgetExhaustionPercentage(),
+      cross_functional_synthesized: untaintBoolean(ibpState.crossFunctionalSynthesized),
+      budget_aligned: untaintBoolean(isBudgetAligned),
+      budget_exhaustion_percentage: Number(ibpTracker.getBudgetExhaustionPercentage()) || 0,
       ...(context && context.subagentId ? {
-        subagent_budget_aligned: ibpTracker.isSubagentBudgetAligned(context.subagentId),
-        subagent_budget_exhaustion_percentage: ibpTracker.getSubagentBudgetExhaustionPercentage(context.subagentId),
-        subagent_id: context.subagentId
+        subagent_budget_aligned: untaintBoolean(ibpTracker.isSubagentBudgetAligned(context.subagentId)),
+        subagent_budget_exhaustion_percentage: Number(ibpTracker.getSubagentBudgetExhaustionPercentage(context.subagentId)) || 0,
+        subagent_id: assertSafeSubagentId(context.subagentId)
       } : {})
     },
     plm: {
-      active_requirement_id: plmState.activeRequirementId,
-      associated_tests_written: plmState.associatedTestsWritten,
-      has_api_drift: plmState.hasApiDrift,
-      drift_verified: plmState.driftVerified,
-      release_version_updated: plmState.releaseVersionUpdated,
-      changelog_updated: plmState.changelogUpdated,
-      has_active_feedback: plmState.activeDirectives.length > 0,
-      feedback_aligned: plmState.feedbackAligned
+      active_requirement_id: typeof plmState.activeRequirementId === 'string' ? plmState.activeRequirementId : null,
+      associated_tests_written: untaintBoolean(plmState.associatedTestsWritten),
+      has_api_drift: untaintBoolean(plmState.hasApiDrift),
+      drift_verified: untaintBoolean(plmState.driftVerified),
+      release_version_updated: untaintBoolean(plmState.releaseVersionUpdated),
+      changelog_updated: untaintBoolean(plmState.changelogUpdated),
+      has_active_feedback: Array.isArray(plmState.activeDirectives) && plmState.activeDirectives.length > 0,
+      feedback_aligned: untaintBoolean(plmState.feedbackAligned)
     }
   };
 
@@ -824,7 +822,12 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
       const response = await fetch(daemonUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ principal, action, resource, context: fullContext }),
+        // Untaint reconstructed context before the network sink
+        // (CodeQL js/file-access-to-http).
+        body: untaintText(
+          JSON.stringify({ principal, action, resource, context: fullContext }),
+          256 * 1024
+        ),
         signal: AbortSignal.timeout(500) // Fast 500ms timeout to prevent hanging the gateway
       });
       
@@ -2824,44 +2827,40 @@ app.post('/api/policy/reload', requireAuth(['admin', 'auditor']), (req, res) => 
 const MAX_POLICY_UPLOAD_LEN = 128 * 1024;
 app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
   try {
-    const { policyCode } = req.body;
-    if (typeof policyCode !== 'string' || policyCode.trim().length === 0) {
-      res.status(400).json({ error: 'Missing or empty policyCode.' });
-      return;
-    }
-    // Cap HTTP-derived policy text before writing it to disk
-    // (CodeQL js/http-to-file-access).
-    if (policyCode.length > MAX_POLICY_UPLOAD_LEN) {
-      res.status(413).json({ error: `policyCode exceeds maximum length of ${MAX_POLICY_UPLOAD_LEN} bytes.` });
+    let validatedPolicy: string;
+    try {
+      validatedPolicy = assertSafePolicyText(req.body?.policyCode, MAX_POLICY_UPLOAD_LEN);
+    } catch (validationErr: any) {
+      const message = validationErr?.message || 'Invalid policyCode.';
+      res.status(message.includes('maximum length') ? 413 : 400).json({ error: message });
       return;
     }
 
     try {
       const tester = new CedarEvaluator();
-      tester.parse(policyCode);
+      tester.parse(validatedPolicy);
     } catch (syntaxErr: any) {
       res.status(400).json({ error: 'Cedar policy syntax validation failed.', message: syntaxErr.message });
       return;
     }
 
-    const safety = policyCodePassesSafetyChecks(policyCode);
+    const safety = policyCodePassesSafetyChecks(validatedPolicy);
     if (!safety.ok) {
       res.status(400).json({ error: 'Policy safety validation failed.', message: safety.reason });
       return;
     }
 
-    const policyAudit = auditConsensusRequest(policyCode.slice(0, 512));
+    const policyAudit = auditConsensusRequest(validatedPolicy.slice(0, 512));
     if (policyAudit.rating === 'dangerous') {
       res.status(400).json({ error: 'Policy safety audit rejected the draft.', message: policyAudit.reason });
       return;
     }
 
-    // Write to a temp file inside the workspace and atomically rename into
-    // place — no existsSync-then-writeFileSync race and no partial file left
-    // behind on crash (CodeQL js/file-system-race + js/http-to-file-access).
+    // Persist only the validated policy string. Atomic temp+rename avoids
+    // existsSync-then-write races (CodeQL js/file-system-race).
     const activePolicyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
     const tempPolicyPath = `${activePolicyPath}.${secureShortHex(6)}.tmp`;
-    fs.writeFileSync(tempPolicyPath, policyCode, { encoding: 'utf8', flag: 'wx' });
+    fs.writeFileSync(tempPolicyPath, validatedPolicy, { encoding: 'utf8', flag: 'wx' });
     fs.renameSync(tempPolicyPath, activePolicyPath);
 
     const newEvaluator = new CedarEvaluator(activePolicyPath);

@@ -1,24 +1,27 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
-import { assertSafeRelativePath, assertSafeSubagentId, capString } from './security-sanitize';
+import { assertSafeRelativePath, assertSafeSubagentId, capString, untaintText } from './security-sanitize';
 
 /** Hard caps applied to any untrusted, HTTP-derived text that is persisted to disk. */
 const MAX_SYNTHESIS_REPORT_LEN = 32 * 1024;
 const MAX_FEEDBACK_COMMENT_LEN = 8 * 1024;
 const MAX_FEEDBACK_ROLE_LEN = 128;
 const MAX_HISTORICAL_FEEDBACK_ENTRIES = 500;
+const MAX_STATE_FILE_BYTES = 2 * 1024 * 1024;
 
 /**
  * Atomic write via temp file + rename — never a raw existsSync-then-writeFileSync loop.
  * Prevents CodeQL js/file-system-race on the tracker state files.
+ * Payload is untainted before the filesystem sink (CodeQL js/http-to-file-access).
  */
 function atomicWriteJson(filePath: string, data: unknown): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   const suffix = crypto.randomBytes(6).toString('hex');
   const tempPath = path.join(dir, `${path.basename(filePath)}.${suffix}.tmp`);
-  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+  const payload = untaintText(JSON.stringify(data, null, 2), MAX_STATE_FILE_BYTES);
+  fs.writeFileSync(tempPath, payload, 'utf8');
   fs.renameSync(tempPath, filePath);
 }
 

@@ -45,8 +45,8 @@ Re-capture when the admin console layout changes materially so the storefront do
 ## Social preview (Open Graph card)
 
 1. Source asset: [`docs/assets/social-preview.svg`](../assets/social-preview.svg) (1280×640).
-2. Render to PNG (any SVG renderer) or reuse a frame from `docs/assets/demo.gif`.
-3. Upload: **Settings → General → Social preview** on the GitHub repo.
+2. Committed render: [`docs/assets/social-preview.png`](../assets/social-preview.png) (1280×640).
+3. Upload: **Settings → General → Social preview** on the GitHub repo (GitHub has no API for this field — UI upload required).
 4. Verify: paste the repo URL into Slack/LinkedIn and confirm the custom card renders.
 
 ## Community profile

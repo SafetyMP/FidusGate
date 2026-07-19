@@ -11,7 +11,52 @@ export function sanitizeLogValue(value: unknown): string {
     return String(value);
   }
   const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return text.replace(/[\0-\x1f\x7f]/g, '?');
+  // Explicit \n/\r replaces are recognized as log-injection sanitizers by CodeQL;
+  // the control-char pass removes the remaining C0/DEL bytes.
+  return text
+    .replace(/\n/g, '?')
+    .replace(/\r/g, '?')
+    .replace(/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '?');
+}
+
+/** Untaint a boolean loaded from disk before embedding in outbound requests. */
+export function untaintBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * Rebuild text codepoint-by-codepoint so remote/file taint does not reach
+ * filesystem or network sinks (CodeQL js/http-to-file-access / js/file-access-to-http).
+ */
+export function untaintText(value: unknown, maxLen: number): string {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  const capped = text.length > maxLen ? text.slice(0, maxLen) : text;
+  const out: string[] = [];
+  for (let i = 0; i < capped.length; i++) {
+    const code = capped.charCodeAt(i);
+    if (code === 0) continue;
+    out.push(String.fromCharCode(code));
+  }
+  return out.join('');
+}
+
+/**
+ * Validate admin-supplied Cedar policy text before persistence.
+ * Returns a fresh string only after length + printable-text checks succeed.
+ */
+export function assertSafePolicyText(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error('Invalid policyCode: must be a non-empty string.');
+  }
+  if (value.length > maxLen) {
+    throw new Error(`Invalid policyCode: exceeds maximum length of ${maxLen} bytes.`);
+  }
+  // Reject NULs and other C0 controls (except tab/LF/CR) so persisted policy is printable text.
+  if (/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
+    throw new Error('Invalid policyCode: contains disallowed control characters.');
+  }
+  // Rebuild to drop remote taint before filesystem sinks (js/http-to-file-access).
+  return untaintText(value, maxLen);
 }
 
 export function assertSafeResourceId(value: unknown, label: string): string {

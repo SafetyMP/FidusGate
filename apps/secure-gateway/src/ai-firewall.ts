@@ -4,8 +4,6 @@
  * and measures cosine similarity against known adversarial injection profiles.
  */
 
-import { sanitizeLogValue } from './security-sanitize';
-
 export interface FirewallResult {
   secure: boolean;
   reason?: string;
@@ -117,7 +115,9 @@ export function isPromptSecure(prompt: string): FirewallResult {
 
   for (const item of forbiddenPatterns) {
     if (item.pattern.test(promptLower)) {
-      console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: ${item.label} detected in prompt: "${sanitizeLogValue(prompt)}"`);
+      // Log only the rule label — never echo attacker-controlled prompt text
+      // (CodeQL js/log-injection).
+      console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: ${item.label} detected in prompt.`);
       return {
         secure: false,
         reason: `Adversarial input blocked: ${item.label}.`,
@@ -128,7 +128,7 @@ export function isPromptSecure(prompt: string): FirewallResult {
 
   // 2. Scan for SQL/Script injections
   if (promptLower.includes('<script>') || promptLower.includes('javascript:') || promptLower.includes('union select')) {
-    console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Script/Payload injection detected in prompt: "${sanitizeLogValue(prompt)}"`);
+    console.warn('🛡️  [PROMPT FIREWALL BLOCKED]: Script/Payload injection detected in prompt.');
     return {
       secure: false,
       reason: 'Script or payload injection detected.',
@@ -147,7 +147,7 @@ export function isPromptSecure(prompt: string): FirewallResult {
       if (decoded.length >= 6 && isPrintableText(decoded)) {
         const decodedResult = isPromptSecure(decoded);
         if (!decodedResult.secure) {
-          console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Obfuscated Base64 injection detected: "${sanitizeLogValue(candidate)}" -> "${sanitizeLogValue(decoded)}"`);
+          console.warn('🛡️  [PROMPT FIREWALL BLOCKED]: Obfuscated Base64 injection detected in prompt.');
           return {
             secure: false,
             reason: `Adversarial obfuscated input blocked: Base64 payload contains blocked pattern.`,
