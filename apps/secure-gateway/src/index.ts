@@ -246,22 +246,25 @@ const policyPath = findRootPath(config.policy || 'policy.cedar');
 let cedarEvaluator = new CedarEvaluator(policyPath);
 log('info', `Loaded TS Cedar Policy Parser with ${cedarEvaluator.getRulesCount()} rules. Enforcing mode: ${config.mode.toUpperCase()}`);
 
-// Implement safe filesystem watcher for hot-reloading policy changes
-fs.watch(process.cwd(), (eventType, filename) => {
-  if (filename === 'policy.cedar' || filename === 'policy.cedarschema') {
-    log('info', `Detected filesystem change in ${filename}. Initiating hot-reload...`);
-    try {
-      const newEvaluator = new CedarEvaluator(policyPath);
-      // Validate the evaluator has successfully parsed rules
-      if (newEvaluator.getRulesCount() >= 0) {
-        cedarEvaluator = newEvaluator;
-        log('info', `✅ HOT-RELOAD SUCCESSFUL: Loaded new Cedar policy with ${cedarEvaluator.getRulesCount()} rules.`);
+// Implement safe filesystem watcher for hot-reloading policy changes.
+// Skip under tests — leftover watchers trip node:test with EMFILE after the suite ends.
+if (process.env.FIDUSGATE_TEST !== 'true' && process.env.NODE_ENV !== 'test') {
+  fs.watch(process.cwd(), (eventType, filename) => {
+    if (filename === 'policy.cedar' || filename === 'policy.cedarschema') {
+      log('info', `Detected filesystem change in ${filename}. Initiating hot-reload...`);
+      try {
+        const newEvaluator = new CedarEvaluator(policyPath);
+        // Validate the evaluator has successfully parsed rules
+        if (newEvaluator.getRulesCount() >= 0) {
+          cedarEvaluator = newEvaluator;
+          log('info', `✅ HOT-RELOAD SUCCESSFUL: Loaded new Cedar policy with ${cedarEvaluator.getRulesCount()} rules.`);
+        }
+      } catch (e: any) {
+        log('error', `❌ HOT-RELOAD FAILED: Policy has compilation/syntax errors. Keeping current active policy. Error: ${e.message}`);
       }
-    } catch (e: any) {
-      log('error', `❌ HOT-RELOAD FAILED: Policy has compilation/syntax errors. Keeping current active policy. Error: ${e.message}`);
     }
-  }
-});
+  });
+}
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));

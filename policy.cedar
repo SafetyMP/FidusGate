@@ -478,7 +478,7 @@ permit(
   && principal == "sb:issuer:devops-sme"
 };
 
-// Permit security-sme or de073ae64e43 to modify policy files in the root
+// Permit security-sme to modify policy files in the root
 permit(
   principal,
   action == Action::"call_tool",
@@ -496,7 +496,7 @@ permit(
   && (principal == "sb:issuer:security-sme")
 };
 
-// Permit pm-sme or de073ae64e43 to modify changelogs in the root
+// Permit pm-sme to modify changelogs in the root
 permit(
   principal,
   action == Action::"call_tool",
