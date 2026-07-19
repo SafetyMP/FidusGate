@@ -1,0 +1,10 @@
+---
+description: Compose false-green prevention for worktree + shared Docker stacks
+globs: docker-compose*,scripts/*
+alwaysApply: false
+---
+
+# Compose false-green
+
+Do not run `docker compose`, `smoke-test*.sh`, or integration scripts from worktree cwd.
+Parent runs merge verification on main repo root. See `docs/harness/false-green-checklist.md`.

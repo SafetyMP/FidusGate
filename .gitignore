@@ -131,6 +131,13 @@ out/
 .memory/
 apps/secure-gateway/.memory/
 
+# Harness local state (commit profile.yaml + VERSION + archive/)
+.harness/trajectories/
+.harness/feedback/
+.harness/disclosure.json
+.harness/backup/
+.cursor/hooks/__pycache__/
+
 # FidusGate local JSON database files
 packages/database/data/*.json
 !packages/database/data/templates/
