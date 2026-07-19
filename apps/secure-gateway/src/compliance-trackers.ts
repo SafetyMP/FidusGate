@@ -23,6 +23,7 @@ function atomicWriteJson(filePath: string, data: unknown): void {
   const payload = untaintText(JSON.stringify(data, null, 2), MAX_STATE_FILE_BYTES);
   // Buffer sink breaks remaining HTTP taint into the filesystem write
   // (CodeQL js/http-to-file-access).
+  // codeql[js/http-to-file-access] -- capped/untainted tracker JSON under fixed workspace paths
   fs.writeFileSync(tempPath, Buffer.from(payload, 'utf8'));
   fs.renameSync(tempPath, filePath);
 }

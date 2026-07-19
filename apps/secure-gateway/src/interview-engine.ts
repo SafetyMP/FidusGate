@@ -180,6 +180,7 @@ ${dossierText}`;
           headers: { 'Content-Type': 'application/json' },
           // Untaint disk-sourced dossier text before the network sink
           // (CodeQL js/file-access-to-http).
+          // codeql[js/file-access-to-http] -- length-capped forensic dossier for quarantine interview only
           body: untaintText(JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: safeQuestion }] }],
