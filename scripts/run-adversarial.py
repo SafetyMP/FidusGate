@@ -7,6 +7,7 @@ import fnmatch
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -212,16 +213,55 @@ def run_http_case(
                     raise AssertionError(f"{case['id']}: json[{k}]={parsed.get(k)!r}, want {v!r}")
 
 
+def _resolve_exec_command(command: str, root: Path) -> list[str] | str:
+    """Resolve repo-relative scripts against root; avoid cwd-relative false fails."""
+    stripped = command.strip()
+    rel = stripped[2:] if stripped.startswith("./") else stripped
+    candidate = (root / rel).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError:
+        return stripped
+    if not candidate.is_file():
+        return stripped
+    if candidate.suffix == ".py":
+        return [sys.executable, str(candidate)]
+    return ["bash", str(candidate)]
+
+
+def _worktree_probe_cwd(root: Path, cwd_rel: str) -> tuple[Path, Path | None]:
+    """
+    Mirror scripts/adversarial.sh: nest under .worktrees/<probe>/ so
+    integration-smoke's */.worktrees/* guard matches. Bare `.worktrees` as cwd
+    is not enough and absolute script+cd-to-root would false-pass.
+    """
+    rel = cwd_rel.strip().rstrip("/") or "."
+    if rel == ".worktrees" or rel.endswith("/.worktrees"):
+        probe = root / ".worktrees" / f"adversarial-probe-{os.getpid()}"
+        probe.mkdir(parents=True, exist_ok=True)
+        return probe, probe
+    cwd = root / rel
+    cwd.mkdir(parents=True, exist_ok=True)
+    return cwd, None
+
+
 def run_exec_case(case: dict[str, Any], cell: dict[str, Any], root: Path) -> None:
     fixture = case.get("fixture") or {}
     expect = case.get("expect") or {}
     command = str(fixture.get("command") or cell.get("path") or "")
     if not command:
         raise RuntimeError(f"{case['id']}: EXEC case missing command")
-    cwd_rel = fixture.get("cwd", ".")
-    cwd = root / str(cwd_rel)
-    cwd.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
+    cwd_rel = str(fixture.get("cwd", "."))
+    cwd, cleanup = _worktree_probe_cwd(root, cwd_rel)
+    resolved = _resolve_exec_command(command, root)
+    try:
+        if isinstance(resolved, list):
+            proc = subprocess.run(resolved, cwd=cwd, capture_output=True, text=True)
+        else:
+            proc = subprocess.run(resolved, shell=True, cwd=cwd, capture_output=True, text=True)
+    finally:
+        if cleanup is not None:
+            shutil.rmtree(cleanup, ignore_errors=True)
     expected = expect.get("status", 1)
     if proc.returncode != expected:
         raise AssertionError(

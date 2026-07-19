@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Definition of Done — turbo lint + test (mirrors .github/workflows/ci.yml).
+# Definition of Done — stub canary + npm ci + lint/test + threat-model.
+# Invoked by stop hook and CI verify job (.github/workflows/ci.yml).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

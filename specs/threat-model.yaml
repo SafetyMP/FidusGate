@@ -16,6 +16,8 @@ deny_cases:
     cell: integration_smoke_main_root
     principal: agent_worktree
     fixture:
+      # Runner nests to .worktrees/adversarial-probe-<pid> and invokes the cell
+      # path as an absolute script under repo root (never cwd-relative).
       cwd: .worktrees
     expect:
       status: 1

@@ -29,7 +29,12 @@ Integration (main repo root or CI `integration` job — never from `.worktrees/`
 
 Do **not** put Docker or integration smoke inside `verify.sh`. Child green in a worktree does not imply main-stack green — see `docs/harness/false-green-checklist.md`.
 
-CI mirrors this two-tier split in `.github/workflows/ci.yml` (`verify` + `integration`).
+CI (`.github/workflows/ci.yml`) mirrors this two-tier split:
+
+| Job | Runs |
+|-----|------|
+| `verify` | `./scripts/verify.sh` (stub canary → `npm ci` → lint → test → threat-model) |
+| `integration` | `./scripts/integration-smoke.sh` then `./scripts/adversarial.sh` |
 
 ## Layout
 

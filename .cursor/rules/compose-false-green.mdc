@@ -6,5 +6,6 @@ alwaysApply: false
 
 # Compose false-green
 
-Do not run `docker compose`, `smoke-test*.sh`, or integration scripts from worktree cwd.
+Do not run `docker compose`, `smoke-test*.sh`, `integration-smoke.sh`, `adversarial.sh`,
+or other stack/smoke scripts from worktree cwd (including `cd` to main root then smoke).
 Parent runs merge verification on main repo root. See `docs/harness/false-green-checklist.md`.

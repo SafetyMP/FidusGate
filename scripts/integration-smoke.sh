@@ -3,7 +3,7 @@
 set -euo pipefail
 
 case "$PWD" in
-  */.worktrees/*)
+  */.worktrees|*/.worktrees/|*/.worktrees/*)
     echo "integration-smoke refused from worktree cwd ($PWD)" >&2
     exit 1
     ;;
