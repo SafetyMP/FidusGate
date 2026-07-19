@@ -62,7 +62,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build & Push Secure Gateway Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/secure-gateway/Dockerfile
@@ -87,7 +87,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build & Push Admin Dashboard Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/admin-dashboard/Dockerfile
