@@ -1,19 +1,23 @@
-# AGENTS.md
+# Site contract
 
-Harness profile: **compose** (Cursor harness v4 — monorepo + docker-compose).
-
-## Commands
+## Gates
 
 | Command | Purpose |
-|---------|---------|
-| `./scripts/verify.sh` | Hermetic Definition of Done (stop hook) |
-| `./scripts/integration-smoke.sh` | Integration E2E (CI + main root; not worktrees) |
-| `./scripts/adversarial.sh` | Tier-3 adversarial oracle (worktree denial) |
-| `./scripts/check-stub-canary.sh` | Stub/placeholder detector (via verify) |
+|---|---|
+| `./scripts/verify.sh` | Functional and static acceptance |
+| `./scripts/adversarial.sh` | Authorized local adversarial probes |
+
+The corporate handoff fixes scope. The site manager assigns ADRs; site specialists write;
+the root orchestrator dispatches nondelegating workers and runs gate commands; operations
+excellence reviews immutable root-produced evidence. Work in isolated roots, never edit
+corporate approval state, and never self-approve. A site role cannot return work to
+corporate design; that boundary requires an explicit user rework authorization.
+
+Site id: `fidusgate`. Prior Cursor Harness v4 (compose profile) is under `_archives/harness-v4/`.
 
 ## Definition of Done
 
-Hermetic (stop hook / PR verify job):
+Hermetic (PR verify job):
 
 ```bash
 npx npm@10.9.2 ci
@@ -27,7 +31,7 @@ Integration (main repo root or CI `integration` job — never from `.worktrees/`
 ./scripts/adversarial.sh
 ```
 
-Do **not** put Docker or integration smoke inside `verify.sh`. Child green in a worktree does not imply main-stack green — see `docs/harness/false-green-checklist.md`.
+Do **not** put Docker or integration smoke inside `verify.sh`. Child green in a worktree does not imply main-stack green — see [`docs/harness/false-green-checklist.md`](docs/harness/false-green-checklist.md).
 
 CI (`.github/workflows/ci.yml`) mirrors this two-tier split:
 
@@ -40,11 +44,16 @@ CI (`.github/workflows/ci.yml`) mirrors this two-tier split:
 
 | Path | Purpose |
 |------|---------|
-| `.harness/profile.yaml` | Repo harness contract |
-| `.cursor/hooks/` | Vendored guards + verify-on-stop + session-start |
+| `.corp-harness/site.json` | Corp-site binding (unbound until a program) |
 | `specs/threat-model.yaml` | Adversarial deny cases |
 | `docs/adr/0000-threat-model.md` | Threat-model ADR |
+| `_archives/harness-v4/` | Archived Cursor Harness v4 compose surface |
 
-## Verify-on-stop
+## Commands
 
-When `.cursor/hooks.json` is loaded, `stop` runs `./scripts/verify.sh` after code edits (max 3 loops). Emergency override only: `CURSOR_VERIFY_SKIP=1`.
+| Command | Purpose |
+|---------|---------|
+| `./scripts/verify.sh` | Hermetic Definition of Done |
+| `./scripts/integration-smoke.sh` | Integration E2E (CI + main root; not worktrees) |
+| `./scripts/adversarial.sh` | Tier-3 adversarial oracle (worktree denial) |
+| `./scripts/check-stub-canary.sh` | Stub/placeholder detector (via verify) |
