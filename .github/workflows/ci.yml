@@ -23,9 +23,9 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run test
+      - run: chmod +x scripts/*.sh
+      - name: Hermetic verify
+        run: ./scripts/verify.sh
 
   integration:
     runs-on: ubuntu-latest

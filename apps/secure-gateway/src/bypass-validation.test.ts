@@ -193,7 +193,7 @@ test('FidusGate Advanced Bypass Validation Tests', async (t) => {
       assert.strictEqual(decision, 'deny', 'Modifying apps/secure-gateway/ source files must be blocked for backend-sme');
     });
 
-    await subT.test('Step E: Cedar policy permits security-sme or developer agent to modify apps/secure-gateway/*', () => {
+    await subT.test('Step E: Cedar policy permits security-sme (not god-mode developer) to modify apps/secure-gateway/*', () => {
       const securityDecision = evaluator.isAuthorized(
         'sb:issuer:security-sme',
         'write_file',
@@ -202,13 +202,14 @@ test('FidusGate Advanced Bypass Validation Tests', async (t) => {
       );
       assert.strictEqual(securityDecision, 'allow', 'Modifying apps/secure-gateway/ must be allowed for security-sme');
 
+      // God-mode principal exceptions were removed in #18; developer issuer must not bypass SME forbids.
       const devDecision = evaluator.isAuthorized(
         'sb:issuer:de073ae64e43',
         'write_file',
         { path: 'apps/secure-gateway/src/index.ts' },
         defaultCompliantContext
       );
-      assert.strictEqual(devDecision, 'allow', 'Modifying apps/secure-gateway/ must be allowed for de073ae64e43');
+      assert.strictEqual(devDecision, 'deny', 'Modifying apps/secure-gateway/ must be denied for de073ae64e43');
     });
 
     await subT.test('Step F: Log content sanitization removes prompt injection strings', () => {

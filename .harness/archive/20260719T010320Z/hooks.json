@@ -35,12 +35,6 @@
         "command": "python3 .cursor/hooks/verify-on-stop.py",
         "loop_limit": 3
       }
-    ],
-    "sessionStart": [
-      {
-        "command": "python3 .cursor/hooks/session-start.py",
-        "failClosed": false
-      }
     ]
   }
 }
