@@ -421,16 +421,24 @@ app.use(async (req, res, next) => {
 // CodeQL js/log-injection recognizes the sanitizer at the sink.
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  const safeMessage = String(message ?? '').slice(0, 8 * 1024);
+  const sanitizeLogValue = (value: unknown): string =>
+    String(value ?? '')
+      // Remove CR/LF and Unicode line separators to prevent log forging/splitting
+      .replace(/[\r\n\u2028\u2029]/g, '?')
+      // Remove other ASCII control chars except tab
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '?')
+      .slice(0, 8 * 1024);
+
+  const safeMessage = sanitizeLogValue(message);
   const safeMeta =
     meta === undefined
       ? ''
-      : String(typeof meta === 'string' ? meta : JSON.stringify(meta)).slice(0, 8 * 1024);
+      : sanitizeLogValue(typeof meta === 'string' ? meta : JSON.stringify(meta));
   const line = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`;
   if (process.argv.includes('--mcp')) {
-    console.error(line.replace(/\n/g, '?').replace(/\r/g, '?'));
+    console.error(line);
   } else {
-    console.log(line.replace(/\n/g, '?').replace(/\r/g, '?'));
+    console.log(line);
   }
 }
 
