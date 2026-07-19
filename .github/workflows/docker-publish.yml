@@ -52,7 +52,7 @@ jobs:
       # ------------------------------------------
       - name: Extract Secure Gateway Metadata
         id: meta-gateway
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_GATEWAY }}
           tags: |
@@ -77,7 +77,7 @@ jobs:
       # ------------------------------------------
       - name: Extract Admin Dashboard Metadata
         id: meta-dashboard
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_DASHBOARD }}
           tags: |
