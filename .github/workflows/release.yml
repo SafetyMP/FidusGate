@@ -68,6 +68,8 @@ jobs:
       # ------------------------------------------
       # TRIGGER AUTOMATED SEMANTIC RELEASE
       # ------------------------------------------
+      # Do not use @semantic-release/git: main is PR-protected and GITHUB_TOKEN
+      # cannot push release commits. Tags + GitHub Releases are published via API.
       - name: Semantic Release Action
         run: npx semantic-release
         env:
