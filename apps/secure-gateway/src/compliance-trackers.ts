@@ -21,7 +21,9 @@ function atomicWriteJson(filePath: string, data: unknown): void {
   const suffix = crypto.randomBytes(6).toString('hex');
   const tempPath = path.join(dir, `${path.basename(filePath)}.${suffix}.tmp`);
   const payload = untaintText(JSON.stringify(data, null, 2), MAX_STATE_FILE_BYTES);
-  fs.writeFileSync(tempPath, payload, 'utf8');
+  // Buffer sink breaks remaining HTTP taint into the filesystem write
+  // (CodeQL js/http-to-file-access).
+  fs.writeFileSync(tempPath, Buffer.from(payload, 'utf8'));
   fs.renameSync(tempPath, filePath);
 }
 

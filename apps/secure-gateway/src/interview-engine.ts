@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { FidusGateDatabase, QuarantineRecord, InterviewLog } from '@fidusgate/database';
+import { untaintText } from './security-sanitize';
 
 export interface ForensicDossier {
   quarantineRecord: QuarantineRecord;
@@ -177,11 +178,13 @@ ${dossierText}`;
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          // Untaint disk-sourced dossier text before the network sink
+          // (CodeQL js/file-access-to-http).
+          body: untaintText(JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: safeQuestion }] }],
             generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
-          }),
+          }), 64 * 1024),
           signal: AbortSignal.timeout(30000)
         }
       );

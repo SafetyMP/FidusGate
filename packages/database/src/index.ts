@@ -194,10 +194,11 @@ async function lockAndModifyAsync(filePath: string, modifyFn: (currentData: any)
   const lockPath = `${filePath}.lock`;
   await acquireLockAsync(lockPath);
   try {
-    let currentData = defaultValue;
     // Read directly and treat any read/parse error as "no state yet" — matches
     // legacy behavior and removes the prior stat-then-read TOCTOU race
-    // (CodeQL js/file-system-race).
+    // (CodeQL js/file-system-race). Avoid an unused initial assignment
+    // (CodeQL js/useless-assignment-to-local).
+    let currentData: any;
     try {
       const fileContent = await fs.promises.readFile(filePath, 'utf-8');
       try {
