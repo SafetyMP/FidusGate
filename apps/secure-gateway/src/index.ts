@@ -371,7 +371,8 @@ app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
       { algorithm: 'HS256', expiresIn: '1h' }
     );
 
-    log('info', `Generated authenticated JWT token for user: ${email} (${role.toUpperCase()})`);
+    // Do not echo attacker-controlled email/role into logs (CodeQL js/log-injection).
+    log('info', 'Generated authenticated JWT token after bootstrap-key authentication.');
     res.json({ token, role, email });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to generate token' });
@@ -425,9 +426,17 @@ app.use(async (req, res, next) => {
 // applied so an unbounded attacker-controlled string cannot balloon logs.
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  const safeMessage = capString(sanitizeLogValue(message), 8 * 1024);
-  const safeMeta = meta !== undefined ? capString(sanitizeLogValue(meta), 8 * 1024) : '';
-  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`;
+  // Inline \n/\r replaces at the sink so CodeQL js/log-injection recognizes the
+  // sanitizer even when taint flows through the helper from many call sites.
+  const safeMessage = capString(sanitizeLogValue(message), 8 * 1024)
+    .replace(/\n/g, '?')
+    .replace(/\r/g, '?');
+  const safeMeta = meta !== undefined
+    ? capString(sanitizeLogValue(meta), 8 * 1024).replace(/\n/g, '?').replace(/\r/g, '?')
+    : '';
+  const formatted = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`
+    .replace(/\n/g, '?')
+    .replace(/\r/g, '?');
   if (process.argv.includes('--mcp')) {
     console.error(formatted);
   } else {
