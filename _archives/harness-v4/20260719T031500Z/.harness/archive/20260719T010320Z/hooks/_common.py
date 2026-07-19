@@ -226,22 +226,18 @@ def find_data_destructive(text: str) -> str | None:
 # --- Agent worktree integration guard (shared pattern for guard-shell) ----------
 _COMPOSE_RE = re.compile(r"\bdocker\s+compose\b|\bdocker-compose\b", re.IGNORECASE)
 _INTEGRATION_SCRIPT_RE = re.compile(
-    r"(?:^|[;&|`$(\s]|/)"
-    r"(?:\./|bash\s+|sh\s+)?"
-    r"(?:[\w./-]*/)?"
-    r"scripts/"
+    r"(?:^|[;&|\s])(?:\./)?scripts/"
     r"(?:smoke-test(?:-phase[23])?|deploy-stack|seed|register-debezium-connector|"
     r"wait-outbox-drained|verify-state-twin-pipeline|demo-phase3|verify-worktree-merge|"
-    r"register-schemas|submit-flink-job|integration-smoke|adversarial|"
-    r"run-adversarial\.py)"
-    r"(?:\.sh)?\b",
+    r"register-schemas|submit-flink-job)"
+    r"\.sh\b",
     re.IGNORECASE,
 )
 _WORKTREE_INTEGRATION_MSG = (
     "Integration/stack scripts from an agent worktree (.worktrees/) are blocked — "
     "they hit the main Docker stack and produce false confidence. "
     "Parent runs merge verification from the main repo root "
-    "(./scripts/integration-smoke.sh and ./scripts/adversarial.sh). "
+    "(./scripts/verify-worktree-merge.sh). "
     "Set ALLOW_WORKTREE_COMPOSE=1 only when the user explicitly overrides."
 )
 
