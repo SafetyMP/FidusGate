@@ -422,12 +422,11 @@ app.use(async (req, res, next) => {
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
   const sanitizeLogValue = (value: unknown): string =>
-    untaintText(String(value ?? ''))
+    untaintText(String(value ?? ''), 8 * 1024)
       // Remove CR/LF and Unicode line separators to prevent log forging/splitting
       .replace(/[\r\n\u2028\u2029]/g, '?')
       // Remove other ASCII control chars except tab
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '?')
-      .slice(0, 8 * 1024);
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '?');
 
   const safeMessage = sanitizeLogValue(message);
   const safeMeta =
