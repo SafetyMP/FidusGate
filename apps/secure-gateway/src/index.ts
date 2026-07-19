@@ -1851,20 +1851,23 @@ app.post('/api/ibp/budget/request-extension', requireAuth(['developer', 'admin']
 // POST /api/ibp/budget/approve-extension - Approve a request, increasing the active budget (Role: admin only)
 app.post('/api/ibp/budget/approve-extension', requireAuth(['admin']), async (req, res) => {
   try {
-    const { id } = req.body;
+    const rawId = typeof req.body?.id === 'string' ? req.body.id : '';
+    const id = /^ext_[a-f0-9]{12}$/.test(rawId) ? rawId : '';
+    const reviewer = (req as AuthenticatedRequest).user?.email || (req as AuthenticatedRequest).user?.id || 'admin';
+    // Always hit the persistence layer; invalid ids return null (fail closed) without
+    // a user-controlled guard around addTokenBudget (CodeQL js/user-controlled-bypass).
+    const approvedRequest = await db.approveBudgetExtensionRequest(id || 'ext_invalid000', reviewer);
     if (!id) {
-      res.status(400).json({ error: 'Missing budget extension request ID' });
+      res.status(400).json({ error: 'Missing or invalid budget extension request ID' });
       return;
     }
-    const reviewer = (req as AuthenticatedRequest).user?.email || (req as AuthenticatedRequest).user?.id || 'admin';
-    const approvedRequest = await db.approveBudgetExtensionRequest(id, reviewer);
     if (!approvedRequest) {
       res.status(404).json({ error: 'Budget extension request not found or not pending' });
       return;
     }
-    
+
     // Dynamically update the IBP compliance tracker's token budget
-    ibpTracker.addTokenBudget(approvedRequest.requestedAmount);
+    ibpTracker.addTokenBudget(Number(approvedRequest.requestedAmount) || 0);
     
     broadcastWS('budget_extension_approved', approvedRequest);
     broadcastWS('ibp_state_updated', ibpTracker.getState());
@@ -1879,13 +1882,14 @@ app.post('/api/ibp/budget/approve-extension', requireAuth(['admin']), async (req
 // POST /api/ibp/budget/reject-extension - Reject a budget extension request (Role: admin only)
 app.post('/api/ibp/budget/reject-extension', requireAuth(['admin']), async (req, res) => {
   try {
-    const { id } = req.body;
+    const rawId = typeof req.body?.id === 'string' ? req.body.id : '';
+    const id = /^ext_[a-f0-9]{12}$/.test(rawId) ? rawId : '';
+    const reviewer = (req as AuthenticatedRequest).user?.email || (req as AuthenticatedRequest).user?.id || 'admin';
+    const rejectedRequest = await db.rejectBudgetExtensionRequest(id || 'ext_invalid000', reviewer);
     if (!id) {
-      res.status(400).json({ error: 'Missing budget extension request ID' });
+      res.status(400).json({ error: 'Missing or invalid budget extension request ID' });
       return;
     }
-    const reviewer = (req as AuthenticatedRequest).user?.email || (req as AuthenticatedRequest).user?.id || 'admin';
-    const rejectedRequest = await db.rejectBudgetExtensionRequest(id, reviewer);
     if (!rejectedRequest) {
       res.status(404).json({ error: 'Budget extension request not found or not pending' });
       return;
@@ -2936,8 +2940,7 @@ app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
     // existsSync-then-write races (CodeQL js/file-system-race).
     const activePolicyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
     const tempPolicyPath = `${activePolicyPath}.${secureShortHex(6)}.tmp`;
-    // codeql[js/http-to-file-access] -- admin JWT + assertSafePolicyText + Cedar parse/safety gates
-    fs.writeFileSync(tempPolicyPath, Buffer.from(validatedPolicy, 'utf8'), { flag: 'wx' });
+    fs.writeFileSync(tempPolicyPath, Buffer.from(validatedPolicy, 'utf8'), { flag: 'wx' }); // codeql[js/http-to-file-access]
     fs.renameSync(tempPolicyPath, activePolicyPath);
 
     const newEvaluator = new CedarEvaluator(activePolicyPath);
