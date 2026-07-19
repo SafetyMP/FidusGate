@@ -1,6 +1,36 @@
 import * as crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { AuditReceipt, AuditReceiptPayload } from '@fidusgate/core-types';
+
+const SAFE_PRINCIPAL_PATTERN = /^[a-zA-Z0-9._@:/-]{1,256}$/;
+const HEX_PATTERN = /^[0-9a-fA-F]{1,4096}$/;
+
+interface ValidatedAttestation {
+  sessionPublicKey: string;
+  issuerId: string;
+  expiresAt: string;
+  attestationSignature: string;
+}
+
+/**
+ * Structural guard for signature.attestation to prevent user-controlled bypass
+ * of the KMS provider verification path (CodeQL js/user-controlled-bypass).
+ * Only attestations that match the expected shape enter the attested branch.
+ */
+function validateAttestation(candidate: unknown): ValidatedAttestation | null {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const v = candidate as Record<string, unknown>;
+  if (typeof v.sessionPublicKey !== 'string' || !HEX_PATTERN.test(v.sessionPublicKey)) return null;
+  if (typeof v.issuerId !== 'string' || !SAFE_PRINCIPAL_PATTERN.test(v.issuerId)) return null;
+  if (typeof v.expiresAt !== 'string' || Number.isNaN(Date.parse(v.expiresAt))) return null;
+  if (typeof v.attestationSignature !== 'string' || !HEX_PATTERN.test(v.attestationSignature)) return null;
+  return {
+    sessionPublicKey: v.sessionPublicKey,
+    issuerId: v.issuerId,
+    expiresAt: v.expiresAt,
+    attestationSignature: v.attestationSignature,
+  };
+}
 
 export interface KeyPair {
   publicKeyHex: string;
@@ -89,15 +119,13 @@ export class LocalKMSProvider implements KMSProvider {
 
   public verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
     try {
-      const attestation = receipt.signature.attestation;
-      
+      const attestation = validateAttestation(receipt.signature.attestation);
+
       if (attestation) {
-        // 1. Verify attestation is not expired
         if (new Date(attestation.expiresAt).getTime() < Date.now()) {
           return false;
         }
 
-        // 2. Verify the attestation certificate signed by the master root key
         const rootPublicKey = crypto.createPublicKey({
           key: Buffer.from(publicKeyHex, 'hex'),
           format: 'der',
@@ -115,7 +143,6 @@ export class LocalKMSProvider implements KMSProvider {
           return false;
         }
 
-        // 3. Verify the receipt signature signed by the ephemeral session key
         const sessionPublicKey = crypto.createPublicKey({
           key: Buffer.from(attestation.sessionPublicKey, 'hex'),
           format: 'der',
@@ -143,20 +170,51 @@ export class LocalKMSProvider implements KMSProvider {
   }
 }
 
+// Only allow HTTPS or loopback HTTP URLs for KMS/HSM calls; refuse anything else so
+// a compromised env var cannot smuggle arbitrary payloads via a bogus URL scheme.
+function assertKmsUrl(target: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    throw new Error(`Invalid KMS URL: ${target}`);
+  }
+  const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopback)) {
+    throw new Error(`Rejected KMS URL scheme: ${parsed.protocol}`);
+  }
+}
+
+// Assemble a curl argv without ever invoking a shell — prevents CodeQL
+// js/command-line-injection because no user-controlled value is concatenated
+// into a shell command string.
+function buildCurlArgs(
+  method: 'GET' | 'POST',
+  target: string,
+  headers: Record<string, string>,
+  body?: unknown,
+): string[] {
+  const args: string[] = ['-s', '-X', method, '--max-time', '30', target];
+  for (const [k, v] of Object.entries(headers)) {
+    args.push('-H', `${k}: ${v}`);
+  }
+  if (body !== undefined) {
+    args.push('--data-binary', JSON.stringify(body));
+  }
+  return args;
+}
+
 // Synchronous curl post helper to handle networked HSM queries
 function curlPost(url: string, headers: Record<string, string>, body: any): any {
-  const curlCmd = `curl -s -X POST "${url}" ` +
-    Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ') +
-    ` -d '${JSON.stringify(body).replace(/'/g, "'\\''")}'`;
-  const output = execSync(curlCmd, { encoding: 'utf8' });
+  assertKmsUrl(url);
+  const output = execFileSync('curl', buildCurlArgs('POST', url, headers, body), { encoding: 'utf8' });
   return JSON.parse(output);
 }
 
 // Synchronous curl get helper to handle networked HSM queries
 function curlGet(url: string, headers: Record<string, string>): any {
-  const curlCmd = `curl -s -X GET "${url}" ` +
-    Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ');
-  const output = execSync(curlCmd, { encoding: 'utf8' });
+  assertKmsUrl(url);
+  const output = execFileSync('curl', buildCurlArgs('GET', url, headers), { encoding: 'utf8' });
   return JSON.parse(output);
 }
 
@@ -419,7 +477,10 @@ export function signPayload(
 }
 
 export function verifyReceipt(receipt: AuditReceipt, publicKeyHex: string): boolean {
-  if (receipt.signature.attestation) {
+  // Only enter the attested/local verification branch when the attestation object
+  // matches the expected shape. Prevents user-controlled bypass of the configured
+  // KMS provider via a truthy but malformed attestation field (CodeQL js/user-controlled-bypass).
+  if (validateAttestation(receipt.signature.attestation)) {
     const local = new LocalKMSProvider();
     return local.verifyReceipt(receipt, publicKeyHex);
   }

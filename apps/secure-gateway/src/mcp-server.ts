@@ -11,6 +11,7 @@ import {
   IBPComplianceTracker,
   PLMComplianceTracker
 } from './compliance-trackers';
+import { sanitizeLogValue } from './security-sanitize';
 
 const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
@@ -43,13 +44,13 @@ function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
 
   const publicKeyHex = PUBLIC_KEY_MAP[principal];
   if (!publicKeyHex) {
-    console.error(`[FidusGate] Cryptographic verification failed: Principal '${principal}' is not recognized.`);
+    console.error(`[FidusGate] Cryptographic verification failed: Principal '${sanitizeLogValue(principal)}' is not recognized.`);
     return false;
   }
 
   const signatureHex = args.signature;
   if (!signatureHex) {
-    console.error(`[FidusGate] Cryptographic verification failed: Signature parameter is missing for privileged principal '${principal}'.`);
+    console.error(`[FidusGate] Cryptographic verification failed: Signature parameter is missing for privileged principal '${sanitizeLogValue(principal)}'.`);
     return false;
   }
 
@@ -103,7 +104,7 @@ export async function recordPrincipalViolation(principal: string): Promise<void>
         reason: `Auto-quarantined: 3 consecutive Cedar policy denials`,
         evidence: [`${principalViolationCounts[principal]} consecutive Cedar denials`]
       });
-      console.error(`[FidusGate] 🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${principal}`);
+      console.error(`[FidusGate] 🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${sanitizeLogValue(principal)}`);
     }
     delete principalViolationCounts[principal];
   }
@@ -250,27 +251,40 @@ function searchCodeHelper(dir: string, query: string, caseInsensitive = false, i
   }
 
   function traverse(currentDir: string) {
-    const files = fs.readdirSync(currentDir);
-    for (const file of files) {
+    // readdir with withFileTypes so we don't have to re-stat each entry;
+    // avoids the readdir -> stat -> read race (CodeQL js/file-system-race).
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+    for (const entry of entries) {
+      const file = entry.name;
       const fullPath = path.join(currentDir, file);
-      let stat;
-      try {
-        stat = fs.statSync(fullPath);
-      } catch (e) {
-        continue;
-      }
-      if (stat.isDirectory()) {
+      if (entry.isDirectory()) {
         if (['node_modules', '.git', '.memory', 'dist', 'build', '.turbo'].includes(file)) {
           continue;
         }
         traverse(fullPath);
-      } else {
+      } else if (entry.isFile()) {
         const ext = path.extname(file).toLowerCase();
         if (['.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz', '.mp3', '.wav', '.DS_Store'].includes(ext)) {
           continue;
         }
+        let fd: number | null = null;
         try {
-          const content = fs.readFileSync(fullPath, 'utf8');
+          fd = fs.openSync(fullPath, 'r');
+          const stat = fs.fstatSync(fd);
+          if (stat.size > 2 * 1024 * 1024) continue;
+          const buf = Buffer.alloc(stat.size);
+          let offset = 0;
+          while (offset < stat.size) {
+            const read = fs.readSync(fd, buf, offset, stat.size - offset, offset);
+            if (read <= 0) break;
+            offset += read;
+          }
+          const content = buf.slice(0, offset).toString('utf8');
           if (content.includes('\0')) continue;
           const lines = content.split('\n');
           for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
@@ -286,6 +300,10 @@ function searchCodeHelper(dir: string, query: string, caseInsensitive = false, i
           }
         } catch (e) {
           // Ignore
+        } finally {
+          if (fd !== null) {
+            try { fs.closeSync(fd); } catch {}
+          }
         }
       }
     }

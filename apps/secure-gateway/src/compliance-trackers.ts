@@ -1,6 +1,40 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { assertSafeRelativePath, assertSafeSubagentId } from './security-sanitize';
+import * as crypto from 'node:crypto';
+import { assertSafeRelativePath, assertSafeSubagentId, capString } from './security-sanitize';
+
+/** Hard caps applied to any untrusted, HTTP-derived text that is persisted to disk. */
+const MAX_SYNTHESIS_REPORT_LEN = 32 * 1024;
+const MAX_FEEDBACK_COMMENT_LEN = 8 * 1024;
+const MAX_FEEDBACK_ROLE_LEN = 128;
+const MAX_HISTORICAL_FEEDBACK_ENTRIES = 500;
+
+/**
+ * Atomic write via temp file + rename — never a raw existsSync-then-writeFileSync loop.
+ * Prevents CodeQL js/file-system-race on the tracker state files.
+ */
+function atomicWriteJson(filePath: string, data: unknown): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const suffix = crypto.randomBytes(6).toString('hex');
+  const tempPath = path.join(dir, `${path.basename(filePath)}.${suffix}.tmp`);
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tempPath, filePath);
+}
+
+/**
+ * Read a JSON file if it exists; catch ENOENT explicitly so there's no
+ * existsSync-then-readFileSync race (CodeQL js/file-system-race).
+ */
+function safeReadJson<T>(filePath: string): T | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(content) as T;
+  } catch (err: any) {
+    if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null;
+    throw err;
+  }
+}
 
 export type BroadcastWSFn = (event: string, data: any) => void;
 
@@ -30,24 +64,21 @@ export class DevOpsComplianceTracker {
   }
 
   private loadState() {
-    if (fs.existsSync(this.statePath)) {
-      try {
-        this.state = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
-      } catch (err: any) {
-        console.error('Failed to parse devops-compliance-state.json:', err.message);
+    try {
+      const loaded = safeReadJson<DevOpsComplianceState>(this.statePath);
+      if (loaded) {
+        this.state = loaded;
+      } else {
+        this.saveState();
       }
-    } else {
-      this.saveState();
+    } catch (err: any) {
+      console.error('Failed to parse devops-compliance-state.json:', err.message);
     }
   }
 
   private saveState() {
     try {
-      const dir = path.dirname(this.statePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+      atomicWriteJson(this.statePath, this.state);
     } catch (err: any) {
       console.error('Failed to write devops-compliance-state.json:', err.message);
     }
@@ -120,27 +151,24 @@ export class IBPComplianceTracker {
   }
 
   private loadState() {
-    if (fs.existsSync(this.statePath)) {
-      try {
-        this.state = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
+    try {
+      const loaded = safeReadJson<IBPComplianceState>(this.statePath);
+      if (loaded) {
+        this.state = loaded;
         if (!this.state.subagentBudgets) {
           this.state.subagentBudgets = {};
         }
-      } catch (err: any) {
-        console.error('Failed to parse ibp-compliance-state.json:', err.message);
+      } else {
+        this.saveState();
       }
-    } else {
-      this.saveState();
+    } catch (err: any) {
+      console.error('Failed to parse ibp-compliance-state.json:', err.message);
     }
   }
 
   private saveState() {
     try {
-      const dir = path.dirname(this.statePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+      atomicWriteJson(this.statePath, this.state);
     } catch (err: any) {
       console.error('Failed to write ibp-compliance-state.json:', err.message);
     }
@@ -175,7 +203,8 @@ export class IBPComplianceTracker {
 
   public submitSynthesis(report: string) {
     this.state.crossFunctionalSynthesized = true;
-    this.state.lastSynthesisReport = report;
+    // Cap HTTP-derived text before persistence (CodeQL js/http-to-file-access).
+    this.state.lastSynthesisReport = capString(report, MAX_SYNTHESIS_REPORT_LEN);
     this.state.lastSynthesisTimestamp = new Date().toISOString();
     this.saveState();
     this.broadcastWS('ibp_state_updated', this.getState());
@@ -299,9 +328,9 @@ export class PLMComplianceTracker {
   }
 
   private loadState() {
-    if (fs.existsSync(this.statePath)) {
-      try {
-        const loaded = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
+    try {
+      const loaded = safeReadJson<PLMComplianceState>(this.statePath);
+      if (loaded) {
         this.state = {
           ...this.state,
           ...loaded,
@@ -309,21 +338,17 @@ export class PLMComplianceTracker {
           feedbackAligned: loaded.feedbackAligned !== undefined ? loaded.feedbackAligned : true,
           historicalFeedback: loaded.historicalFeedback || []
         };
-      } catch (err: any) {
-        console.error('Failed to parse plm-compliance-state.json:', err.message);
+      } else {
+        this.saveState();
       }
-    } else {
-      this.saveState();
+    } catch (err: any) {
+      console.error('Failed to parse plm-compliance-state.json:', err.message);
     }
   }
 
   private saveState() {
     try {
-      const dir = path.dirname(this.statePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf8');
+      atomicWriteJson(this.statePath, this.state);
     } catch (err: any) {
       console.error('Failed to write plm-compliance-state.json:', err.message);
     }
@@ -414,22 +439,29 @@ export class PLMComplianceTracker {
   }
 
   public addFeedback(role: string, comment: string, severity: 'info' | 'warn' | 'critical') {
+    // Cap HTTP-derived text before persistence (CodeQL js/http-to-file-access) and
+    // trim the retained history so an attacker cannot inflate the state file.
+    const safeRole = capString(role, MAX_FEEDBACK_ROLE_LEN);
+    const safeComment = capString(comment, MAX_FEEDBACK_COMMENT_LEN);
     const entry: FeedbackEntry = {
       timestamp: new Date().toISOString(),
-      role,
-      comment,
+      role: safeRole,
+      comment: safeComment,
       severity
     };
     if (!this.state.historicalFeedback) {
       this.state.historicalFeedback = [];
     }
     this.state.historicalFeedback.push(entry);
-    
+    if (this.state.historicalFeedback.length > MAX_HISTORICAL_FEEDBACK_ENTRIES) {
+      this.state.historicalFeedback = this.state.historicalFeedback.slice(-MAX_HISTORICAL_FEEDBACK_ENTRIES);
+    }
+
     if (severity === 'critical' || severity === 'warn') {
       if (!this.state.activeDirectives) {
         this.state.activeDirectives = [];
       }
-      this.state.activeDirectives.push(comment);
+      this.state.activeDirectives.push(safeComment);
       this.state.feedbackAligned = false;
     }
     this.saveState();

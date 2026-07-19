@@ -2,6 +2,8 @@
 # Unified Repository Bootstrapper
 # Author: Antigravity Code Assistant
 
+set -euo pipefail
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 SCRIPTS_DIR="$REPO_ROOT/scripts"
 
@@ -16,15 +18,16 @@ else
     exit 1
 fi
 
-# 2. Check for Mise version manager
-if ! command -v mise >/dev/null 2>&1; then
-    echo "ℹ️  Mise version manager not found. Installing Mise..."
-    curl https://mise.jdx.dev/install.sh | sh
-    # Add mise to PATH for the current subshell
+# 2. Check for Mise version manager (no curl|sh — Scorecard downloadThenRun)
+if command -v mise >/dev/null 2>&1; then
+    echo "✅ Mise version manager is active."
+elif [ -x "$HOME/.local/bin/mise" ]; then
     export PATH="$HOME/.local/bin:$HOME/.local/share/mise/bin:$PATH"
-    eval "$(mise activate bash)"
+    echo "✅ Mise found at ~/.local/bin/mise."
+else
+    echo "ℹ️  Mise not installed. Install from https://mise.jdx.dev (brew/release binary),"
+    echo "   then re-run bootstrap. Continuing with system Node/npm."
 fi
-echo "✅ Mise version manager is active."
 
 # 3. Check Docker status for the isolated sandbox
 if command -v docker >/dev/null 2>&1; then
@@ -37,14 +40,18 @@ else
     echo "⚠️  Docker is not installed. Sandbox execution will fall back to safe host shell."
 fi
 
-# 4. Install dependencies if package.json exists
+# 4. Install dependencies via locked npm ci only (Scorecard npmCommand pin)
 if [ -f "$REPO_ROOT/package.json" ]; then
     echo "📦 Installing package dependencies..."
-    if command -v pnpm >/dev/null 2>&1; then
-        pnpm install
-    elif command -v npm >/dev/null 2>&1; then
-        npm install
+    if [ ! -f "$REPO_ROOT/package-lock.json" ]; then
+        echo "❌ Error: package-lock.json missing; refusing unpinned npm install."
+        exit 1
     fi
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "❌ Error: npm is required."
+        exit 1
+    fi
+    (cd "$REPO_ROOT" && npm ci)
 fi
 
 # 5. Run initial Context Drift audit

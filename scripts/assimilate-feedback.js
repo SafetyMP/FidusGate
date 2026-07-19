@@ -1,10 +1,22 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 const plmStatePath = path.resolve(process.cwd(), '.memory/plm-compliance-state.json');
 const ledgerPath = path.resolve(process.cwd(), '.memory/agent-learning-ledger.json');
+
+// Atomic write via temp file + rename — no existsSync/writeFileSync race
+// (CodeQL js/file-system-race).
+function atomicWriteFileSync(targetPath, data) {
+  const dir = path.dirname(targetPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const suffix = crypto.randomBytes(6).toString('hex');
+  const tempPath = path.join(dir, `${path.basename(targetPath)}.${suffix}.tmp`);
+  fs.writeFileSync(tempPath, data, 'utf8');
+  fs.renameSync(tempPath, targetPath);
+}
 
 // Helper to resolve the target SME role based on files modified
 function getTargetSmeRole(modifiedFiles) {
@@ -52,8 +64,8 @@ function main() {
   let stagedFiles = [];
   let gitDiffStat = '';
   try {
-    stagedFiles = execSync('git diff --cached --name-only').toString().trim().split('\n').filter(Boolean);
-    gitDiffStat = execSync('git diff --cached --stat').toString().trim();
+    stagedFiles = execFileSync('git', ['diff', '--cached', '--name-only']).toString().trim().split('\n').filter(Boolean);
+    gitDiffStat = execFileSync('git', ['diff', '--cached', '--stat']).toString().trim();
   } catch (e) {
     // Git might not be initialized or no files staged
   }
@@ -122,7 +134,7 @@ function main() {
 
   // Write updated ledger
   try {
-    fs.writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+    atomicWriteFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
     console.log(`✅ FidusGate Learning: Recorded ${newLessons.length} new lesson(s) in .memory/agent-learning-ledger.json.`);
     newLessons.forEach(l => {
       console.log(`   💡 [${l.sourceRole} ➔ ${l.targetRole}]: "${l.critique}" Resolved via: "${l.resolution.split('\n')[0]}"`);
@@ -135,9 +147,9 @@ function main() {
   // Clear PLM gate in state
   plmState.feedbackAligned = true;
   plmState.activeDirectives = [];
-  
+
   try {
-    fs.writeFileSync(plmStatePath, JSON.stringify(plmState, null, 2), 'utf8');
+    atomicWriteFileSync(plmStatePath, JSON.stringify(plmState, null, 2));
     console.log('✅ FidusGate Learning: PLM compliance state updated. FeedbackAligned = true.');
   } catch (err) {
     console.error('❌ FidusGate Learning: Failed to update PLM compliance state file:', err.message);

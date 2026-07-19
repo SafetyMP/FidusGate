@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { execFileSync, execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as crypto from 'node:crypto';
 import { FidusGateDatabase } from '@fidusgate/database';
 import { buildDossier, conductInterview } from './interview-engine';
 import * as http from 'node:http';
@@ -21,12 +22,31 @@ import { auditConsensusRequest } from './consensus-auditor';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
   assertSafeSubagentId,
+  assertSafeCedarDaemonUrl,
+  assertVerifiedRole,
+  capString,
   safeRecordKey,
   sanitizeLogValue,
 } from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
 import * as ws from 'ws';
+
+/**
+ * Generate a short numeric id using crypto.randomInt so security-relevant
+ * identifiers (session, transaction, command, compliance, action, budget-extension)
+ * are drawn from a CSPRNG, not Math.random (CodeQL js/insecure-randomness).
+ */
+function secureNumericId(digits: number): string {
+  const upper = 10 ** digits;
+  const lower = 10 ** (digits - 1);
+  return String(crypto.randomInt(lower, upper));
+}
+
+/** Short cryptographically-random hex suffix for opaque tokens. */
+function secureShortHex(bytes: number): string {
+  return crypto.randomBytes(bytes).toString('hex');
+}
 
 // Active WebSocket connections tracking
 const wsClients = new Set<ws.WebSocket>();
@@ -228,6 +248,22 @@ const sandboxPatchRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/** Global API rate limiter (CodeQL js/missing-rate-limiting). */
+const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Stricter limiter for token minting. */
+const authTokenRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 
 
 // Load FidusGate MCP Configuration and policies
@@ -282,25 +318,39 @@ if (process.env.FIDUSGATE_TEST !== 'true' && process.env.NODE_ENV !== 'test') {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use('/api/', apiRateLimiter);
 app.use('/api/proxy', (req, res, next) => createProxyVerifier(cedarEvaluator)(req, res, next));
 
 // Global emergency Kill-Switch / Circuit Breaker Middleware
+//
+// Bypasses are gated exclusively on a cryptographically-verified admin JWT.
+// The previous logic also allowed a bypass based on `req.path` matching a
+// hardcoded allowlist, but `req.path` is user-controlled and CodeQL flagged
+// this as js/user-controlled-bypass. Auth-token minting and the reset endpoint
+// still work when the breaker is tripped: they are called with an admin
+// bootstrap key / admin JWT, so the JWT-verify path here covers them.
+const CIRCUIT_BREAKER_UNAUTHENTICATED_PATHS = new Set(['/api/auth/token']);
 app.use(async (req, res, next) => {
   try {
     const systemConfig = await db.getSystemConfig();
     if (systemConfig.circuitBreakerActive) {
       const authHeader = req.headers.authorization;
-      const isBypassPath = req.path === '/api/auth/token' || req.path === '/api/reset' || req.path === '/api/sandbox/reconcile';
-      if (authHeader && authHeader.startsWith('Bearer ')) {
+      if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
         try {
           const decoded = jwt.verify(token, JWT_SECRET) as any;
-          if (decoded.role === 'admin') {
+          const role = assertVerifiedRole(decoded?.role);
+          if (role === 'admin') {
             return next();
           }
-        } catch (e) {}
+        } catch (e) {
+          // Fall through to deny below.
+        }
       }
-      if (isBypassPath) {
+      // Allow only the bootstrap token endpoint through unauthenticated so
+      // operators can mint an admin JWT while the breaker is tripped. The
+      // endpoint itself still enforces the bootstrap key check.
+      if (CIRCUIT_BREAKER_UNAUTHENTICATED_PATHS.has(req.path)) {
         return next();
       }
       res.status(503).json({
@@ -324,11 +374,17 @@ const JWT_SECRET: string = (() => {
   return secret;
 })();
 
-// Logger helper with security tagging
+// Logger helper with security tagging.
+//
+// Every dynamic component (message + metadata) is routed through
+// sanitizeLogValue, which strips control characters and newlines. This ensures
+// that no caller can smuggle CRLF sequences into log output to inject a
+// synthetic log line (CodeQL js/log-injection). A hard length cap is also
+// applied so an unbounded attacker-controlled string cannot balloon logs.
 function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
   const timestamp = new Date().toISOString();
-  const safeMessage = sanitizeLogValue(message);
-  const safeMeta = meta !== undefined ? sanitizeLogValue(meta) : '';
+  const safeMessage = capString(sanitizeLogValue(message), 8 * 1024);
+  const safeMeta = meta !== undefined ? capString(sanitizeLogValue(meta), 8 * 1024) : '';
   const formatted = `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}${safeMeta ? ' ' + safeMeta : ''}`;
   if (process.argv.includes('--mcp')) {
     console.error(formatted);
@@ -533,13 +589,17 @@ function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[]) {
     const token = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      (req as AuthenticatedRequest).user = decoded;
-      
-      if (!allowedRoles.includes(decoded.role)) {
-        res.status(403).json({ error: `Forbidden: Role '${decoded.role}' lacks sufficient privileges for this endpoint.` });
+      // Only trust the role after cryptographic verification of the JWT —
+      // never derive gating decisions from unverified request fields
+      // (CodeQL js/user-controlled-bypass).
+      const verifiedRole = assertVerifiedRole(decoded?.role);
+      (req as AuthenticatedRequest).user = { ...decoded, role: verifiedRole };
+
+      if (!allowedRoles.includes(verifiedRole)) {
+        res.status(403).json({ error: `Forbidden: Role '${verifiedRole}' lacks sufficient privileges for this endpoint.` });
         return;
       }
-      
+
       next();
     } catch (err: any) {
       log('security', 'CRITICAL AUTHENTICATION FAILURE: Invalid or expired JWT presented!', { error: err.message });
@@ -561,7 +621,7 @@ app.use((req: express.Request, _res: express.Response, next: express.NextFunctio
 });
 
 // OIDC Simulated JWT Token Signer Endpoint — bootstrap key required (no unauthenticated minting).
-app.post('/api/auth/token', (req, res) => {
+app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
   try {
     const expectedKey = process.env.FIDUSGATE_BOOTSTRAP_KEY?.trim();
     if (!expectedKey) {
@@ -588,7 +648,7 @@ app.post('/api/auth/token', (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: `usr_${Math.floor(1000 + Math.random() * 9000)}`, role, email },
+      { id: `usr_${secureNumericId(4)}`, role, email },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -614,7 +674,7 @@ app.post('/api/sessions/bootstrap', requireAuth(['developer', 'admin']), (req, r
       3600 // 1 hour expiration
     );
     
-    const sessionId = `sess_${Math.floor(100000 + Math.random() * 900000)}`;
+    const sessionId = `sess_${secureNumericId(6)}`;
     activeSessions[sessionId] = {
       privateKeyHex: session.sessionKeyPair.privateKeyHex,
       publicKeyHex: session.sessionKeyPair.publicKeyHex,
@@ -670,7 +730,16 @@ app.post('/api/sessions/sign', requireAuth(['developer', 'admin']), (req, res) =
 // Recommendation #3: Rust-Native Cedar Daemon Resolver
 // ==========================================
 async function evaluateCedarPolicy(principal: string, action: string, resource: string, context: any): Promise<'allow' | 'deny'> {
-  const daemonUrl = process.env.CEDAR_DAEMON_URL || 'http://localhost:50051/authorize';
+  // Validate the daemon URL against a strict allowlist so that disk-loaded
+  // tracker state cannot be exfiltrated to an arbitrary host via a rogue
+  // CEDAR_DAEMON_URL value (CodeQL js/file-access-to-http).
+  const rawDaemonUrl = process.env.CEDAR_DAEMON_URL || 'http://localhost:50051/authorize';
+  let daemonUrl: string;
+  try {
+    daemonUrl = assertSafeCedarDaemonUrl(rawDaemonUrl);
+  } catch {
+    daemonUrl = 'http://localhost:50051/authorize';
+  }
   
   // Record token usage for IBP budget enforcement
   // Fix 4: Use actual token counts when provided by the agent (accurate billing).
@@ -838,9 +907,22 @@ app.post('/api/transactions', requireAuth(['developer', 'admin']), async (req, r
        return;
     }
     
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const isSenderPii = emailRegex.test(sender) || sender.toLowerCase().includes(' wallet') || sender.split(' ').length > 2;
-    const isRecipientPii = emailRegex.test(recipient) || recipient.toLowerCase().includes(' wallet') || recipient.split(' ').length > 2;
+    // Linear email-shape check with a hard length cap — replaces the previous
+    // /^[^\s@]+@[^\s@]+\.[^\s@]+$/ regex that had nested quantifiers and was
+    // flagged as CodeQL js/polynomial-redos.
+    const isEmailShape = (v: unknown): boolean => {
+      if (typeof v !== 'string' || v.length === 0 || v.length > 320) return false;
+      const at = v.indexOf('@');
+      if (at <= 0 || at !== v.lastIndexOf('@') || at === v.length - 1) return false;
+      const local = v.slice(0, at);
+      const domain = v.slice(at + 1);
+      const dot = domain.lastIndexOf('.');
+      if (dot <= 0 || dot === domain.length - 1) return false;
+      if (/\s/.test(local) || /\s/.test(domain)) return false;
+      return true;
+    };
+    const isSenderPii = isEmailShape(sender) || sender.toLowerCase().includes(' wallet') || sender.split(' ').length > 2;
+    const isRecipientPii = isEmailShape(recipient) || recipient.toLowerCase().includes(' wallet') || recipient.split(' ').length > 2;
     const requiresMasking = isSenderPii || isRecipientPii;
     
     const processedSender = requiresMasking ? maskPII(sender) : sender;
@@ -850,7 +932,7 @@ app.post('/api/transactions', requireAuth(['developer', 'admin']), async (req, r
     const status = isSuspicious ? 'flagged' : 'completed';
     
     const newTx: Transaction = {
-      id: `tx_${Math.floor(100000 + Math.random() * 900000)}`,
+      id: `tx_${secureNumericId(6)}`,
       timestamp: new Date().toISOString(),
       sender: processedSender,
       recipient: processedRecipient,
@@ -889,13 +971,16 @@ if (process.env.MASTER_PRIVATE_KEY_HEX && process.env.MASTER_PUBLIC_KEY_HEX) {
   };
   log('info', '🔑 Loaded stable Master Root Keypair from environment variables.');
 } else {
-  // Check if we have a cached dev keypair in packages/database/data/test-keys.json to avoid breaking signatures across restarts
+  // Check if we have a cached dev keypair in packages/database/data/test-keys.json to avoid breaking signatures across restarts.
+  // Read directly and catch ENOENT (avoids CodeQL js/file-system-race).
   const devKeysPath = path.resolve(process.cwd(), 'packages/database/data/test-keys.json');
   let cachedKeys: any = null;
-  if (fs.existsSync(devKeysPath)) {
-    try {
-      cachedKeys = JSON.parse(fs.readFileSync(devKeysPath, 'utf8'));
-    } catch (e) {}
+  try {
+    cachedKeys = JSON.parse(fs.readFileSync(devKeysPath, 'utf8'));
+  } catch (e: any) {
+    if (e && e.code !== 'ENOENT' && e.code !== 'ENOTDIR') {
+      log('warn', `Failed to read cached dev keypair: ${e.message}`);
+    }
   }
   if (cachedKeys && cachedKeys.privateKeyHex && cachedKeys.publicKeyHex) {
     MASTER_ROOT_KEYS = cachedKeys;
@@ -904,7 +989,11 @@ if (process.env.MASTER_PRIVATE_KEY_HEX && process.env.MASTER_PUBLIC_KEY_HEX) {
     MASTER_ROOT_KEYS = generateKeyPair();
     log('warn', '⚠️  Generating ephemeral Master Root Keypair. Signatures will NOT be valid across server restarts! Define MASTER_PRIVATE_KEY_HEX to persist.');
     try {
-      fs.writeFileSync(devKeysPath, JSON.stringify(MASTER_ROOT_KEYS, null, 2), 'utf8');
+      // Atomic temp + rename to avoid a race with a concurrent reader.
+      const tempKeysPath = `${devKeysPath}.${secureShortHex(6)}.tmp`;
+      fs.mkdirSync(path.dirname(devKeysPath), { recursive: true });
+      fs.writeFileSync(tempKeysPath, JSON.stringify(MASTER_ROOT_KEYS, null, 2), { encoding: 'utf8', flag: 'wx' });
+      fs.renameSync(tempKeysPath, devKeysPath);
     } catch (e) {}
   }
 }
@@ -969,13 +1058,22 @@ app.post('/api/receipts', requireAuth(['developer', 'admin']), async (req, res) 
   try {
     const receipt: AuditReceipt = req.body;
     const { payload, signature } = receipt;
-    
+
     if (!payload || !signature || !signature.sig || !signature.kid) {
        res.status(400).json({ error: 'Malformed receipt structure. Missing payload or signature.' });
        return;
     }
-    
-    const publicKeyHex = PUBLIC_KEY_MAP[signature.kid] || signature.kid;
+
+    // The public key MUST come from the trusted PUBLIC_KEY_MAP. Falling back
+    // to signature.kid as raw hex allowed a user-controlled bypass of the
+    // verification, because a caller could supply their own public key
+    // alongside a matching signature (CodeQL js/user-controlled-bypass).
+    const publicKeyHex = PUBLIC_KEY_MAP[signature.kid];
+    if (!publicKeyHex) {
+      log('security', 'RECEIPT REJECTED: unknown signature.kid', { kid: signature.kid });
+      res.status(403).json({ error: `Unknown issuer key id '${signature.kid}'. Receipt rejected.`, verified: false });
+      return;
+    }
     const isValid = verifyReceipt(receipt, publicKeyHex);
     
     if (!isValid) {
@@ -1078,15 +1176,21 @@ app.post('/api/receipts/verify', (req, res) => {
   try {
     const receipt: AuditReceipt = req.body;
     const { payload, signature } = receipt;
-    
+
     if (!payload || !signature || !signature.sig || !signature.kid) {
        res.status(400).json({ error: 'Malformed receipt structure. Missing payload or signature.' });
        return;
     }
-    
-    const publicKeyHex = PUBLIC_KEY_MAP[signature.kid] || signature.kid;
+
+    // Only trusted issuer keys — do not fall back to the caller-supplied kid
+    // as a raw public key (CodeQL js/user-controlled-bypass).
+    const publicKeyHex = PUBLIC_KEY_MAP[signature.kid];
+    if (!publicKeyHex) {
+      res.status(200).json({ verified: false, reason: `Unknown issuer key id '${signature.kid}'.` });
+      return;
+    }
     const isValid = verifyReceipt(receipt, publicKeyHex);
-    
+
     res.json({ verified: isValid });
   } catch (error) {
     log('error', 'Failed to perform standalone verification', error);
@@ -1214,7 +1318,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       const audit = auditConsensusRequest(command);
 
       const pendingAction = await db.createPendingAction({
-        id: `act_${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `act_${secureNumericId(6)}`,
         command,
         initiator: userEmail,
         role: userRole,
@@ -1259,7 +1363,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 
       // Persist command log
       await db.addCommandLog({
-        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `cmd_${secureNumericId(6)}`,
         timestamp: new Date().toISOString(),
         command,
         user: userEmail,
@@ -1288,20 +1392,22 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       if (wasmMatch) {
         wasmPath = path.resolve(process.cwd(), wasmMatch[0]);
       } else {
-        // Build a mock compiler.wasm if it doesn't exist so it runs offline successfully
+        // Build a mock compiler.wasm if it doesn't exist. Use mkdir { recursive: true }
+        // (idempotent) and write with { flag: 'wx' } so a concurrent creator wins
+        // instead of racing (CodeQL js/file-system-race).
         const mockWasmDir = path.dirname(wasmPath);
-        if (!fs.existsSync(mockWasmDir)) {
-          fs.mkdirSync(mockWasmDir, { recursive: true });
-        }
-        if (!fs.existsSync(wasmPath)) {
-          const tinyWasm = Buffer.from([
-            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, // WASM magic header
-            0x01, 0x04, 0x01, 0x60, 0x00, 0x00,             // Type section
-            0x03, 0x02, 0x01, 0x00,                         // Function section
-            0x08, 0x01, 0x00,                               // Start section
-            0x0a, 0x06, 0x01, 0x04, 0x00, 0x01, 0x0b        // Code section
-          ]);
-          fs.writeFileSync(wasmPath, tinyWasm);
+        fs.mkdirSync(mockWasmDir, { recursive: true });
+        const tinyWasm = Buffer.from([
+          0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+          0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+          0x03, 0x02, 0x01, 0x00,
+          0x08, 0x01, 0x00,
+          0x0a, 0x06, 0x01, 0x04, 0x00, 0x01, 0x0b
+        ]);
+        try {
+          fs.writeFileSync(wasmPath, tinyWasm, { flag: 'wx' });
+        } catch (e: any) {
+          if (e && e.code !== 'EEXIST') throw e;
         }
       }
 
@@ -1316,7 +1422,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 
       // Persist command log
       await db.addCommandLog({
-        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `cmd_${secureNumericId(6)}`,
         timestamp: new Date().toISOString(),
         command,
         user: userEmail,
@@ -1343,7 +1449,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       
       // Persist forensic log for blocked/audit-violated command
       await db.addCommandLog({
-        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `cmd_${secureNumericId(6)}`,
         timestamp: new Date().toISOString(),
         command,
         user: userEmail,
@@ -1362,23 +1468,26 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
     }
 
     log('info', `Executing sandboxed console task: [${command}] on behalf of Administrator`);
-    
-    // Execute command within unprivileged sandbox container and stream logs
+
+    // Execute command within unprivileged sandbox container and stream logs.
+    // Use execFileSync with an argv array so `command`/`subagentId` are passed
+    // as raw arguments and never re-interpreted by a shell
+    // (CodeQL js/command-line-injection).
     const workspacePath = path.resolve(__dirname, '..', '..', '..');
-    const sandboxCmd = subagentId 
-      ? `bash scripts/sandbox-execute.sh "${command}" "${workspacePath}" "${subagentId}"`
-      : `bash scripts/sandbox-execute.sh "${command}" "${workspacePath}"`;
-    
+    const sandboxArgv = subagentId
+      ? ['scripts/sandbox-execute.sh', command, workspacePath, assertSafeSubagentId(subagentId)]
+      : ['scripts/sandbox-execute.sh', command, workspacePath];
+
     const startExec = Date.now();
     activeSandboxContainers++;
     try {
       try {
-        const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        const logs = execFileSync('bash', sandboxArgv, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
         addExecutionLatency(Date.now() - startExec);
         
         // Persist forensic log for successful run
         await db.addCommandLog({
-          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          id: `cmd_${secureNumericId(6)}`,
           timestamp: new Date().toISOString(),
           command,
           user: userEmail,
@@ -1400,7 +1509,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 
         // Persist forensic log for failed run
         await db.addCommandLog({
-          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          id: `cmd_${secureNumericId(6)}`,
           timestamp: new Date().toISOString(),
           command,
           user: userEmail,
@@ -1655,7 +1764,7 @@ app.post('/api/ibp/budget/request-extension', requireAuth(['developer', 'admin']
       return;
     }
     const applicant = (req as AuthenticatedRequest).user?.email || (req as AuthenticatedRequest).user?.id || 'developer';
-    const id = `ext_${Math.random().toString(36).substr(2, 9)}`;
+    const id = `ext_${secureShortHex(6)}`;
     const newRequest = await db.createBudgetExtensionRequest(id, requestedAmount, reason, applicant);
     
     broadcastWS('budget_extension_created', newRequest);
@@ -1796,9 +1905,18 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
-    // Mathematically verify the approver's cryptographic signature!
-    const publicKeyHex = PUBLIC_KEY_MAP[`sb:issuer:${userEmail.split('@')[0]}`] || PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'];
-    
+    // Mathematically verify the approver's cryptographic signature.
+    // Only trust a key that is explicitly registered for the SME-derived
+    // issuer id — never accept a caller-controlled fallback (CodeQL
+    // js/user-controlled-bypass).
+    const approverIssuer = `sb:issuer:${userEmail.split('@')[0]}`;
+    const publicKeyHex = PUBLIC_KEY_MAP[approverIssuer];
+    if (!publicKeyHex) {
+      log('security', 'CONSENSUS APPROVAL REJECTED: no registered issuer key for approver', { approverIssuer });
+      res.status(403).json({ error: `No registered issuer key for approver '${approverIssuer}'.` });
+      return;
+    }
+
     // The payload signed by the approver is the actionId
     const { verifyReceipt } = require('@fidusgate/crypto-utils');
     const isValid = verifyReceipt({
@@ -1852,15 +1970,16 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
 
       log('security', `🛡️ CONSENSUS GATING PASSED: Action ${actionId} approved. Launching command in Docker/gVisor sandbox: [${action.command}]`);
 
-      // Execute command inside sandbox
+      // Execute command inside sandbox with argv-array invocation (no shell) —
+      // prevents CodeQL js/command-line-injection on the approved command payload.
       const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const sandboxCmd = `bash scripts/sandbox-execute.sh "${action.command}" "${workspacePath}"`;
+      const sandboxArgv = ['scripts/sandbox-execute.sh', action.command, workspacePath];
 
       try {
-        executedOutput = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        executedOutput = execFileSync('bash', sandboxArgv, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
         
         await db.addCommandLog({
-          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          id: `cmd_${secureNumericId(6)}`,
           timestamp: new Date().toISOString(),
           command: action.command,
           user: action.initiator,
@@ -1872,7 +1991,7 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       } catch (err: any) {
         executedOutput = [err.stdout, err.stderr].filter(Boolean).join('\n') || err.message;
         await db.addCommandLog({
-          id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+          id: `cmd_${secureNumericId(6)}`,
           timestamp: new Date().toISOString(),
           command: action.command,
           user: action.initiator,
@@ -2140,7 +2259,7 @@ app.post('/api/sandbox/apply', sandboxPatchRateLimiter, autoThrottleMiddleware, 
 
       // Record forensic log
       await db.addCommandLog({
-        id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `cmd_${secureNumericId(6)}`,
         timestamp: new Date().toISOString(),
         command: `git apply ${subagentId ? `.memory/subagents/${assertSafeSubagentId(subagentId)}/pending-sandbox.patch` : '.memory/pending-sandbox.patch'}`,
         user: userEmail,
@@ -2667,7 +2786,7 @@ app.get('/api/logs/compliance/:logId/export', requireAuth(['admin', 'auditor']),
 
     const complianceEnvelope = {
       complianceStandard: "FidusGate-SecOps-v1.0",
-      complianceAttestationId: `compliance_${Math.floor(100000 + Math.random() * 900000)}`,
+      complianceAttestationId: `compliance_${secureNumericId(6)}`,
       timestamp: new Date().toISOString(),
       evaluatedRecord: logItem,
       attestationClaims: attestation,
@@ -2702,14 +2821,21 @@ app.post('/api/policy/reload', requireAuth(['admin', 'auditor']), (req, res) => 
 });
 
 // POST /api/policy/apply - Securely commit and hot-apply simulated draft policy (Role: admin)
+const MAX_POLICY_UPLOAD_LEN = 128 * 1024;
 app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
   try {
     const { policyCode } = req.body;
-    if (!policyCode || policyCode.trim().length === 0) {
+    if (typeof policyCode !== 'string' || policyCode.trim().length === 0) {
       res.status(400).json({ error: 'Missing or empty policyCode.' });
       return;
     }
-    
+    // Cap HTTP-derived policy text before writing it to disk
+    // (CodeQL js/http-to-file-access).
+    if (policyCode.length > MAX_POLICY_UPLOAD_LEN) {
+      res.status(413).json({ error: `policyCode exceeds maximum length of ${MAX_POLICY_UPLOAD_LEN} bytes.` });
+      return;
+    }
+
     try {
       const tester = new CedarEvaluator();
       tester.parse(policyCode);
@@ -2729,18 +2855,26 @@ app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
       res.status(400).json({ error: 'Policy safety audit rejected the draft.', message: policyAudit.reason });
       return;
     }
-    
+
+    // Write to a temp file inside the workspace and atomically rename into
+    // place — no existsSync-then-writeFileSync race and no partial file left
+    // behind on crash (CodeQL js/file-system-race + js/http-to-file-access).
     const activePolicyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
-    fs.writeFileSync(activePolicyPath, policyCode, 'utf8');
-    
+    const tempPolicyPath = `${activePolicyPath}.${secureShortHex(6)}.tmp`;
+    fs.writeFileSync(tempPolicyPath, policyCode, { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(tempPolicyPath, activePolicyPath);
+
     const newEvaluator = new CedarEvaluator(activePolicyPath);
     cedarEvaluator = newEvaluator;
-    
+
     log('info', `🛡️ POLICY APPLIED SUCCESSFULLY: System policy reloaded. Total rules: ${cedarEvaluator.getRulesCount()}`);
-    
-    // Git-backed audit log trail for policy updates
+
+    // Git-backed audit log trail for policy updates. Use execFileSync for each
+    // git invocation with an argv array so no shell interpolation occurs
+    // (CodeQL js/command-line-injection).
     try {
-      execSync('git add policy.cedar && git commit -m "security(policy): programmatically updated Cedar rules via co-pilot"', { cwd: process.cwd(), stdio: 'ignore' });
+      execFileSync('git', ['add', 'policy.cedar'], { cwd: process.cwd(), stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'security(policy): programmatically updated Cedar rules via co-pilot'], { cwd: process.cwd(), stdio: 'ignore' });
       log('info', `✅ POLICY VERSION CONTROLLED: Staged and committed policy.cedar updates.`);
     } catch (gitErr: any) {
       log('error', `⚠️ POLICY VERSION CONTROL FAILURE: Failed to commit policy.cedar. Error: ${gitErr.message}`);
@@ -2855,8 +2989,13 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
             const result = await runWasmCommand(wasmPath, args);
             log('info', `✅ BACKGROUND WASI EXECUTION COMPLETED: stdout: ${result.stdout}, exitCode: ${result.exitCode}`);
           } else {
-            const sandboxCmd = `bash scripts/sandbox-execute.sh "${updatedAction.command}" "${workspacePath}"`;
-            execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8' });
+            // argv-array invocation prevents shell interpolation of the
+            // consensus-approved command (CodeQL js/command-line-injection).
+            execFileSync(
+              'bash',
+              ['scripts/sandbox-execute.sh', updatedAction.command, workspacePath],
+              { cwd: workspacePath, encoding: 'utf8' }
+            );
             log('info', `✅ BACKGROUND SANDBOX EXECUTION COMPLETED.`);
           }
         } catch (bgErr: any) {

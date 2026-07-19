@@ -105,7 +105,14 @@ export class CedarEvaluator {
   private tokenize(expr: string): string[] {
     const tokens: string[] = [];
     let i = 0;
-    
+
+    // Cap the token loop so a pathologically long or attacker-shaped policy
+    // fragment cannot drive an unbounded scan (CodeQL js/loop-bound-injection).
+    const MAX_EXPR_LEN = 32 * 1024;
+    if (expr.length > MAX_EXPR_LEN) {
+      throw new Error(`Cedar condition expression exceeds ${MAX_EXPR_LEN} characters.`);
+    }
+
     while (i < expr.length) {
       const char = expr[i];
       if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {

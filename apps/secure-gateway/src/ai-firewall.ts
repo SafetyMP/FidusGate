@@ -117,7 +117,7 @@ export function isPromptSecure(prompt: string): FirewallResult {
 
   for (const item of forbiddenPatterns) {
     if (item.pattern.test(promptLower)) {
-      console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: ${item.label} detected in prompt: "${prompt}"`);
+      console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: ${item.label} detected in prompt: "${sanitizeLogValue(prompt)}"`);
       return {
         secure: false,
         reason: `Adversarial input blocked: ${item.label}.`,
@@ -128,7 +128,7 @@ export function isPromptSecure(prompt: string): FirewallResult {
 
   // 2. Scan for SQL/Script injections
   if (promptLower.includes('<script>') || promptLower.includes('javascript:') || promptLower.includes('union select')) {
-    console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Script/Payload injection detected in prompt: "${prompt}"`);
+    console.warn(`🛡️  [PROMPT FIREWALL BLOCKED]: Script/Payload injection detected in prompt: "${sanitizeLogValue(prompt)}"`);
     return {
       secure: false,
       reason: 'Script or payload injection detected.',

@@ -1,7 +1,7 @@
 # ==========================================
 # Stage 1: Build Workspace
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
 
 WORKDIR /workspace
 
@@ -34,7 +34,7 @@ RUN npm run build --workspace=@fidusgate/core-types \
 # ==========================================
 # Stage 2: Production Nginx Server
 # ==========================================
-FROM nginx:alpine AS runner
+FROM nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752 AS runner
 
 # Copy compiled static Vite assets to Nginx html root
 COPY --from=builder /workspace/apps/admin-dashboard/dist /usr/share/nginx/html

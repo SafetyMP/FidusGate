@@ -62,13 +62,51 @@ const POLICY_GODMODE_PATTERNS = [
   /!\(\s*principal\s*==\s*"sb:issuer:de073ae64e43"/,
 ];
 
+const MAX_POLICY_CODE_LEN = 128 * 1024;
+
+/**
+ * Linear scan for a `permit ( ... principal == "sb:issuer:...` fragment.
+ * Replaces the previous /permit\s*\([\s\S]*principal\s*==\s*"sb:issuer:/ regex,
+ * which had a nested quantifier and was flagged as ReDoS
+ * (CodeQL js/polynomial-redos).
+ */
+function containsPrivilegedPermit(policyCode: string): boolean {
+  let idx = 0;
+  while (idx < policyCode.length) {
+    const permitIdx = policyCode.indexOf('permit', idx);
+    if (permitIdx < 0) return false;
+    // Look for the opening paren immediately after (optionally through whitespace)
+    let cursor = permitIdx + 'permit'.length;
+    while (cursor < policyCode.length && (policyCode[cursor] === ' ' || policyCode[cursor] === '\t')) {
+      cursor++;
+    }
+    if (policyCode[cursor] === '(') {
+      const closeIdx = policyCode.indexOf(')', cursor);
+      if (closeIdx > cursor) {
+        const inside = policyCode.slice(cursor + 1, closeIdx);
+        if (inside.includes('principal') && inside.includes('sb:issuer:')) {
+          return true;
+        }
+      }
+    }
+    idx = permitIdx + 'permit'.length;
+  }
+  return false;
+}
+
 export function policyCodePassesSafetyChecks(policyCode: string): { ok: true } | { ok: false; reason: string } {
+  if (typeof policyCode !== 'string') {
+    return { ok: false, reason: 'Policy code must be a string.' };
+  }
+  if (policyCode.length > MAX_POLICY_CODE_LEN) {
+    return { ok: false, reason: `Policy code exceeds maximum length of ${MAX_POLICY_CODE_LEN} characters.` };
+  }
   for (const pattern of POLICY_GODMODE_PATTERNS) {
     if (pattern.test(policyCode)) {
       return { ok: false, reason: "Policy must not contain hardcoded god-mode principal exceptions." };
     }
   }
-  if (/permit\s*\([\s\S]*principal\s*==\s*"sb:issuer:/.test(policyCode) && !/signature/.test(policyCode)) {
+  if (containsPrivilegedPermit(policyCode) && !policyCode.includes('signature')) {
     return { ok: false, reason: "Privileged principal permits require signature attestation in policy comments." };
   }
   return { ok: true };

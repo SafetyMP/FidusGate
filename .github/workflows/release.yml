@@ -6,14 +6,16 @@ on:
       - main
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   draft-release:
     name: Compile & Publish Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout Repository
