@@ -1,8 +1,8 @@
 {
   "schema": "corporate-site-site/v1",
   "site_id": "fidusgate",
-  "corporate_program": null,
-  "corporate_handoff_sha256": null,
+  "corporate_program": "fidusgate",
+  "corporate_handoff_sha256": "0d2c28580ec19727a5f2bdfc7021df4b4812a8b99fb9e378e3bb47cf7cc8e322",
   "verify_argv": [
     "./scripts/verify.sh"
   ],

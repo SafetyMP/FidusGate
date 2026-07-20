@@ -194,7 +194,7 @@ def main():
     
     parser.add_argument(
         "--out",
-        default="./audio_segments/fidusgate_lyria_soundtrack.mp3",
+        default="/tmp/fidusgate_lyria_soundtrack.mp3",
         help="Output path to save the generated audio file."
     )
     

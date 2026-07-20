@@ -11,7 +11,14 @@ import { FidusGateDatabase } from '@fidusgate/database';
 import { buildDossier, conductInterview } from './interview-engine';
 import * as http from 'node:http';
 import { verifyReceipt, generateKeyPair, createAttestedSession, verifyAuditChain } from '@fidusgate/crypto-utils';
-import { startMcpServer } from './mcp-server';
+import { startMcpServer, handleMcpRequest } from './mcp-server';
+import {
+  validateMcpStreamableHeaders,
+  extractTraceContext,
+  buildWwwAuthenticateHeader,
+  buildProtectedResourceMetadata,
+  buildTrustedMcpHttpRequest,
+} from './mcp-http';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure } from './command-auditor';
@@ -28,7 +35,6 @@ import {
   safeRecordKey,
   sanitizeLogValue,
   untaintBoolean,
-  untaintText,
 } from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
@@ -262,6 +268,14 @@ const apiRateLimiter = rateLimit({
 const authTokenRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Streamable HTTP MCP endpoint limiter (CodeQL js/missing-rate-limiting). */
+const mcpRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -617,7 +631,15 @@ interface AuthenticatedRequest extends express.Request {
   };
 }
 
-function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[]) {
+function requestBaseUrl(req: express.Request): string {
+  const proto = (typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+    : req.protocol) || 'http';
+  const host = req.get('host') || `localhost:${port}`;
+  return `${proto}://${host}`;
+}
+
+function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[], options?: { mcpResource?: boolean }) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // Standard bypass helper if enabled via env (defaults to false for strict authentication gating)
     const isBypass = process.env.DISABLE_AUTH === 'true';
@@ -644,6 +666,10 @@ function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[]) {
       next();
     } catch (err: any) {
       log('security', 'CRITICAL AUTHENTICATION FAILURE: Invalid or expired JWT presented!', { error: err.message });
+      if (options?.mcpResource) {
+        const metadataUrl = `${requestBaseUrl(req)}/.well-known/oauth-protected-resource`;
+        res.setHeader('WWW-Authenticate', buildWwwAuthenticateHeader(metadataUrl));
+      }
       res.status(401).json({ error: 'Access Denied: Invalid or expired authentication token.' });
     }
   };
@@ -3402,6 +3428,70 @@ app.get('/api/quarantine/:principalId/interview', requireAuth(['admin']), async 
     res.json(logs);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to retrieve interview transcript', message: err.message });
+  }
+});
+
+// RFC 9728 Protected Resource Metadata (MCP 2026-07-28 auth surface — demo-grade)
+app.get('/.well-known/oauth-protected-resource', (req, res) => {
+  res.json(buildProtectedResourceMetadata(requestBaseUrl(req)));
+});
+
+// Streamable HTTP MCP endpoint (stateless; dual-era JSON-RPC via handleMcpRequest)
+app.post('/mcp', mcpRateLimiter, requireAuth(['developer', 'admin'], { mcpResource: true }), async (req, res) => {
+  try {
+    const validation = validateMcpStreamableHeaders(
+      req.headers as Record<string, string | string[] | undefined>,
+      req.body
+    );
+    if (!validation.ok) {
+      log('security', 'MCP Streamable HTTP header validation failed', {
+        error: validation.error,
+      });
+      res.status(validation.status).json({
+        jsonrpc: '2.0',
+        error: { code: validation.code, message: validation.error },
+        id: req.body?.id ?? null,
+      });
+      return;
+    }
+
+    const trusted = buildTrustedMcpHttpRequest(req.body, validation);
+    if (!trusted.ok) {
+      log('security', 'MCP Streamable HTTP trusted envelope rejected', {
+        error: trusted.error,
+      });
+      res.status(trusted.status).json({
+        jsonrpc: '2.0',
+        error: { code: trusted.code, message: trusted.error },
+        id: req.body?.id ?? null,
+      });
+      return;
+    }
+
+    const trace = extractTraceContext(req.body);
+    if (trace.traceparent || trace.tracestate || trace.baggage) {
+      log('info', 'MCP request W3C Trace Context', {
+        traceparent: trace.traceparent,
+        tracestate: trace.tracestate,
+        baggage: trace.baggage,
+        mcpMethod: validation.method,
+        mcpName: validation.name,
+      });
+    }
+
+    const response = await handleMcpRequest(trusted.request);
+    if (response === null || response === undefined) {
+      res.status(204).end();
+      return;
+    }
+    res.status(200).json(response);
+  } catch (err: any) {
+    log('error', 'MCP Streamable HTTP handler failure', { error: err.message });
+    res.status(500).json({
+      jsonrpc: '2.0',
+      error: { code: -32603, message: 'Internal error' },
+      id: req.body?.id ?? null,
+    });
   }
 });
 

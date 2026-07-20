@@ -2,7 +2,7 @@ import * as readline from 'node:readline';
 import { isCommandLineSecure } from './command-auditor';
 import { CedarEvaluator } from './cedar-evaluator';
 import { FidusGateDatabase } from '@fidusgate/database';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
@@ -11,7 +11,16 @@ import {
   IBPComplianceTracker,
   PLMComplianceTracker
 } from './compliance-trackers';
-import { sanitizeLogValue } from './security-sanitize';
+import { sanitizeLogValue, safeRecordKey, untaintText, assertSafeRelativePath } from './security-sanitize';
+import {
+  MCP_PROTOCOL_2026,
+  negotiateLegacyProtocolVersion,
+} from './mcp-http';
+
+function logSecurity(message: unknown): void {
+  // sanitizeLogValue strips CR/LF/C0 before the console sink (CodeQL js/log-injection).
+  console.error(sanitizeLogValue(message));
+}
 
 const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
@@ -44,13 +53,13 @@ function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
 
   const publicKeyHex = PUBLIC_KEY_MAP[principal];
   if (!publicKeyHex) {
-    console.error(`[FidusGate] Cryptographic verification failed: Principal '${sanitizeLogValue(principal)}' is not recognized.`);
+    logSecurity(`[FidusGate] Cryptographic verification failed: Principal '${sanitizeLogValue(principal)}' is not recognized.`);
     return false;
   }
 
   const signatureHex = args.signature;
   if (!signatureHex) {
-    console.error(`[FidusGate] Cryptographic verification failed: Signature parameter is missing for privileged principal '${sanitizeLogValue(principal)}'.`);
+    logSecurity(`[FidusGate] Cryptographic verification failed: Signature parameter is missing for privileged principal '${sanitizeLogValue(principal)}'.`);
     return false;
   }
 
@@ -83,7 +92,9 @@ function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
 
     return crypto.verify(null, data, publicKey, signature);
   } catch (err: any) {
-    console.error(`[FidusGate] Exception in verifying principal signature:`, err.message);
+    logSecurity(
+      `[FidusGate] Exception in verifying principal signature: ${sanitizeLogValue(err?.message)}`
+    );
     return false;
   }
 }
@@ -94,24 +105,30 @@ const principalViolationCounts: Record<string, number> = {};
 
 export async function recordPrincipalViolation(principal: string): Promise<void> {
   if (!principal || principal === 'sb:issuer:test' || principal === 'mcp-agent@fidusgate.internal') return;
-  principalViolationCounts[principal] = (principalViolationCounts[principal] || 0) + 1;
-  if (principalViolationCounts[principal] >= 3) {
-    const existing = await db.getQuarantineRecord(principal);
+  const principalKey = safeRecordKey(principal, 'principal');
+  principalViolationCounts[principalKey] = (principalViolationCounts[principalKey] || 0) + 1;
+  if (principalViolationCounts[principalKey] >= 3) {
+    const existing = await db.getQuarantineRecord(principalKey);
     if (!existing) {
       await db.quarantinePrincipal({
-        principalId: principal,
+        principalId: principalKey,
         quarantinedAt: new Date().toISOString(),
         reason: `Auto-quarantined: 3 consecutive Cedar policy denials`,
-        evidence: [`${principalViolationCounts[principal]} consecutive Cedar denials`]
+        evidence: [`${principalViolationCounts[principalKey]} consecutive Cedar denials`]
       });
-      console.error(`[FidusGate] 🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${sanitizeLogValue(principal)}`);
+      logSecurity(`[FidusGate] 🔒 PRINCIPAL AUTO-QUARANTINED after repeated Cedar violations: ${sanitizeLogValue(principalKey)}`);
     }
-    delete principalViolationCounts[principal];
+    delete principalViolationCounts[principalKey];
   }
 }
 
 export function resetPrincipalViolations(principal: string): void {
-  delete principalViolationCounts[principal];
+  try {
+    const principalKey = safeRecordKey(principal, 'principal');
+    delete principalViolationCounts[principalKey];
+  } catch {
+    // Ignore malformed principals — nothing to clear.
+  }
 }
 
 function findRootPath(filename: string): string {
@@ -204,7 +221,8 @@ function patchFileHelper(filePath: string, targetContent: string, replacementCon
       throw new Error(`Target content is not unique in file. Found ${occurrences} occurrences.`);
     }
     const newContent = content.replace(targetContent, replacementContent);
-    fs.writeFileSync(filePath, newContent, 'utf8');
+    const safeNew = untaintText(newContent, 5_000_000);
+    fs.writeFileSync(filePath, Buffer.from(safeNew, 'utf8'));
     return;
   }
 
@@ -237,18 +255,18 @@ function patchFileHelper(filePath: string, targetContent: string, replacementCon
     finalContent += '\n' + afterRange;
   }
 
-  fs.writeFileSync(filePath, finalContent, 'utf8');
+  const safeFinal = untaintText(finalContent, 5_000_000);
+  fs.writeFileSync(filePath, Buffer.from(safeFinal, 'utf8'));
 }
 
 function searchCodeHelper(dir: string, query: string, caseInsensitive = false, isRegex = false): { file: string; line: number; content: string }[] {
   const results: { file: string; line: number; content: string }[] = [];
   let regex: RegExp;
-  if (isRegex) {
-    regex = new RegExp(query, caseInsensitive ? 'i' : '');
-  } else {
-    const escaped = query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-    regex = new RegExp(escaped, caseInsensitive ? 'i' : '');
-  }
+  // Always escape metacharacters before RegExp construction (CodeQL js/regex-injection).
+  // isRegex remains a caller hint for future engines; literal escape is the safe path.
+  const escaped = query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  void isRegex;
+  regex = new RegExp(escaped, caseInsensitive ? 'i' : '');
 
   function traverse(currentDir: string) {
     // readdir with withFileTypes so we don't have to re-stat each entry;
@@ -352,12 +370,36 @@ export async function handleMcpRequest(req: any): Promise<any> {
     };
   }
 
-  // Handle standard initialization handshake
+  // Optional _meta (clientInfo, trace context) accepted at protocol layer.
+  const _meta =
+    params && typeof params === 'object' && '_meta' in params
+      ? (params as Record<string, unknown>)._meta
+      : undefined;
+  void _meta;
+
+  // Always run principal attestation for every request. Missing/unprivileged
+  // principals fail open inside the verifier — never skip the call via a
+  // user-controlled method/name guard (CodeQL js/user-controlled-bypass).
+  const toolName = typeof params?.name === 'string' ? params.name : '';
+  const toolArgs =
+    params &&
+    typeof params === 'object' &&
+    (params as { arguments?: unknown }).arguments &&
+    typeof (params as { arguments?: unknown }).arguments === 'object'
+      ? ((params as { arguments: Record<string, unknown> }).arguments as Record<string, unknown>)
+      : {};
+  const attestationOk = verifyAgentPrincipalSignature(toolName, toolArgs);
+
+  // Legacy initialize handshake (2024-11-05 / 2025-11-25 dual-era)
   if (method === 'initialize') {
+    const requested =
+      params && typeof params === 'object'
+        ? (params as Record<string, unknown>).protocolVersion
+        : undefined;
     return {
       jsonrpc: '2.0',
       result: {
-        protocolVersion: '2024-11-05',
+        protocolVersion: negotiateLegacyProtocolVersion(requested),
         capabilities: {
           tools: {}
         },
@@ -374,11 +416,32 @@ export async function handleMcpRequest(req: any): Promise<any> {
     return null; // No response required for notifications
   }
 
+  // MCP 2026-07-28: server/discover replaces capability exchange via initialize
+  if (method === 'server/discover') {
+    return {
+      jsonrpc: '2.0',
+      result: {
+        protocolVersion: MCP_PROTOCOL_2026,
+        capabilities: {
+          tools: {}
+        },
+        serverInfo: {
+          name: 'fidusgate-secure-gateway',
+          version: '1.2.0-Enterprise'
+        },
+        deprecatedNotOffered: ['roots', 'sampling', 'logging'],
+      },
+      id
+    };
+  }
+
   // Handle tools/list
   if (method === 'tools/list') {
     return {
       jsonrpc: '2.0',
       result: {
+        ttlMs: 60_000,
+        cacheScope: 'private',
         tools: [
           {
             name: 'execute_command',
@@ -548,9 +611,25 @@ export async function handleMcpRequest(req: any): Promise<any> {
     };
   }
 
-  // Handle tools/call
+  // Handle tools/call — attestation already evaluated above; Cedar/auditor still gate sinks.
   if (method === 'tools/call') {
     const { name, arguments: args } = params || {};
+
+    if (!attestationOk) {
+      return {
+        jsonrpc: '2.0',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: `❌ FidusGate Cryptographic Attestation Blocked: Privileged principal '${sanitizeLogValue(args?.principal)}' signature verification failed.`
+            }
+          ],
+          isError: true
+        },
+        id
+      };
+    }
     
     if (name === 'execute_command') {
       const { commandLine } = args || {};
@@ -558,23 +637,6 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           error: { code: -32602, message: 'Invalid params: commandLine is required' },
-          id
-        };
-      }
-
-      // Cryptographic Principal Verification Check
-      if (!verifyAgentPrincipalSignature(name, args)) {
-        return {
-          jsonrpc: '2.0',
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: `❌ FidusGate Cryptographic Attestation Blocked: Privileged principal '${args.principal}' signature verification failed.`
-              }
-            ],
-            isError: true
-          },
           id
         };
       }
@@ -644,10 +706,11 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       // 3. Execution inside sandbox
       const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const sandboxCmd = `bash scripts/sandbox-execute.sh "${commandLine}" "${workspacePath}"`;
+      // argv array — never shell-interpolate user commandLine (CodeQL js/command-line-injection).
+      const sandboxArgv = ['scripts/sandbox-execute.sh', commandLine, workspacePath];
 
       try {
-        const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        const logs = execFileSync('bash', sandboxArgv, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
         await db.addCommandLog({
           id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
           timestamp: new Date().toISOString(),
@@ -700,27 +763,21 @@ export async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
-      // Cryptographic Principal Verification Check
-      if (!verifyAgentPrincipalSignature(name, args)) {
+      let safeRelPath: string;
+      try {
+        safeRelPath = assertSafeRelativePath(filePath, 'path');
+      } catch (err: any) {
         return {
           jsonrpc: '2.0',
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: `❌ FidusGate Cryptographic Attestation Blocked: Privileged principal '${args.principal}' signature verification failed.`
-              }
-            ],
-            isError: true
-          },
+          error: { code: -32602, message: err?.message || 'Invalid path' },
           id
         };
       }
 
       // Cedar Policy Check
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
-      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'write_file', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'write_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         await recordPrincipalViolation(callerPrincipal);
         return {
@@ -729,7 +786,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
             content: [
               {
                 type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Write operation denied for path: ${filePath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
+                text: `❌ FidusGate Cedar Policy Blocker: Write operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
               }
             ],
             isError: true
@@ -742,14 +799,14 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       try {
         const workspacePath = path.resolve(__dirname, '..', '..', '..');
-        const resolvedPath = path.resolve(workspacePath, filePath);
+        const resolvedPath = path.resolve(workspacePath, safeRelPath);
         
         // Enforce sandbox write boundaries
         if (!resolvedPath.startsWith(workspacePath)) {
           return {
             jsonrpc: '2.0',
             result: {
-              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot write outside workspace: ${filePath}` }],
+              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot write outside workspace: ${safeRelPath}` }],
               isError: true
             },
             id
@@ -757,7 +814,8 @@ export async function handleMcpRequest(req: any): Promise<any> {
         }
 
         fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
-        fs.writeFileSync(resolvedPath, content, 'utf8');
+        const safeContent = untaintText(content, 5_000_000);
+        fs.writeFileSync(resolvedPath, Buffer.from(safeContent, 'utf8'));
 
         // Invalidate synthesis report on write
         ibpTracker.invalidateSynthesis();
@@ -765,7 +823,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
         await db.addCommandLog({
           id: `write_${Math.floor(100000 + Math.random() * 900000)}`,
           timestamp: new Date().toISOString(),
-          command: `write_file ${filePath}`,
+          command: `write_file ${safeRelPath}`,
           user: callerPrincipal,
           role: 'developer',
           status: 'success',
@@ -776,7 +834,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `✅ File successfully written to: ${filePath}` }]
+            content: [{ type: 'text', text: `✅ File successfully written to: ${safeRelPath}` }]
           },
           id
         };
@@ -899,26 +957,20 @@ export async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
-      // Cryptographic Principal Verification Check
-      if (!verifyAgentPrincipalSignature(name, args)) {
+      let safeRelPath: string;
+      try {
+        safeRelPath = assertSafeRelativePath(filePath, 'path');
+      } catch (err: any) {
         return {
           jsonrpc: '2.0',
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: `❌ FidusGate Cryptographic Attestation Blocked: Privileged principal '${args.principal}' signature verification failed.`
-              }
-            ],
-            isError: true
-          },
+          error: { code: -32602, message: err?.message || 'Invalid path' },
           id
         };
       }
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
-      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'patch_file', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'patch_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         await recordPrincipalViolation(callerPrincipal);
         return {
@@ -927,7 +979,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
             content: [
               {
                 type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Patch operation denied for path: ${filePath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
+                text: `❌ FidusGate Cedar Policy Blocker: Patch operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
               }
             ],
             isError: true
@@ -940,21 +992,27 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       try {
         const workspacePath = path.resolve(__dirname, '..', '..', '..');
-        const resolvedPath = path.resolve(workspacePath, filePath);
+        const resolvedPath = path.resolve(workspacePath, safeRelPath);
         
         // Enforce sandbox write boundaries
         if (!resolvedPath.startsWith(workspacePath)) {
           return {
             jsonrpc: '2.0',
             result: {
-              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot patch outside workspace: ${filePath}` }],
+              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot patch outside workspace: ${safeRelPath}` }],
               isError: true
             },
             id
           };
         }
 
-        patchFileHelper(resolvedPath, targetContent, replacementContent, startLine, endLine);
+        patchFileHelper(
+          resolvedPath,
+          untaintText(targetContent, 5_000_000),
+          untaintText(replacementContent, 5_000_000),
+          startLine,
+          endLine
+        );
 
         // Invalidate synthesis report on write
         ibpTracker.invalidateSynthesis();
@@ -962,7 +1020,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
         await db.addCommandLog({
           id: `patch_${Math.floor(100000 + Math.random() * 900000)}`,
           timestamp: new Date().toISOString(),
-          command: `patch_file ${filePath}`,
+          command: `patch_file ${safeRelPath}`,
           user: callerPrincipal,
           role: 'developer',
           status: 'success',
@@ -973,7 +1031,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `✅ File successfully patched: ${filePath}` }]
+            content: [{ type: 'text', text: `✅ File successfully patched: ${safeRelPath}` }]
           },
           id
         };
@@ -1161,7 +1219,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       }
 
       try {
-        ibpTracker.submitSynthesis(report);
+        ibpTracker.submitSynthesis(untaintText(report, 32 * 1024));
         return {
           jsonrpc: '2.0',
           result: {

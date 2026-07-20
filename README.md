@@ -6,10 +6,11 @@ FidusGate shifts security left: programmatic access controls, signature verifica
 
 > **Scope:** Reference implementation and capability showcase — **not** a production-hardened security product. See [Status, Maturity & Mocks](#-status-maturity--mocks).
 
+[![CI](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml)
 [![Docker Publish](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml)
-[![Release](https://img.shields.io/github/v/release/SafetyMP/FidusGate)](https://github.com/SafetyMP/FidusGate/releases)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/SafetyMP/FidusGate/badge)](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate)
-[![License](https://img.shields.io/github/license/SafetyMP/FidusGate)](LICENSE)
+[![Release](https://badgen.net/github/release/SafetyMP/FidusGate)](https://github.com/SafetyMP/FidusGate/releases)
+[![OpenSSF Scorecard](https://github.com/SafetyMP/FidusGate/actions/workflows/scorecard.yml/badge.svg?branch=main)](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate)
+[![License](https://badgen.net/github/license/SafetyMP/FidusGate)](LICENSE)
 
 **Jump to:** [Demo](#demo) · [Quick start](#-quick-start--execution-guide) · [Architecture](#-unified-monorepo-architecture) · [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -104,6 +105,7 @@ FidusGate maps conceptually to control families in **NIST SP 800-53, ISO/IEC 270
 *   **Auditability & Non-Repudiation:** Generates cryptographically signed **Ed25519 receipts** for all gateway transactions, establishing a tamper-evident, append-only audit log of agent actions (illustrative for non-repudiation in this demo due to local key storage).
 *   **Access Control & Least Privilege:** Restricts tool invocation in real-time based on risk severity, forcing high-risk terminal commands into isolated Docker sandboxes.
 *   **System Integrity Protection:** Automatically audits agentic pipelines to scan for dynamic prompt injection vectors and insecure runtime variables.
+*   **MCP July 2026 alignment:** Dual-era MCP — stdio keeps the legacy `initialize` handshake; `POST /mcp` speaks Streamable HTTP for **`2026-07-28`** with required `Mcp-Method` / `Mcp-Name` header/body consistency checks, `server/discover`, and demo RFC 9728 Protected Resource Metadata. See [docs/mcp-2026-07-28-migration.md](docs/mcp-2026-07-28-migration.md) and [OWASP MCP Top 10 mapping](docs/adr/0001-owasp-mcp-top-10.md).
 
 ---
 

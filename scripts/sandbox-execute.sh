@@ -135,7 +135,7 @@ timeout "$TIMEOUT_LIMIT" docker run --name "$CONTAINER_NAME" \
   bash -c "
     echo '🛡️  Preparing ephemeral copy-on-write workspace...' && \
     mkdir -p /app && \
-    tar -cf - --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=audio_segments --exclude=output_presentation --exclude=dist -C /workspace . | tar -xf - -C /app && \
+    tar -cf - --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=dist -C /workspace . | tar -xf - -C /app && \
     find /workspace -maxdepth 3 -type d -name node_modules -prune 2>/dev/null | while read -r dir; do \
       rel=\${dir#/workspace/}; \
       mkdir -p \"/app/\${rel%/*}\" 2>/dev/null; \
@@ -152,7 +152,7 @@ timeout "$TIMEOUT_LIMIT" docker run --name "$CONTAINER_NAME" \
         elif command -v apt-get >/dev/null 2>&1; then apt-get update -y >/dev/null 2>&1 && apt-get install -y diffutils >/dev/null 2>&1; fi; \
       fi; \
       echo '🔍 Generating git diff patch...' && \
-      diff -ruN --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=audio_segments --exclude=output_presentation --exclude=dist /workspace /app | sed 's|^--- /workspace/|--- a/|; s|^+++ /app/|+++ b/|' > /workspace-memory/pending-sandbox.patch; \
+      diff -ruN --exclude=node_modules --exclude=.git --exclude=.turbo --exclude=dist /workspace /app | sed 's|^--- /workspace/|--- a/|; s|^+++ /app/|+++ b/|' > /workspace-memory/pending-sandbox.patch; \
     fi; \
     exit \$EXIT_VAL
   "

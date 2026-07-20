@@ -13,10 +13,12 @@ export function sanitizeLogValue(value: unknown): string {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   // Explicit \n/\r replaces are recognized as log-injection sanitizers by CodeQL;
   // the control-char pass removes the remaining C0/DEL bytes.
-  return text
+  const sanitized = text
     .replace(/\n/g, '?')
     .replace(/\r/g, '?')
     .replace(/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '?');
+  // Rebuild the sanitized text to provide a fresh safe string for log sinks.
+  return untaintText(sanitized, sanitized.length);
 }
 
 /** Untaint a boolean loaded from disk before embedding in outbound requests. */

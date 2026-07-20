@@ -18,6 +18,8 @@ Use the links below to navigate our primary documentation suite:
 | **Phase 3 Feature Walkthrough** | [walkthrough.md](./walkthrough.md) | Active filesystem drift auto-reconciliation models, Gemini policy co-pilots, and trunk-based semantic versioning releases. |
 | **Phase 4 & 5 Walkthrough** | [walkthrough_v2.md](./walkthrough_v2.md) | Extended verification flows and enterprise simulator features. |
 | **Enterprise Hardening Plan** | [implementation_plan.md](./implementation_plan.md) | Technical blueprint and database schema migrations for structured agent auto-fixes, KMS HSM signing, and WASI sandboxes. |
+| **MCP 2026-07-28 migration** | [mcp-2026-07-28-migration.md](./mcp-2026-07-28-migration.md) | Dual-era stdio/HTTP, Streamable headers, RFC 9728 PRM for operators. |
+| **OWASP MCP Top 10 ADR** | [adr/0001-owasp-mcp-top-10.md](./adr/0001-owasp-mcp-top-10.md) | Control mapping MCP01–MCP10 to Cedar, quarantine, and gateway surfaces. |
 
 ---
 

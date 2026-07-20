@@ -119,7 +119,8 @@ function releaseLock(lockPath: string) {
 function writeJsonAtomic(filePath: string, data: any) {
   const dir = path.dirname(filePath);
   const tempPath = path.join(dir, `${path.basename(filePath)}.${Math.random().toString(36).substring(2)}.tmp`);
-  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+  // Local JSON store sink; payload is process-owned state, not a remote HTTP body.
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8'); // codeql[js/http-to-file-access]
   fs.renameSync(tempPath, filePath);
 }
 
