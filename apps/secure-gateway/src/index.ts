@@ -3428,8 +3428,15 @@ app.get('/.well-known/oauth-protected-resource', (req, res) => {
   res.json(buildProtectedResourceMetadata(requestBaseUrl(req)));
 });
 
+const mcpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Streamable HTTP MCP endpoint (stateless; dual-era JSON-RPC via handleMcpRequest)
-app.post('/mcp', requireAuth(['developer', 'admin'], { mcpResource: true }), async (req, res) => {
+app.post('/mcp', mcpRateLimiter, requireAuth(['developer', 'admin'], { mcpResource: true }), async (req, res) => {
   try {
     const validation = validateMcpStreamableHeaders(
       req.headers as Record<string, string | string[] | undefined>,
