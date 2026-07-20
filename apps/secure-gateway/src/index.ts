@@ -17,6 +17,7 @@ import {
   extractTraceContext,
   buildWwwAuthenticateHeader,
   buildProtectedResourceMetadata,
+  buildTrustedMcpHttpRequest,
 } from './mcp-http';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { CedarEvaluator } from './cedar-evaluator';
@@ -3454,6 +3455,19 @@ app.post('/mcp', mcpRateLimiter, requireAuth(['developer', 'admin'], { mcpResour
       return;
     }
 
+    const trusted = buildTrustedMcpHttpRequest(req.body, validation);
+    if (!trusted.ok) {
+      log('security', 'MCP Streamable HTTP trusted envelope rejected', {
+        error: trusted.error,
+      });
+      res.status(trusted.status).json({
+        jsonrpc: '2.0',
+        error: { code: trusted.code, message: trusted.error },
+        id: req.body?.id ?? null,
+      });
+      return;
+    }
+
     const trace = extractTraceContext(req.body);
     if (trace.traceparent || trace.tracestate || trace.baggage) {
       log('info', 'MCP request W3C Trace Context', {
@@ -3465,7 +3479,7 @@ app.post('/mcp', mcpRateLimiter, requireAuth(['developer', 'admin'], { mcpResour
       });
     }
 
-    const response = await handleMcpRequest(req.body);
+    const response = await handleMcpRequest(trusted.request);
     if (response === null || response === undefined) {
       res.status(204).end();
       return;

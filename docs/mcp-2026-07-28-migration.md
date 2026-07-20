@@ -23,6 +23,8 @@ Every `POST /mcp` must include:
 
 Header/body disagreement is rejected **before** Cedar evaluation (desync / confused-routing control).
 
+Streamable HTTP rebuilds a trusted JSON-RPC envelope from allowlisted methods/tools. Filesystem-mutating tools (`write_file`, `patch_file`, `submit_ibp_synthesis`) are **not** available over `POST /mcp` — use stdio MCP for those. HTTP supports protocol methods plus `execute_command`, `read_file`, `search_code`, and `list_directory`.
+
 Optional: put W3C Trace Context (`traceparent`, `tracestate`, `baggage`) under `params._meta` for correlated logs.
 
 ## Cursor / stdio

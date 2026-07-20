@@ -7,6 +7,7 @@ import {
   extractTraceContext,
   buildWwwAuthenticateHeader,
   buildProtectedResourceMetadata,
+  buildTrustedMcpHttpRequest,
   MCP_PROTOCOL_2025,
   MCP_PROTOCOL_2026,
   MCP_PROTOCOL_LEGACY,
@@ -166,5 +167,37 @@ test('MCP Streamable HTTP header/body consistency (OWASP / SEP-2243)', async (t)
     const www = buildWwwAuthenticateHeader('http://localhost:3001/.well-known/oauth-protected-resource');
     assert.match(www, /resource_metadata=/);
     assert.match(www, /Bearer/);
+  });
+
+  await t.test('trusted HTTP envelope allows read_file and rejects write_file', () => {
+    const readOk = buildTrustedMcpHttpRequest(
+      {
+        jsonrpc: '2.0',
+        id: 9,
+        method: 'tools/call',
+        params: { name: 'read_file', arguments: { path: 'README.md' } },
+      },
+      { method: 'tools/call', name: 'read_file' }
+    );
+    assert.strictEqual(readOk.ok, true);
+    if (readOk.ok) {
+      assert.strictEqual((readOk.request.params as any).name, 'read_file');
+      assert.strictEqual((readOk.request.params as any).arguments.path, 'README.md');
+    }
+
+    const writeDenied = buildTrustedMcpHttpRequest(
+      {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: { name: 'write_file', arguments: { path: 'x.ts', content: 'pwn' } },
+      },
+      { method: 'tools/call', name: 'write_file' }
+    );
+    assert.strictEqual(writeDenied.ok, false);
+    if (!writeDenied.ok) {
+      assert.strictEqual(writeDenied.status, 405);
+      assert.match(writeDenied.error, /stdio MCP/);
+    }
   });
 });
