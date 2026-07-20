@@ -18,8 +18,8 @@ import {
 } from './mcp-http';
 
 function logSecurity(message: string): void {
-  // Re-strip newlines at the console sink (CodeQL js/log-injection).
-  console.error(String(message).replace(/\n/g, '?').replace(/\r/g, '?'));
+  // Sanitize at the console sink to prevent log-forging/control-char injection.
+  console.error(sanitizeLogValue(message));
 }
 
 const PUBLIC_KEY_MAP: Record<string, string> = {
