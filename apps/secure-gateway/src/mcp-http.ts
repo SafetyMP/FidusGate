@@ -7,6 +7,13 @@ export const MCP_PROTOCOL_2026 = '2026-07-28';
 export const MCP_PROTOCOL_2025 = '2025-11-25';
 export const MCP_PROTOCOL_LEGACY = '2024-11-05';
 
+/** Dual-era initialize negotiation (legacy 2024-11-05 / 2025-11-25). */
+export function negotiateLegacyProtocolVersion(requested: unknown): string {
+  if (requested === MCP_PROTOCOL_LEGACY) return MCP_PROTOCOL_LEGACY;
+  if (requested === MCP_PROTOCOL_2025) return MCP_PROTOCOL_2025;
+  return MCP_PROTOCOL_2025;
+}
+
 const NAMED_METHODS = new Set([
   'tools/call',
   'resources/read',
