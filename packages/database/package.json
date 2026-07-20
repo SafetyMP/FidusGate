@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npx prisma generate && tsc",
     "dev": "tsc -w",
-    "test": "echo \"No database tests defined.\""
+    "test": "npm run build && node --test dist/production-persistence.test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

@@ -81,7 +81,7 @@ def _load_yaml_minimal(text: str) -> dict[str, Any]:
         val = val.strip()
 
         if val == "":
-            if key in ("cells", "deny_cases", "pr_scope"):
+            if key in ("cells", "deny_cases", "pr_scope", "oos", "owasp_mcp_map"):
                 new_val: Any = []
             else:
                 new_val = {}

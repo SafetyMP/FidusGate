@@ -4,6 +4,37 @@ import * as crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production' || process.env.FIDUSGATE_RUNTIME === 'production';
+}
+
+function assertJsonFallbackAllowed(): void {
+  const production = isProductionRuntime();
+  if (production && !process.env.DATABASE_URL) {
+    throw new Error('JSON fallback forbidden; PostgreSQL DATABASE_URL is required.');
+  }
+  if (production) {
+    throw new Error('JSON persistence is disabled in production; PostgreSQL is required.');
+  }
+}
+
+function validateDatabaseUrl(databaseUrl: string | undefined): void {
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required in production.');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
+  }
+
+  if ((parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') || !parsed.hostname) {
+    throw new Error('DATABASE_URL must use the postgres or postgresql scheme.');
+  }
+}
+
 function calculateReceiptHash(payload: any): string {
   const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
   return crypto.createHash('sha256').update(data).digest('hex');
@@ -125,6 +156,7 @@ function writeJsonAtomic(filePath: string, data: any) {
 }
 
 function lockAndModify(filePath: string, modifyFn: (currentData: any) => any, defaultValue: any = []) {
+  assertJsonFallbackAllowed();
   const lockPath = `${filePath}.lock`;
   acquireLock(lockPath);
   try {
@@ -192,6 +224,7 @@ async function writeJsonAtomicAsync(filePath: string, data: any): Promise<void> 
 }
 
 async function lockAndModifyAsync(filePath: string, modifyFn: (currentData: any) => any, defaultValue: any = []): Promise<void> {
+  assertJsonFallbackAllowed();
   const lockPath = `${filePath}.lock`;
   await acquireLockAsync(lockPath);
   try {
@@ -323,7 +356,11 @@ export class FidusGateDatabase {
   }
 
   constructor() {
-    this.ensureInitialized();
+    if (isProductionRuntime()) {
+      validateDatabaseUrl(process.env.DATABASE_URL);
+    } else {
+      this.ensureInitialized();
+    }
     this.initPrisma();
   }
 
@@ -334,15 +371,22 @@ export class FidusGateDatabase {
         this.usePostgres = true;
         console.error('📡 FidusGateDatabase: Relational PostgreSQL mode enabled via Prisma ORM.');
       } catch (e: any) {
+        if (isProductionRuntime()) {
+          throw new Error(`PostgreSQL initialization failed: ${e.message}`);
+        }
         console.warn('⚠️  FidusGateDatabase: Failed to initialize Prisma client, falling back to JSON mock files:', e.message);
         this.usePostgres = false;
       }
     } else {
+      if (isProductionRuntime()) {
+        throw new Error('DATABASE_URL is required in production.');
+      }
       console.error('💾 FidusGateDatabase: Running in zero-dependency local JSON file store mode.');
     }
   }
 
   private ensureInitialized() {
+    assertJsonFallbackAllowed();
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
@@ -388,6 +432,7 @@ export class FidusGateDatabase {
   // Transactions Management
   // ==========================================
   private async getTransactionsJson(): Promise<Transaction[]> {
+    assertJsonFallbackAllowed();
     try {
       const data = await fs.promises.readFile(TX_FILE, 'utf-8');
       return JSON.parse(data);
@@ -450,6 +495,7 @@ export class FidusGateDatabase {
   // Signed Receipts Management
   // ==========================================
   private async getAuditReceiptsJson(): Promise<AuditReceipt[]> {
+    assertJsonFallbackAllowed();
     try {
       const data = await fs.promises.readFile(RECEIPTS_FILE, 'utf-8');
       return JSON.parse(data);
@@ -563,6 +609,7 @@ export class FidusGateDatabase {
   // Security Findings Management
   // ==========================================
   private async getFindingsJson(): Promise<SecurityFinding[]> {
+    assertJsonFallbackAllowed();
     try {
       const data = await fs.promises.readFile(FINDINGS_FILE, 'utf-8');
       return JSON.parse(data);
@@ -657,6 +704,7 @@ export class FidusGateDatabase {
   // Command Audit Logs Management
   // ==========================================
   private getCommandLogsJson(): CommandLogEntry[] {
+    assertJsonFallbackAllowed();
     this.ensureInitialized();
     try {
       const data = fs.readFileSync(COMMAND_LOGS_FILE, 'utf-8');
@@ -720,6 +768,7 @@ export class FidusGateDatabase {
   // Filesystem Drift Management
   // ==========================================
   private getDriftsJson(): FilesystemDriftEntry[] {
+    assertJsonFallbackAllowed();
     this.ensureInitialized();
     try {
       const data = fs.readFileSync(DRIFTS_FILE, 'utf-8');
@@ -823,6 +872,7 @@ export class FidusGateDatabase {
   // System Config / Circuit Breaker Management
   // ==========================================
   private getSystemConfigJson(): { circuitBreakerActive: boolean; agentTokenBudget: number } {
+    assertJsonFallbackAllowed();
     const CONFIG_FILE = path.join(DATA_DIR, 'system-config.json');
     if (!fs.existsSync(CONFIG_FILE)) {
       writeJsonAtomic(CONFIG_FILE, { circuitBreakerActive: false, agentTokenBudget: 1000.0 });
@@ -894,6 +944,7 @@ export class FidusGateDatabase {
   // Consensus Gating / Pending Actions Management
   // ==========================================
   private getPendingActionsJson(): any[] {
+    assertJsonFallbackAllowed();
     const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
     if (!fs.existsSync(ACTIONS_FILE)) {
       writeJsonAtomic(ACTIONS_FILE, []);

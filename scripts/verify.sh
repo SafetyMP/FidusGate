@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Definition of Done — stub canary + npm ci + lint/test + threat-model.
-# Invoked by stop hook and CI verify job (.github/workflows/ci.yml).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -27,3 +26,33 @@ if [[ -f ./scripts/check-threat-model.sh ]]; then
   echo "==> threat model gate"
   bash ./scripts/check-threat-model.sh
 fi
+
+FILTER="${1:-}"
+if [[ "$FILTER" == "--filter" ]]; then
+  FILTER="${2:-}"
+fi
+
+run_if_exists() {
+  local script="$1"
+  if [[ -x "$script" ]] || [[ -f "$script" ]]; then
+    bash "$script"
+  fi
+}
+
+case "$FILTER" in
+  ux-console)
+    echo "==> ux-console filter"
+    run_if_exists ./scripts/operator-journey-smoke.sh
+    ;;
+  data-ai)
+    echo "==> data-ai filter (covered by npm test ai-firewall/interview/router)"
+    ;;
+  "" )
+    echo "==> production profile + kill-list honesty"
+    run_if_exists ./scripts/production-profile-failclosed.sh
+    run_if_exists ./scripts/kill-list-honesty-check.sh
+    ;;
+  *)
+    echo "==> unknown filter '$FILTER' (skipped extras)"
+    ;;
+esac
