@@ -32,6 +32,16 @@ Guidance for governing AI agent tool calls using Cedar policies and Ed25519 sign
 
 protect-mcp intercepts MCP tool calls, evaluates them against Cedar policies (the same policy engine used by AWS Verified Permissions), and signs every decision as an Ed25519 receipt. The receipt is a cryptographic proof that a specific policy was evaluated against a specific tool call at a specific time.
 
+### July 2026 protocol notes (MCP `2026-07-28`)
+
+FidusGate’s gateway is **dual-era**:
+
+- **stdio** — legacy `initialize` handshake retained for Cursor/local clients (`2025-11-25` preferred; `2024-11-05` accepted).
+- **HTTP** `POST /mcp` — stateless Streamable HTTP: require `MCP-Protocol-Version`, `Mcp-Method`, and (for named methods) `Mcp-Name`. Header/body disagreement is rejected **before** Cedar runs.
+- Modern clients should call `server/discover` instead of relying on session init.
+- Demo OAuth surface: `GET /.well-known/oauth-protected-resource` (RFC 9728); map residual risks via [OWASP MCP Top 10 ADR](../../docs/adr/0001-owasp-mcp-top-10.md).
+- Operator guide: [mcp-2026-07-28-migration.md](../../docs/mcp-2026-07-28-migration.md).
+
 ```
 Agent → protect-mcp → Cedar policy evaluation → MCP Server
                 ↓

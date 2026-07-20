@@ -1,0 +1,43 @@
+{
+  "schema": "fidusgate-site-verification/v1",
+  "program_id": "fidusgate",
+  "revision": 1,
+  "authored": "2026-07-20T01:44:58Z",
+  "packets": [
+    "ADR-A",
+    "ADR-B"
+  ],
+  "commands": {
+    "verify": {
+      "argv": [
+        "./scripts/verify.sh"
+      ],
+      "exit_code": 0,
+      "cwd": "/Users/sagehart/Downloads/FidusGate"
+    },
+    "integration_smoke": {
+      "argv": [
+        "./scripts/integration-smoke.sh"
+      ],
+      "exit_code": 0,
+      "cwd": "/Users/sagehart/Downloads/FidusGate"
+    },
+    "adversarial": {
+      "argv": [
+        "./scripts/adversarial.sh"
+      ],
+      "exit_code": 0,
+      "cwd": "/Users/sagehart/Downloads/FidusGate"
+    }
+  },
+  "cr6": [
+    "integration_from_worktree_denied",
+    "mcp_header_body_desync_denied"
+  ],
+  "legacy_media_removed": true,
+  "corporate_evidence_refs": [
+    "/Users/sagehart/Downloads/FidusGate Corporate/evidence/site_verify-r1.json",
+    "/Users/sagehart/Downloads/FidusGate Corporate/evidence/operations-r1.json",
+    "/Users/sagehart/Downloads/FidusGate Corporate/evidence/adversarial-check-r1.json"
+  ]
+}

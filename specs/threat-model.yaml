@@ -1,6 +1,6 @@
 schema: threat-model/v1
 product: FidusGate
-updated: "2026-07-13"
+updated: "2026-07-18"
 
 cells:
   - id: integration_smoke_main_root
@@ -10,6 +10,16 @@ cells:
     auth_mechanism: cwd_main_root
     trust_boundary: not_from_worktree
     establishment_failure: "exit 1 from worktree cwd"
+
+  - id: mcp_streamable_http_header_consistency
+    method: EXEC
+    path: ./scripts/check-mcp-protocol.sh
+    principals: [gateway_operator]
+    auth_mechanism: header_body_agreement
+    trust_boundary: mcp_streamable_http
+    establishment_failure: "header/body desync or dual-era protocol regression"
+    owasp: [MCP07, MCP03]
+    baseline: true
 
 deny_cases:
   - id: integration_from_worktree_denied
@@ -21,3 +31,13 @@ deny_cases:
       cwd: .worktrees
     expect:
       status: 1
+
+  - id: mcp_header_body_desync_denied
+    cell: mcp_streamable_http_header_consistency
+    principal: gateway_operator
+    owasp: MCP07
+    fixture:
+      cwd: .
+      command: ./scripts/check-mcp-protocol.sh
+    expect:
+      status: 0

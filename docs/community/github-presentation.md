@@ -15,12 +15,13 @@ Set in **Settings** or the gear icon next to About on the repo home. Keep it to 
 
 The badge row lives near the top of [`README.md`](../../README.md):
 
+- **CI** — [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (GitHub Actions badge; hermetic verify + related jobs).
 - **Docker Publish** — [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml) (GHCR images for gateway + dashboard).
-- **Release** — latest GitHub Release via shields.io.
-- **OpenSSF Scorecard** — [`.github/workflows/scorecard.yml`](../../.github/workflows/scorecard.yml); badge populates after the first published run on `main`.
-- **License** — Apache 2.0.
+- **Release** — latest GitHub Release via [badgen.net](https://badgen.net) (avoids shields.io CDN outages).
+- **OpenSSF Scorecard** — [`.github/workflows/scorecard.yml`](../../.github/workflows/scorecard.yml) workflow status badge; numeric score and check details live on the [Scorecard viewer](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate). Prefer the Actions badge over `api.scorecard.dev/.../badge`, which redirects through shields.io.
+- **License** — Apache 2.0 via badgen.net.
 
-If a workflow file is renamed, update the matching badge URL and its link target.
+If a workflow file is renamed, update the matching badge URL and its link target. Prefer GitHub Actions badges for workflow status and badgen (or another non-shields host) for release/license so a single CDN outage cannot blank the row.
 
 ## Demo image
 
