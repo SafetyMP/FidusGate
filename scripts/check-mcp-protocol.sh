@@ -6,8 +6,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Integration CI only runs npm ci — build workspace deps before compiling the gateway.
 if [[ ! -f apps/secure-gateway/dist/mcp-protocol.test.js ]]; then
-  (cd apps/secure-gateway && npm run build)
+  if command -v npx >/dev/null 2>&1 && [[ -f package.json ]]; then
+    npx turbo run build --filter=@fidusgate/secure-gateway...
+  else
+    (cd apps/secure-gateway && npm run build)
+  fi
 fi
 
 node --test apps/secure-gateway/dist/mcp-protocol.test.js

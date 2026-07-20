@@ -34,7 +34,6 @@ import {
   safeRecordKey,
   sanitizeLogValue,
   untaintBoolean,
-  untaintText,
 } from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
@@ -268,6 +267,14 @@ const apiRateLimiter = rateLimit({
 const authTokenRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Streamable HTTP MCP endpoint limiter (CodeQL js/missing-rate-limiting). */
+const mcpRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
 });

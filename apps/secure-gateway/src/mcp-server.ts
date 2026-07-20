@@ -2,7 +2,7 @@ import * as readline from 'node:readline';
 import { isCommandLineSecure } from './command-auditor';
 import { CedarEvaluator } from './cedar-evaluator';
 import { FidusGateDatabase } from '@fidusgate/database';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
@@ -18,188 +18,10 @@ import {
   MCP_PROTOCOL_LEGACY,
 } from './mcp-http';
 
-const MCP_SERVER_INFO = {
-  name: 'fidusgate-secure-gateway',
-  version: '1.2.0-Enterprise',
-};
-
-const MCP_TOOLS_CAPABILITIES = { tools: {} as Record<string, unknown> };
-
-/** Demo cache hints for list results (SEP-2549). */
-const MCP_LIST_CACHE = { ttlMs: 60_000, cacheScope: 'private' as const };
-
 function negotiateLegacyProtocolVersion(requested: unknown): string {
   if (requested === MCP_PROTOCOL_LEGACY) return MCP_PROTOCOL_LEGACY;
   if (requested === MCP_PROTOCOL_2025) return MCP_PROTOCOL_2025;
-  // Prefer 2025-11-25 for dual-era legacy handshake when client omits or sends modern.
   return MCP_PROTOCOL_2025;
-}
-
-function getToolDefinitions() {
-  return [
-          {
-            name: 'execute_command',
-            description: 'Run a shell command securely inside FidusGate\'s unprivileged Docker container sandbox (gVisor optional).',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                commandLine: {
-                  type: 'string',
-                  description: 'The shell command line string to execute.'
-                },
-                principal: {
-                  type: 'string',
-                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
-                },
-                signature: {
-                  type: 'string',
-                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
-                }
-              },
-              required: ['commandLine']
-            }
-          },
-          {
-            name: 'write_file',
-            description: 'Write or modify a file inside the sandboxed workspace directory.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: {
-                  type: 'string',
-                  description: 'Absolute or relative path to the target file.'
-                },
-                content: {
-                  type: 'string',
-                  description: 'The string content to write to the file.'
-                },
-                principal: {
-                  type: 'string',
-                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
-                },
-                signature: {
-                  type: 'string',
-                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
-                }
-              },
-              required: ['path', 'content']
-            }
-          },
-          {
-            name: 'read_file',
-            description: 'Read the contents of a file inside the sandboxed workspace directory.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: {
-                  type: 'string',
-                  description: 'Absolute or relative path to the target file.'
-                },
-                startLine: {
-                  type: 'integer',
-                  description: 'Optional start line number (1-indexed).'
-                },
-                endLine: {
-                  type: 'integer',
-                  description: 'Optional end line number (1-indexed).'
-                }
-              },
-              required: ['path']
-            }
-          },
-          {
-            name: 'patch_file',
-            description: 'Apply a single search-and-replace patch to a file in the workspace directory.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: {
-                  type: 'string',
-                  description: 'Absolute or relative path to the target file.'
-                },
-                targetContent: {
-                  type: 'string',
-                  description: 'The exact string content inside the file to be replaced.'
-                },
-                replacementContent: {
-                  type: 'string',
-                  description: 'The string content to replace targetContent with.'
-                },
-                startLine: {
-                  type: 'integer',
-                  description: 'Optional start line number of the range to look for targetContent.'
-                },
-                endLine: {
-                  type: 'integer',
-                  description: 'Optional end line number of the range to look for targetContent.'
-                },
-                principal: {
-                  type: 'string',
-                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
-                },
-                signature: {
-                  type: 'string',
-                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
-                }
-              },
-              required: ['path', 'targetContent', 'replacementContent']
-            }
-          },
-          {
-            name: 'search_code',
-            description: 'Search for a query pattern recursively inside the workspace files (Node-native grep).',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The query text or pattern to look for.'
-                },
-                searchPath: {
-                  type: 'string',
-                  description: 'Optional relative path to a subfolder to search inside.'
-                },
-                caseInsensitive: {
-                  type: 'boolean',
-                  description: 'Whether to ignore case during searching.'
-                },
-                isRegex: {
-                  type: 'boolean',
-                  description: 'Whether to treat query as a regular expression pattern.'
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'list_directory',
-            description: 'List contents of a directory in the workspace.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: {
-                  type: 'string',
-                  description: 'Absolute or relative path to list contents of.'
-                }
-              },
-              required: ['path']
-            }
-          },
-          {
-            name: 'submit_ibp_synthesis',
-            description: 'Submit the Sprint Sprint cross-functional IBP synthesis report to unlock gates.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                report: {
-                  type: 'string',
-                  description: 'The text of the Sprint synthesis report.'
-                }
-              },
-              required: ['report']
-            }
-          }
-  ];
 }
 
 const PUBLIC_KEY_MAP: Record<string, string> = {
@@ -541,8 +363,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
     };
   }
 
-  // Optional _meta (clientInfo, trace context) is accepted and ignored at the
-  // protocol layer — application state stays in PLM/IBP trackers and tool args.
+  // Optional _meta (clientInfo, trace context) accepted at protocol layer.
   const _meta =
     params && typeof params === 'object' && '_meta' in params
       ? (params as Record<string, unknown>)._meta
@@ -559,8 +380,13 @@ export async function handleMcpRequest(req: any): Promise<any> {
       jsonrpc: '2.0',
       result: {
         protocolVersion: negotiateLegacyProtocolVersion(requested),
-        capabilities: MCP_TOOLS_CAPABILITIES,
-        serverInfo: MCP_SERVER_INFO,
+        capabilities: {
+          tools: {}
+        },
+        serverInfo: {
+          name: 'fidusgate-secure-gateway',
+          version: '1.2.0-Enterprise'
+        }
       },
       id
     };
@@ -576,9 +402,13 @@ export async function handleMcpRequest(req: any): Promise<any> {
       jsonrpc: '2.0',
       result: {
         protocolVersion: MCP_PROTOCOL_2026,
-        capabilities: MCP_TOOLS_CAPABILITIES,
-        serverInfo: MCP_SERVER_INFO,
-        // Roots, Sampling, and Logging are deprecated and not offered.
+        capabilities: {
+          tools: {}
+        },
+        serverInfo: {
+          name: 'fidusgate-secure-gateway',
+          version: '1.2.0-Enterprise'
+        },
         deprecatedNotOffered: ['roots', 'sampling', 'logging'],
       },
       id
@@ -590,8 +420,172 @@ export async function handleMcpRequest(req: any): Promise<any> {
     return {
       jsonrpc: '2.0',
       result: {
-        tools: getToolDefinitions(),
-        ...MCP_LIST_CACHE,
+        ttlMs: 60_000,
+        cacheScope: 'private',
+        tools: [
+          {
+            name: 'execute_command',
+            description: 'Run a shell command securely inside FidusGate\'s unprivileged Docker container sandbox (gVisor optional).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                commandLine: {
+                  type: 'string',
+                  description: 'The shell command line string to execute.'
+                },
+                principal: {
+                  type: 'string',
+                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
+                },
+                signature: {
+                  type: 'string',
+                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
+                }
+              },
+              required: ['commandLine']
+            }
+          },
+          {
+            name: 'write_file',
+            description: 'Write or modify a file inside the sandboxed workspace directory.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'Absolute or relative path to the target file.'
+                },
+                content: {
+                  type: 'string',
+                  description: 'The string content to write to the file.'
+                },
+                principal: {
+                  type: 'string',
+                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
+                },
+                signature: {
+                  type: 'string',
+                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
+                }
+              },
+              required: ['path', 'content']
+            }
+          },
+          {
+            name: 'read_file',
+            description: 'Read the contents of a file inside the sandboxed workspace directory.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'Absolute or relative path to the target file.'
+                },
+                startLine: {
+                  type: 'integer',
+                  description: 'Optional start line number (1-indexed).'
+                },
+                endLine: {
+                  type: 'integer',
+                  description: 'Optional end line number (1-indexed).'
+                }
+              },
+              required: ['path']
+            }
+          },
+          {
+            name: 'patch_file',
+            description: 'Apply a single search-and-replace patch to a file in the workspace directory.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'Absolute or relative path to the target file.'
+                },
+                targetContent: {
+                  type: 'string',
+                  description: 'The exact string content inside the file to be replaced.'
+                },
+                replacementContent: {
+                  type: 'string',
+                  description: 'The string content to replace targetContent with.'
+                },
+                startLine: {
+                  type: 'integer',
+                  description: 'Optional start line number of the range to look for targetContent.'
+                },
+                endLine: {
+                  type: 'integer',
+                  description: 'Optional end line number of the range to look for targetContent.'
+                },
+                principal: {
+                  type: 'string',
+                  description: 'Optional agent principal (e.g. sb:issuer:devops-sme, sb:issuer:de073ae64e43) for Cedar policy enforcement.'
+                },
+                signature: {
+                  type: 'string',
+                  description: 'Optional Ed25519 signature in hex format (required if a privileged principal is specified).'
+                }
+              },
+              required: ['path', 'targetContent', 'replacementContent']
+            }
+          },
+          {
+            name: 'search_code',
+            description: 'Search for a query pattern recursively inside the workspace files (Node-native grep).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'The query text or pattern to look for.'
+                },
+                searchPath: {
+                  type: 'string',
+                  description: 'Optional relative path to a subfolder to search inside.'
+                },
+                caseInsensitive: {
+                  type: 'boolean',
+                  description: 'Whether to ignore case during searching.'
+                },
+                isRegex: {
+                  type: 'boolean',
+                  description: 'Whether to treat query as a regular expression pattern.'
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'list_directory',
+            description: 'List contents of a directory in the workspace.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'Absolute or relative path to list contents of.'
+                }
+              },
+              required: ['path']
+            }
+          },
+          {
+            name: 'submit_ibp_synthesis',
+            description: 'Submit the Sprint Sprint cross-functional IBP synthesis report to unlock gates.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                report: {
+                  type: 'string',
+                  description: 'The text of the Sprint synthesis report.'
+                }
+              },
+              required: ['report']
+            }
+          }
+        ]
       },
       id
     };
@@ -693,10 +687,11 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       // 3. Execution inside sandbox
       const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const sandboxCmd = `bash scripts/sandbox-execute.sh "${commandLine}" "${workspacePath}"`;
+      // argv array — never shell-interpolate user commandLine (CodeQL js/command-line-injection).
+      const sandboxArgv = ['scripts/sandbox-execute.sh', commandLine, workspacePath];
 
       try {
-        const logs = execSync(sandboxCmd, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
+        const logs = execFileSync('bash', sandboxArgv, { cwd: workspacePath, encoding: 'utf8', stdio: 'pipe' });
         await db.addCommandLog({
           id: `cmd_${Math.floor(100000 + Math.random() * 900000)}`,
           timestamp: new Date().toISOString(),
