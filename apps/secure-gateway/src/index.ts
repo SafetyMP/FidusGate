@@ -3561,16 +3561,15 @@ if (process.argv.includes('--mcp')) {
   wss.on('connection', (socket, req) => {
     // Defense-in-depth: verifyClient already rejects bad upgrades; keep an
     // explicit production close path for CR-6 ws_unauthenticated_connect_denied.
+    // Always verify via the auth helper (no user-controlled early return) so
+    // CodeQL js/user-controlled-bypass does not treat header presence as the gate.
     if (isProductionRuntime()) {
       try {
-        const authHeader =
-          typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
-        if (!authHeader) {
-          log('security', 'WS_AUTH: unauthenticated WebSocket rejected in production');
-          socket.close(1008, 'authentication required');
-          return;
-        }
-        verifyLegacyBearerAuthorization(authHeader, JWT_SECRET, 'fidusgate-mcp');
+        verifyLegacyBearerAuthorization(
+          req.headers.authorization,
+          JWT_SECRET,
+          'fidusgate-mcp'
+        );
       } catch {
         log('security', 'WS_AUTH: unauthenticated WebSocket rejected in production');
         socket.close(1008, 'authentication required');
