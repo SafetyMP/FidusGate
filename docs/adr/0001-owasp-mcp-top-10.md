@@ -12,13 +12,13 @@ The [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) (beta) is the 
 
 | OWASP ID | Risk | FidusGate control | Gap / note |
 |---|---|---|---|
-| MCP01 | Token mismanagement & secret exposure | Short-lived JWT (`expiresIn: 1h`); bootstrap-key gated minting; log sanitization | Demo HS256 secret; not a production IdP |
+| MCP01 | Token mismanagement & secret exposure | Production marker refuses HS256/bootstrap; dashboard demo bearer state is memory-only | OIDC BFF/JWKS implementation pending — residual-risk owner: platform security |
 | MCP02 | Privilege escalation via scope creep | Cedar risk tiers 0–9; SME principals; PLM requirement gate | Scope expiry is session/gate based, not OAuth scopes |
 | MCP03 | Tool poisoning | Fixed tool catalog in `mcp-server.ts`; header/body name agreement on `/mcp` | No SHA-256 tool-description pinning yet |
 | MCP04 | Supply chain / dependency tampering | Command auditor blocks host `curl`/`npm install`; sandbox execution | Relies on lockfile/CI; not MCP package signing |
 | MCP05 | Command injection & execution | `isCommandLineSecure` + Docker/WASI sandbox | Host kernel compromise out of scope |
 | MCP06 | Intent flow subversion | Cedar on every `tools/call`; native IDE tool deny (Tier 9) | Prompt-layer injection still model-side |
-| MCP07 | Insufficient authn/authz | JWT on `/mcp`; Cedar; Ed25519 privileged signatures; quarantine | RFC 9728 PRM is demo-grade; no CIMD |
+| MCP07 | Insufficient authn/authz | MCP and WebSocket require bearer auth; MCP validates audience; production marker refuses demo authentication | OIDC BFF/JWKS implementation pending — residual-risk owner: platform security |
 | MCP08 | Lack of audit & telemetry | Ed25519 receipts; structured logs; optional Trace Context from `_meta` | OpenTelemetry backend optional |
 | MCP09 | Shadow MCP servers | Documented single gateway entry (`--mcp` stdio + `POST /mcp`) | No org-wide shadow inventory |
 | MCP10 | Context injection & over-sharing | Per-principal quarantine; cacheScope `private` on `tools/list` | No cross-tenant context store |
@@ -28,7 +28,9 @@ The [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) (beta) is the 
 - `integration_from_worktree_denied` — false-green prevention (`specs/threat-model.yaml`)
 - `mcp_header_body_desync_denied` — Streamable HTTP header/body consistency via `scripts/check-mcp-protocol.sh`
 - Privileged signature failure and quarantine write deny — covered in `bypass-validation.test.ts` (MCP07)
+- `production_disable_auth_denied` and `production_hs256_bootstrap_denied` — production markers reject demo authentication startup (MCP01/MCP07)
+- `mcp_missing_or_wrong_audience_denied` and `websocket_unauthenticated_denied` — hermetic bearer/audience denial coverage (MCP07)
 
 ## Consequences
 
-Operators treating FidusGate as a reference should map their deployment checklist to this table and close gaps (tool pinning, IdP CIMD, shadow MCP inventory) before production use. Cursor Auto-review / `permissions.json` remains a host-side complement, not a substitute for Cedar at the gateway.
+Operators treating FidusGate as a reference should map their deployment checklist to this table and close gaps (tool pinning, OIDC BFF/JWKS, IdP CIMD, shadow MCP inventory) before production use. Cursor Auto-review / `permissions.json` remains a host-side complement, not a substitute for Cedar at the gateway.

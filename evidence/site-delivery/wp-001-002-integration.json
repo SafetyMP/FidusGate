@@ -1,0 +1,16 @@
+{
+  "schema": "fidusgate-site-delivery-packet-integration/v1",
+  "program_id": "fidusgate-production",
+  "revision": 1,
+  "authored_at": "2026-07-20T04:19:14Z",
+  "producer_role": "site-specialist",
+  "packets": [
+    "WP-001-auth-mcp",
+    "WP-002-kms-postgres"
+  ],
+  "integrated_from_worktrees": [
+    "adr-0002-auth",
+    "adr-0003-kms"
+  ],
+  "note": "Producer integration receipt only; not a gate verdict. Full verify/adversarial pending."
+}

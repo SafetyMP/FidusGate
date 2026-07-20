@@ -1,6 +1,6 @@
 schema: threat-model/v1
 product: FidusGate
-updated: "2026-07-18"
+updated: "2026-07-19"
 
 cells:
   - id: integration_smoke_main_root
@@ -21,13 +21,117 @@ cells:
     owasp: [MCP07, MCP03]
     baseline: true
 
+  - id: mcp_unauthenticated_http_denied
+    method: EXEC
+    path: ./scripts/probes/mcp_unauthenticated_http_denied.sh
+    principals: [anonymous]
+    auth_mechanism: jwt_bearer_required
+    trust_boundary: mcp_streamable_http
+    establishment_failure: "unauthenticated POST /mcp accepted"
+    owasp: [MCP07]
+    baseline: true
+
+  - id: mcp_tool_poisoning_denied
+    method: EXEC
+    path: ./scripts/probes/mcp_tool_poisoning_denied.sh
+    principals: [gateway_operator]
+    auth_mechanism: fixed_tool_catalog
+    trust_boundary: mcp_tools_call
+    establishment_failure: "fs-mutating tools reachable over Streamable HTTP"
+    owasp: [MCP03]
+    baseline: true
+
+  - id: mcp_command_injection_denied
+    method: EXEC
+    path: ./scripts/probes/mcp_command_injection_denied.sh
+    principals: [developer]
+    auth_mechanism: command_auditor_allowlist
+    trust_boundary: execute_command
+    establishment_failure: "shell metacharacters accepted in execute_command"
+    owasp: [MCP05]
+    baseline: true
+
+  - id: unsigned_policy_reload_denied
+    method: EXEC
+    path: ./scripts/probes/unsigned_policy_reload_denied.sh
+    principals: [admin, auditor]
+    auth_mechanism: jwt_role_gate
+    trust_boundary: policy_reload_api
+    establishment_failure: "unauthenticated Cedar reload accepted"
+    owasp: [MCP07]
+    baseline: true
+
+  - id: kms_missing_fail_closed
+    method: EXEC
+    path: ./scripts/probes/kms_missing_fail_closed.sh
+    principals: [platform_operator]
+    auth_mechanism: production_prerequisite_gate
+    trust_boundary: production_boot
+    establishment_failure: "production starts without KMS configuration"
+    owasp: [MCP01]
+    baseline: true
+
+  - id: json_db_fallback_denied
+    method: EXEC
+    path: ./scripts/probes/json_db_fallback_denied.sh
+    principals: [platform_operator]
+    auth_mechanism: production_prerequisite_gate
+    trust_boundary: datastore_init
+    establishment_failure: "production silently falls back to JSON files"
+    owasp: [MCP01]
+    baseline: true
+
+  - id: host_sandbox_fallback_denied
+    method: EXEC
+    path: ./scripts/probes/host_sandbox_fallback_denied.sh
+    principals: [agent_subagent]
+    auth_mechanism: docker_sandbox_required
+    trust_boundary: sandbox_execute
+    establishment_failure: "host execution when Docker unavailable without explicit opt-in"
+    owasp: [MCP05]
+    baseline: true
+
+  - id: ws_unauthenticated_connect_denied
+    method: EXEC
+    path: ./scripts/probes/ws_unauthenticated_connect_denied.sh
+    principals: [anonymous]
+    auth_mechanism: jwt_bearer_required
+    trust_boundary: websocket_telemetry
+    establishment_failure: "unauthenticated WebSocket telemetry connect in production"
+    owasp: [MCP07]
+    baseline: true
+
+oos:
+  - owasp: MCP02
+    risk: Privilege escalation via OAuth scope creep
+    residual_risk_owner: security-sme
+    note: Cedar risk tiers + PLM gate; no OAuth scope-expiry EXEC probe yet
+  - owasp: MCP04
+    risk: MCP supply-chain / dependency tampering
+    residual_risk_owner: devops-sme
+    note: Lockfile CI + command auditor; no MCP package signing EXEC probe
+  - owasp: MCP06
+    risk: Intent flow subversion (prompt-layer)
+    residual_risk_owner: security-sme
+    note: Cedar on tools/call; model-side prompt injection out of gateway scope
+  - owasp: MCP08
+    risk: Insufficient audit telemetry export
+    residual_risk_owner: devops-sme
+    note: Ed25519 receipts + structured logs; OpenTelemetry backend optional
+  - owasp: MCP09
+    risk: Shadow MCP servers
+    residual_risk_owner: platform-operator
+    note: Documented single gateway entry; no org-wide shadow inventory probe
+  - owasp: MCP10
+    risk: Context injection and over-sharing
+    residual_risk_owner: security-sme
+    note: Per-principal quarantine; no cross-tenant context store
+
 deny_cases:
   - id: integration_from_worktree_denied
     cell: integration_smoke_main_root
     principal: agent_worktree
     fixture:
-      # Runner nests to .worktrees/adversarial-probe-<pid> and invokes the cell
-      # path as an absolute script under repo root (never cwd-relative).
       cwd: .worktrees
     expect:
       status: 1
@@ -39,5 +143,93 @@ deny_cases:
     fixture:
       cwd: .
       command: ./scripts/check-mcp-protocol.sh
+    expect:
+      status: 0
+
+  - id: mcp_unauthenticated_http_denied
+    cell: mcp_unauthenticated_http_denied
+    principal: anonymous
+    owasp: MCP07
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/mcp_unauthenticated_http_denied.sh
+    expect:
+      status: 0
+
+  - id: mcp_tool_poisoning_denied
+    cell: mcp_tool_poisoning_denied
+    principal: gateway_operator
+    owasp: MCP03
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/mcp_tool_poisoning_denied.sh
+    expect:
+      status: 0
+
+  - id: mcp_command_injection_denied
+    cell: mcp_command_injection_denied
+    principal: developer
+    owasp: MCP05
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/mcp_command_injection_denied.sh
+    expect:
+      status: 0
+
+  - id: unsigned_policy_reload_denied
+    cell: unsigned_policy_reload_denied
+    principal: anonymous
+    owasp: MCP07
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/unsigned_policy_reload_denied.sh
+    expect:
+      status: 0
+
+  - id: kms_missing_fail_closed
+    cell: kms_missing_fail_closed
+    principal: platform_operator
+    owasp: MCP01
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/kms_missing_fail_closed.sh
+    expect:
+      status: 0
+
+  - id: json_db_fallback_denied
+    cell: json_db_fallback_denied
+    principal: platform_operator
+    owasp: MCP01
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/json_db_fallback_denied.sh
+    expect:
+      status: 0
+
+  - id: host_sandbox_fallback_denied
+    cell: host_sandbox_fallback_denied
+    principal: agent_subagent
+    owasp: MCP05
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/host_sandbox_fallback_denied.sh
+    expect:
+      status: 0
+
+  - id: ws_unauthenticated_connect_denied
+    cell: ws_unauthenticated_connect_denied
+    principal: anonymous
+    owasp: MCP07
+    baseline: true
+    fixture:
+      cwd: .
+      command: ./scripts/probes/ws_unauthenticated_connect_denied.sh
     expect:
       status: 0

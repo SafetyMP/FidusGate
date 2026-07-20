@@ -38,6 +38,12 @@ import {
 } from './security-sanitize';
 import { auditSandboxSyscalls } from './ebpf-monitor';
 import { createProxyVerifier } from './proxy-verifier';
+import {
+  assertProductionAuthConfiguration,
+  isProductionRuntime,
+  verifyLegacyBearerAuthorization,
+} from './production-auth';
+import { assertProductionPrerequisites } from './production-profile';
 import * as ws from 'ws';
 
 /**
@@ -337,6 +343,11 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/api/', apiRateLimiter);
 app.use('/api/proxy', (req, res, next) => createProxyVerifier(cedarEvaluator)(req, res, next));
 
+// Production never starts on the demo HS256/bootstrap authentication surface.
+// Until the OIDC BFF/JWKS verifier is installed, this deliberately fails closed.
+assertProductionAuthConfiguration();
+assertProductionPrerequisites();
+
 const JWT_SECRET: string = (() => {
   const secret =
     process.env.JWT_SECRET ||
@@ -379,9 +390,14 @@ app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: `usr_${secureNumericId(4)}`, role, email },
+      { email, role },
       JWT_SECRET,
-      { algorithm: 'HS256', expiresIn: '1h' }
+      {
+        algorithm: 'HS256',
+        audience: 'fidusgate-mcp',
+        expiresIn: '1h',
+        subject: `usr_${secureNumericId(4)}`,
+      }
     );
 
     // Do not echo attacker-controlled email/role into logs (CodeQL js/log-injection).
@@ -642,24 +658,22 @@ function requestBaseUrl(req: express.Request): string {
 function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[], options?: { mcpResource?: boolean }) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // Standard bypass helper if enabled via env (defaults to false for strict authentication gating)
-    const isBypass = process.env.DISABLE_AUTH === 'true';
+    const isBypass = !isProductionRuntime() && process.env.DISABLE_AUTH === 'true';
     if (isBypass) {
       (req as AuthenticatedRequest).user = { id: 'usr_bypass', role: 'admin', email: 'admin@fidusgate.internal' };
       return next();
     }
 
     try {
-      const raw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
-      const token = raw.replace(/^Bearer\s+/i, '');
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
-      // Only trust the role after cryptographic verification of the JWT —
-      // never derive gating decisions from unverified request fields
-      // (CodeQL js/user-controlled-bypass).
-      const verifiedRole = assertVerifiedRole(decoded?.role);
-      (req as AuthenticatedRequest).user = { ...decoded, role: verifiedRole };
+      const claims = verifyLegacyBearerAuthorization(
+        req.headers.authorization,
+        JWT_SECRET,
+        options?.mcpResource ? 'fidusgate-mcp' : undefined
+      );
+      (req as AuthenticatedRequest).user = claims;
 
-      if (!allowedRoles.includes(verifiedRole)) {
-        res.status(403).json({ error: `Forbidden: Role '${verifiedRole}' lacks sufficient privileges for this endpoint.` });
+      if (!allowedRoles.includes(claims.role)) {
+        res.status(403).json({ error: `Forbidden: Role '${claims.role}' lacks sufficient privileges for this endpoint.` });
         return;
       }
 
@@ -3529,8 +3543,40 @@ if (process.argv.includes('--mcp')) {
   });
 
   // Attach WebSocket server to Express HTTP Server
-  const wss = new ws.Server({ server });
-  wss.on('connection', (socket) => {
+  const wss = new ws.Server({
+    server,
+    verifyClient: (info, done) => {
+      try {
+        verifyLegacyBearerAuthorization(
+          info.req.headers.authorization,
+          JWT_SECRET,
+          'fidusgate-mcp'
+        );
+        done(true);
+      } catch {
+        done(false, 401, 'Unauthorized');
+      }
+    },
+  });
+  wss.on('connection', (socket, req) => {
+    // Defense-in-depth: verifyClient already rejects bad upgrades; keep an
+    // explicit production close path for CR-6 ws_unauthenticated_connect_denied.
+    if (isProductionRuntime()) {
+      try {
+        const authHeader =
+          typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+        if (!authHeader) {
+          log('security', 'WS_AUTH: unauthenticated WebSocket rejected in production');
+          socket.close(1008, 'authentication required');
+          return;
+        }
+        verifyLegacyBearerAuthorization(authHeader, JWT_SECRET, 'fidusgate-mcp');
+      } catch {
+        log('security', 'WS_AUTH: unauthenticated WebSocket rejected in production');
+        socket.close(1008, 'authentication required');
+        return;
+      }
+    }
     wsClients.add(socket);
     log('info', '📡 New WebSocket client connected to SecOps Telemetry Stream');
 

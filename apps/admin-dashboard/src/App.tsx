@@ -57,12 +57,11 @@ export default function App() {
   const [alignJustification, setAlignJustification] = useState('');
   const [alignLoading, setAlignLoading] = useState(false);
   
-  // OIDC/JWT Authentication States
-  const [authToken, setAuthToken] = useState<string | null>(localStorage.getItem('fidusgate_jwt') || null);
-  const [authRole, setAuthRole] = useState<'developer' | 'admin' | 'auditor' | 'unauthenticated'>(
-    (localStorage.getItem('fidusgate_role') as any) || 'unauthenticated'
-  );
-  const [authEmail, setAuthEmail] = useState(localStorage.getItem('fidusgate_email') || 'admin@fidusgate.internal');
+  // Demo bearer state is memory-only. Production uses the OIDC BFF HttpOnly
+  // session cookie and must never persist bearer tokens or roles in localStorage.
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [authRole, setAuthRole] = useState<'developer' | 'admin' | 'auditor' | 'unauthenticated'>('unauthenticated');
+  const [authEmail, setAuthEmail] = useState('admin@fidusgate.internal');
   const [authLoading, setAuthLoading] = useState(false);
 
   // Dynamically resolve request headers with JWT Bearer Token
@@ -774,15 +773,12 @@ export default function App() {
         const data = await res.json();
         setAuthToken(data.token);
         setAuthRole(data.role);
-        localStorage.setItem('fidusgate_jwt', data.token);
-        localStorage.setItem('fidusgate_role', data.role);
-        localStorage.setItem('fidusgate_email', data.email);
         
         setConsoleLines(prev => [
           ...prev,
-          `🔑 [OIDC] Successfully authenticated via federated identity provider.`,
+          `🔑 [Demo only] Authenticated with a memory-only development session.`,
           `🧑‍💻 User: ${data.email} | Active Role: ${data.role.toUpperCase()}`,
-          `🎫 JWT bearer token mounted to request headers. Security gateways unlocked.`
+          `🎫 Development bearer token held only in memory; production requires an OIDC BFF cookie.`
         ]);
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -799,9 +795,6 @@ export default function App() {
   const handleOidcLogout = () => {
     setAuthToken(null);
     setAuthRole('unauthenticated');
-    localStorage.removeItem('fidusgate_jwt');
-    localStorage.removeItem('fidusgate_role');
-    localStorage.removeItem('fidusgate_email');
     
     // Explicitly flush state arrays on logout for leak-proof security
     setTransactions([]);

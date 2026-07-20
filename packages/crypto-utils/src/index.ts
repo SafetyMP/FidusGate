@@ -5,6 +5,14 @@ import { AuditReceipt, AuditReceiptPayload } from '@fidusgate/core-types';
 const SAFE_PRINCIPAL_PATTERN = /^[a-zA-Z0-9._@:/-]{1,256}$/;
 const HEX_PATTERN = /^[0-9a-fA-F]{1,4096}$/;
 
+export function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production' || process.env.FIDUSGATE_RUNTIME === 'production';
+}
+
+function kmsConfigurationError(provider: string): Error {
+  return new Error(`${provider} KMS configuration is required in production.`);
+}
+
 interface ValidatedAttestation {
   sessionPublicKey: string;
   issuerId: string;
@@ -253,6 +261,9 @@ export class VaultKMSProvider implements KMSProvider {
         }
       };
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        throw new Error(`Vault Transit signing failed: ${err.message}`);
+      }
       console.warn(`⚠️ Vault Transit sign failed: ${err.message}. Falling back to local HSM keys.`);
       const local = new LocalKMSProvider();
       return local.signPayload(payload, privateKeyHex, kid);
@@ -277,6 +288,9 @@ export class VaultKMSProvider implements KMSProvider {
 
       return !!response?.data?.valid;
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        return false;
+      }
       console.warn(`⚠️ Vault verification failed: ${err.message}. Falling back to local offline check.`);
       const local = new LocalKMSProvider();
       return local.verifyReceipt(receipt, publicKeyHex);
@@ -324,6 +338,9 @@ export class GcpKMSProvider implements KMSProvider {
         }
       };
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        throw new Error(`Google Cloud KMS signing failed: ${err.message}`);
+      }
       console.warn(`⚠️ GCP KMS sign failed: ${err.message}. Falling back to local keys.`);
       const local = new LocalKMSProvider();
       return local.signPayload(payload, privateKeyHex, kid);
@@ -356,6 +373,9 @@ export class GcpKMSProvider implements KMSProvider {
       verifier.update(JSON.stringify(receipt.payload));
       return verifier.verify(pem, Buffer.from(receipt.signature.sig, 'base64'));
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        return false;
+      }
       console.warn(`⚠️ GCP KMS verification failed: ${err.message}. Falling back to local offline check.`);
       const local = new LocalKMSProvider();
       return local.verifyReceipt(receipt, publicKeyHex);
@@ -409,6 +429,9 @@ export class AwsKMSProvider implements KMSProvider {
         }
       };
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        throw new Error(`AWS KMS signing failed: ${err.message}`);
+      }
       console.warn(`⚠️ AWS KMS sign failed: ${err.message}. Falling back to local keys.`);
       const local = new LocalKMSProvider();
       return local.signPayload(payload, privateKeyHex, kid);
@@ -447,6 +470,9 @@ export class AwsKMSProvider implements KMSProvider {
       }
       throw new Error(response?.Message || 'Verification returned SignatureValid = false');
     } catch (err: any) {
+      if (isProductionRuntime()) {
+        return false;
+      }
       console.warn(`⚠️ AWS KMS verification failed: ${err.message}. Falling back to local offline check.`);
       const local = new LocalKMSProvider();
       return local.verifyReceipt(receipt, publicKeyHex);
@@ -457,13 +483,25 @@ export class AwsKMSProvider implements KMSProvider {
 // Dynamically resolve provider based on environment configurations
 function getKMSProvider(): KMSProvider {
   if (process.env.AWS_KMS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) {
+    if (isProductionRuntime() && (!process.env.AWS_KMS_KEY_ID || !process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID)) {
+      throw kmsConfigurationError('AWS');
+    }
     return new AwsKMSProvider();
   }
   if (process.env.GCP_KMS_KEY_RING || process.env.GCP_KMS_KEY_NAME) {
+    if (isProductionRuntime() && (!process.env.GCP_PROJECT_ID || !process.env.GCP_LOCATION || !process.env.GCP_KMS_KEY_RING || !process.env.GCP_KMS_KEY_NAME || !process.env.GCP_ACCESS_TOKEN)) {
+      throw kmsConfigurationError('Google Cloud');
+    }
     return new GcpKMSProvider();
   }
   if (process.env.VAULT_ADDR || process.env.VAULT_TOKEN || process.env.KMS_KEY_ID) {
+    if (isProductionRuntime() && (!process.env.VAULT_ADDR || !process.env.VAULT_TOKEN || !process.env.KMS_KEY_ID)) {
+      throw kmsConfigurationError('Vault');
+    }
     return new VaultKMSProvider();
+  }
+  if (isProductionRuntime()) {
+    throw new Error('A KMS provider is required in production; local signing is disabled.');
   }
   return new LocalKMSProvider();
 }

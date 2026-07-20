@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { generateKeyPair, signPayload, verifyReceipt, createAttestedSession } from './index';
+import crypto from 'node:crypto';
+import { generateKeyPair, signPayload, verifyReceipt, createAttestedSession, verifyAuditChain } from './index';
 import { AuditReceiptPayload } from '@fidusgate/core-types';
 
 test('Ed25519 Public-Key Cryptography Tests', async (t) => {
@@ -274,5 +275,98 @@ test('Ed25519 Public-Key Cryptography Tests', async (t) => {
     assert.strictEqual(isValid, true, 'Verification fallback should succeed');
 
     delete process.env.AWS_KMS_KEY_ID;
+  });
+
+  await t.test('Production denies missing KMS configuration', () => {
+    const priorNodeEnv = process.env.NODE_ENV;
+    const priorRuntime = process.env.FIDUSGATE_RUNTIME;
+    const priorVaultAddr = process.env.VAULT_ADDR;
+    const priorVaultToken = process.env.VAULT_TOKEN;
+    const priorKmsKeyId = process.env.KMS_KEY_ID;
+    const priorAwsKeyId = process.env.AWS_KMS_KEY_ID;
+    const priorAwsRegion = process.env.AWS_REGION;
+    const priorAwsAccessKey = process.env.AWS_ACCESS_KEY_ID;
+    const priorGcpProject = process.env.GCP_PROJECT_ID;
+    const priorGcpLocation = process.env.GCP_LOCATION;
+    const priorGcpKeyRing = process.env.GCP_KMS_KEY_RING;
+    const priorGcpKeyName = process.env.GCP_KMS_KEY_NAME;
+    const priorGcpToken = process.env.GCP_ACCESS_TOKEN;
+    const restore = (name: string, value: string | undefined) => {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    };
+
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.FIDUSGATE_RUNTIME;
+      delete process.env.VAULT_ADDR;
+      delete process.env.VAULT_TOKEN;
+      delete process.env.KMS_KEY_ID;
+      delete process.env.AWS_KMS_KEY_ID;
+      delete process.env.AWS_REGION;
+      delete process.env.AWS_ACCESS_KEY_ID;
+      delete process.env.GCP_PROJECT_ID;
+      delete process.env.GCP_LOCATION;
+      delete process.env.GCP_KMS_KEY_RING;
+      delete process.env.GCP_KMS_KEY_NAME;
+      delete process.env.GCP_ACCESS_TOKEN;
+
+      const keys = generateKeyPair();
+      assert.throws(
+        () => signPayload({
+          type: 'protectmcp:decision',
+          tool_name: 'read_file',
+          decision: 'allow',
+          policy_digest: 'sha256:test',
+          issued_at: new Date().toISOString(),
+          issuer_id: 'sb:issuer:test'
+        }, keys.privateKeyHex, 'sb:issuer:test'),
+        /KMS provider is required in production/
+      );
+    } finally {
+      restore('NODE_ENV', priorNodeEnv);
+      restore('FIDUSGATE_RUNTIME', priorRuntime);
+      restore('VAULT_ADDR', priorVaultAddr);
+      restore('VAULT_TOKEN', priorVaultToken);
+      restore('KMS_KEY_ID', priorKmsKeyId);
+      restore('AWS_KMS_KEY_ID', priorAwsKeyId);
+      restore('AWS_REGION', priorAwsRegion);
+      restore('AWS_ACCESS_KEY_ID', priorAwsAccessKey);
+      restore('GCP_PROJECT_ID', priorGcpProject);
+      restore('GCP_LOCATION', priorGcpLocation);
+      restore('GCP_KMS_KEY_RING', priorGcpKeyRing);
+      restore('GCP_KMS_KEY_NAME', priorGcpKeyName);
+      restore('GCP_ACCESS_TOKEN', priorGcpToken);
+    }
+  });
+
+  await t.test('Receipt-chain verification rejects tampering', () => {
+    const receipt: {
+      payload: AuditReceiptPayload;
+      signature: { alg: 'EdDSA'; kid: string; sig: string };
+      previousReceiptHash: string;
+      receiptHash: string;
+    } = {
+      payload: {
+        type: 'protectmcp:decision',
+        tool_name: 'read_file',
+        decision: 'allow',
+        policy_digest: 'sha256:test',
+        issued_at: new Date().toISOString(),
+        issuer_id: 'sb:issuer:test'
+      },
+      signature: { alg: 'EdDSA' as const, kid: 'sb:issuer:test', sig: 'signed' },
+      previousReceiptHash: '',
+      receiptHash: ''
+    };
+    receipt.receiptHash = crypto.createHash('sha256').update(JSON.stringify({
+      payload: receipt.payload,
+      signature: receipt.signature,
+      previousReceiptHash: receipt.previousReceiptHash
+    })).digest('hex');
+
+    assert.strictEqual(verifyAuditChain([receipt]), true);
+    receipt.payload.decision = 'deny';
+    assert.strictEqual(verifyAuditChain([receipt]), false);
   });
 });
