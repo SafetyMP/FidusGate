@@ -1,7 +1,6 @@
 process.env.FIDUSGATE_TEST = 'true';
 import test from 'node:test';
 import assert from 'node:assert';
-import * as path from 'node:path';
 import jwt from 'jsonwebtoken';
 import {
   assertProductionPrerequisites,
