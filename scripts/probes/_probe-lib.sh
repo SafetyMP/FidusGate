@@ -10,7 +10,14 @@ require_pattern() {
   local label="$1"
   local pattern="$2"
   local file="$3"
-  if ! rg -q "$pattern" "$file"; then
+  # Prefer ripgrep when present; fall back to grep so CI runners without rg work.
+  if command -v rg >/dev/null 2>&1; then
+    if ! rg -q "$pattern" "$file"; then
+      echo "FAIL [$label]: pattern not found in $file" >&2
+      echo "  want: $pattern" >&2
+      exit 1
+    fi
+  elif ! grep -EEq "$pattern" "$file"; then
     echo "FAIL [$label]: pattern not found in $file" >&2
     echo "  want: $pattern" >&2
     exit 1
