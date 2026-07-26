@@ -21,7 +21,7 @@
     "build": "turbo run build",
     "build:wasm": "node scripts/build-wasm.js",
     "test": "turbo run test",
-    "lint": "biome check apps/admin-dashboard/src apps/secure-gateway/src/routes apps/secure-gateway/src/middleware packages/core-types/src && turbo run lint",
+    "lint": "biome check apps/admin-dashboard/src/lib apps/admin-dashboard/src/hooks apps/admin-dashboard/src/components apps/admin-dashboard/src/tabs/LedgerTab.tsx apps/secure-gateway/src/routes apps/secure-gateway/src/middleware packages/core-types/src/index.ts && turbo run lint",
     "ci": "bash scripts/ci-verify.sh",
     "bootstrap": "node scripts/build-wasm.js && bash scripts/bootstrap.sh",
     "sandbox": "bash scripts/sandbox-execute.sh",
