@@ -45,6 +45,8 @@ import {
 } from './production-auth';
 import { assertProductionPrerequisites } from './production-profile';
 import * as ws from 'ws';
+import { registerModularRoutes } from './routes/register';
+import type { RequireAuth } from './routes/types';
 
 /**
  * Generate a short numeric id using crypto.randomInt so security-relevant
@@ -55,6 +57,12 @@ function secureNumericId(digits: number): string {
   const upper = 10 ** digits;
   const lower = 10 ** (digits - 1);
   return String(crypto.randomInt(lower, upper));
+}
+
+/** Express 5 may type route params as string | string[]; normalize to a single string. */
+function paramString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
 }
 
 /** Short cryptographically-random hex suffix for opaque tokens. */
@@ -942,90 +950,8 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
 }
 
 // ==========================================
-// REST API Routes
+// REST API Routes (legacy monolith handlers + modular routers)
 // ==========================================
-
-// 1. GET /api/transactions - Retrieve list of transactions (Role: developer, admin, auditor)
-app.get('/api/transactions', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
-  try {
-    const list = await db.getTransactions();
-    res.json(list);
-  } catch (error) {
-    log('error', 'Failed to retrieve transactions', error);
-    res.status(500).json({ error: 'Failed to retrieve transactions' });
-  }
-});
-
-// Helper to mask sensitive information (PII)
-function maskPII(text: string): string {
-  if (text.includes('@')) {
-    const parts = text.split('@');
-    const name = parts[0];
-    const domain = parts[1];
-    return `${name.substring(0, 1)}***@${domain.substring(0, 1)}***`;
-  }
-  
-  const words = text.split(' ');
-  if (words.length > 1) {
-    return words.map(w => `${w.substring(0, 1)}***`).join(' ');
-  }
-  
-  return `${text.substring(0, 2)}***`;
-}
-
-// 2. POST /api/transactions - Create a new transaction (Role: developer, admin)
-app.post('/api/transactions', requireAuth(['developer', 'admin']), async (req, res) => {
-  try {
-    const { sender, recipient, amount, currency } = req.body;
-    
-    if (!sender || !recipient || amount === undefined || !currency) {
-       res.status(400).json({ error: 'Missing required parameters: sender, recipient, amount, currency' });
-       return;
-    }
-    
-    // Linear email-shape check with a hard length cap — replaces the previous
-    // /^[^\s@]+@[^\s@]+\.[^\s@]+$/ regex that had nested quantifiers and was
-    // flagged as CodeQL js/polynomial-redos.
-    const isEmailShape = (v: unknown): boolean => {
-      if (typeof v !== 'string' || v.length === 0 || v.length > 320) return false;
-      const at = v.indexOf('@');
-      if (at <= 0 || at !== v.lastIndexOf('@') || at === v.length - 1) return false;
-      const local = v.slice(0, at);
-      const domain = v.slice(at + 1);
-      const dot = domain.lastIndexOf('.');
-      if (dot <= 0 || dot === domain.length - 1) return false;
-      if (/\s/.test(local) || /\s/.test(domain)) return false;
-      return true;
-    };
-    const isSenderPii = isEmailShape(sender) || sender.toLowerCase().includes(' wallet') || sender.split(' ').length > 2;
-    const isRecipientPii = isEmailShape(recipient) || recipient.toLowerCase().includes(' wallet') || recipient.split(' ').length > 2;
-    const requiresMasking = isSenderPii || isRecipientPii;
-    
-    const processedSender = requiresMasking ? maskPII(sender) : sender;
-    const processedRecipient = requiresMasking ? maskPII(recipient) : recipient;
-    
-    const isSuspicious = sender.toLowerCase().includes('tor') || recipient.toLowerCase().includes('tor') || amount > 1000000;
-    const status = isSuspicious ? 'flagged' : 'completed';
-    
-    const newTx: Transaction = {
-      id: `tx_${secureNumericId(6)}`,
-      timestamp: new Date().toISOString(),
-      sender: processedSender,
-      recipient: processedRecipient,
-      amount: Number(amount),
-      currency,
-      status,
-      maskedPii: requiresMasking
-    };
-    
-    await db.addTransaction(newTx);
-    log('info', `Transaction registered successfully: ${newTx.id}`, { id: newTx.id, status });
-    res.status(201).json(newTx);
-  } catch (error) {
-    log('error', 'Failed to create transaction', error);
-    res.status(500).json({ error: 'Failed to create transaction' });
-  }
-});
 
 const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
@@ -1294,52 +1220,6 @@ app.post('/api/receipts/verify', (req, res) => {
   } catch (error) {
     log('error', 'Failed to perform standalone verification', error);
     res.status(500).json({ error: 'Failed to verify receipt' });
-  }
-});
-
-// 5. GET /api/findings - Retrieve static analysis security findings (Role: developer, admin, auditor)
-app.get('/api/findings', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
-  try {
-    const list = await db.getFindings();
-    res.json(list);
-  } catch (error) {
-    log('error', 'Failed to retrieve findings', error);
-    res.status(500).json({ error: 'Failed to retrieve findings' });
-  }
-});
-
-// 6. POST /api/findings - Push a set of static analysis findings (Role: admin)
-app.post('/api/findings', requireAuth(['admin']), async (req, res) => {
-  try {
-    const findings: SecurityFinding[] = req.body;
-    if (!Array.isArray(findings)) {
-       res.status(400).json({ error: 'Invalid findings format. Expected a JSON array.' });
-       return;
-    }
-    
-    await db.setFindings(findings);
-    log('security', `CI Security Auditor reported ${findings.length} findings.`, { count: findings.length });
-    
-    // Stateful DevOps compliance checks: mark security audited as true if zero High findings
-    const highFindings = findings.filter(f => f.severity === 'High');
-    if (highFindings.length === 0) {
-      devopsTracker.onSecurityAuditSuccess();
-      ibpTracker.logTask('generic', 'security_scanner');
-      log('info', 'DevOps compliance gate verified: static security audit passed with zero High findings.');
-    }
-
-    findings.forEach(f => {
-      if (f.severity === 'High') {
-        dispatchWebhookAlert('finding', { finding: f });
-      }
-    });
-
-    broadcastWS('findings_updated', findings);
-    
-    res.json({ message: 'Findings updated successfully', count: findings.length });
-  } catch (error) {
-    log('error', 'Failed to update findings', error);
-    res.status(500).json({ error: 'Failed to update findings' });
   }
 });
 
@@ -2022,7 +1902,9 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
-    const alreadyApproved = action.approvals.some(app => app.approver === userEmail);
+    const alreadyApproved = action.approvals.some(
+      (approval: { approver: string }) => approval.approver === userEmail
+    );
     if (alreadyApproved) {
       res.status(400).json({ error: 'You have already approved this action.' });
       return;
@@ -2192,89 +2074,6 @@ app.post('/api/reset', requireAuth(['admin']), async (req, res) => {
   } catch (error) {
     log('error', 'Failed to reset database', error);
     res.status(500).json({ error: 'Failed to reset database' });
-  }
-});
-
-// ==========================================
-// Stateful PLM Gating Endpoints
-// ==========================================
-
-// 11. POST /api/plm/requirement - Register active Requirement ID (Role: developer, admin)
-app.post('/api/plm/requirement', requireAuth(['developer', 'admin']), (req, res) => {
-  try {
-    const { id, description } = req.body;
-    if (!id || id.trim().length === 0) {
-      res.status(400).json({ error: 'Missing or empty requirement ID.' });
-      return;
-    }
-
-    plmTracker.setRequirement(id);
-    log('info', `PLM Governance: Registered active requirement/issue ID: ${id}. Description: ${description || ''}`);
-    res.json({ message: `Active requirement ${id} registered and verified.`, activeRequirementId: id });
-  } catch (error: any) {
-    log('error', 'Failed to register requirement ID', error.message);
-    res.status(500).json({ error: 'Failed to register requirement' });
-  }
-});
-
-// 12. POST /api/plm/drift-verify - Verify and clear active API schema drift (Role: developer, admin)
-app.post('/api/plm/drift-verify', requireAuth(['developer', 'admin']), (req, res) => {
-  try {
-    plmTracker.verifyDrift();
-    log('info', 'PLM Governance: API and schema contract drift successfully verified and cleared.');
-    res.json({ message: 'API schema contract drift verified and cleared.', verified: true });
-  } catch (error: any) {
-    log('error', 'Failed to verify API drift', error.message);
-    res.status(500).json({ error: 'Failed to verify drift' });
-  }
-});
-
-// 12b. POST /api/plm/feedback - Submit runtime user/system feedback (Role: developer, admin)
-app.post('/api/plm/feedback', requireAuth(['developer', 'admin']), (req, res) => {
-  try {
-    const { role, comment, severity } = req.body;
-    if (!role || !comment || !severity) {
-      res.status(400).json({ error: 'Missing required parameters: role, comment, severity' });
-      return;
-    }
-    if (!['info', 'warn', 'critical'].includes(severity)) {
-      res.status(400).json({ error: 'Invalid severity. Must be info, warn, or critical' });
-      return;
-    }
-
-    plmTracker.addFeedback(role, comment, severity);
-    log('info', `PLM Governance: Received feedback from ${role}. Severity: ${severity.toUpperCase()}. Comment: ${comment}`);
-    res.json({ message: 'Feedback logged successfully', aligned: plmTracker.getState().feedbackAligned });
-  } catch (error: any) {
-    log('error', 'Failed to log PLM feedback', error.message);
-    res.status(500).json({ error: 'Failed to log feedback' });
-  }
-});
-
-// 12c. POST /api/plm/feedback-align - Record feedback alignment/resolution (Role: developer, admin)
-app.post('/api/plm/feedback-align', requireAuth(['developer', 'admin']), (req, res) => {
-  try {
-    const { requirementId, justification } = req.body;
-    if (!requirementId || !justification || justification.trim().length === 0) {
-      res.status(400).json({ error: 'Missing required parameters: requirementId, justification' });
-      return;
-    }
-
-    plmTracker.alignFeedback(requirementId, justification);
-    log('info', `PLM Governance: Feedback aligned for Requirement ${requirementId}. Justification: ${justification}`);
-    res.json({ message: 'Feedback aligned successfully', aligned: true });
-  } catch (error: any) {
-    log('error', 'Failed to align PLM feedback', error.message);
-    res.status(500).json({ error: 'Failed to align feedback' });
-  }
-});
-
-// 13. GET /api/plm/state - Retrieve current PLM compliance state (Role: developer, admin, auditor)
-app.get('/api/plm/state', requireAuth(['developer', 'admin', 'auditor']), (req, res) => {
-  try {
-    res.json(plmTracker.getState());
-  } catch (error: any) {
-    res.status(500).json({ error: 'Failed to retrieve PLM state' });
   }
 });
 
@@ -3007,32 +2806,6 @@ app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
   }
 });
 
-// GET /api/system/config - Retrieve current system configurations (Role: developer, admin, auditor)
-app.get('/api/system/config', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
-  try {
-    const systemConfig = await db.getSystemConfig();
-    res.json(systemConfig);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to retrieve system configuration', message: err.message });
-  }
-});
-
-// POST /api/system/config - Update circuit breaker state and limits (Role: admin)
-app.post('/api/system/config', requireAuth(['admin']), async (req, res) => {
-  try {
-    const { circuitBreakerActive, agentTokenBudget } = req.body;
-    await db.updateSystemConfig({ circuitBreakerActive, agentTokenBudget });
-    const updated = await db.getSystemConfig();
-    
-    log('warn', `🛡️ SYSTEM CONFIG UPDATED: circuitBreakerActive=${updated.circuitBreakerActive}, agentTokenBudget=${updated.agentTokenBudget}`);
-    broadcastWS('system_config_updated', updated);
-    
-    res.json({ message: 'System configuration updated successfully', config: updated });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to update system configuration', message: err.message });
-  }
-});
-
 // GET /api/consensus/requests - Retrieve all pending consensus gating actions (Role: developer, admin, auditor)
 app.get('/api/consensus/requests', requireAuth(['developer', 'admin', 'auditor']), async (req, res) => {
   try {
@@ -3134,7 +2907,7 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
 // POST /api/consensus/requests/:actionId/override - Override AI Auditor block for dangerous commands (Role: admin)
 app.post('/api/consensus/requests/:actionId/override', requireAuth(['admin']), async (req, res) => {
   try {
-    const { actionId } = req.params;
+    const actionId = paramString(req.params.actionId);
     if (!actionId) {
       res.status(400).json({ error: 'Missing actionId parameter.' });
       return;
@@ -3352,7 +3125,7 @@ app.get('/api/quarantine', requireAuth(['admin']), async (req, res) => {
 // POST /api/quarantine/:principalId — Manually quarantine a principal (Role: admin)
 app.post('/api/quarantine/:principalId', requireAuth(['admin']), async (req, res) => {
   try {
-    const { principalId } = req.params;
+    const principalId = paramString(req.params.principalId);
     const { reason, evidence } = req.body;
     if (!reason) {
       res.status(400).json({ error: 'Missing required parameter: reason' });
@@ -3375,7 +3148,7 @@ app.post('/api/quarantine/:principalId', requireAuth(['admin']), async (req, res
 // DELETE /api/quarantine/:principalId — Release quarantine (Role: admin)
 app.delete('/api/quarantine/:principalId', requireAuth(['admin']), async (req, res) => {
   try {
-    const { principalId } = req.params;
+    const principalId = paramString(req.params.principalId);
     const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
     const record = await db.releaseQuarantine(principalId, userEmail);
     if (!record) {
@@ -3393,7 +3166,7 @@ app.delete('/api/quarantine/:principalId', requireAuth(['admin']), async (req, r
 // GET /api/quarantine/:principalId/dossier — Compile forensic dossier (Role: admin)
 app.get('/api/quarantine/:principalId/dossier', requireAuth(['admin']), async (req, res) => {
   try {
-    const { principalId } = req.params;
+    const principalId = paramString(req.params.principalId);
     const allRecords = await db.getQuarantinedPrincipals();
     const record = allRecords.find(r => r.principalId === principalId);
     if (!record) {
@@ -3410,7 +3183,7 @@ app.get('/api/quarantine/:principalId/dossier', requireAuth(['admin']), async (r
 // POST /api/quarantine/:principalId/interview — Conduct interview turn (Role: admin)
 app.post('/api/quarantine/:principalId/interview', requireAuth(['admin']), async (req, res) => {
   try {
-    const { principalId } = req.params;
+    const principalId = paramString(req.params.principalId);
     const { question } = req.body;
     if (!question) {
       res.status(400).json({ error: 'Missing required parameter: question' });
@@ -3437,7 +3210,7 @@ app.post('/api/quarantine/:principalId/interview', requireAuth(['admin']), async
 // GET /api/quarantine/:principalId/interview — Get interview transcript (Role: admin)
 app.get('/api/quarantine/:principalId/interview', requireAuth(['admin']), async (req, res) => {
   try {
-    const { principalId } = req.params;
+    const principalId = paramString(req.params.principalId);
     const logs = await db.getInterviewLogs(principalId);
     res.json(logs);
   } catch (err: any) {
@@ -3509,28 +3282,17 @@ app.post('/mcp', mcpRateLimiter, requireAuth(['developer', 'admin'], { mcpResour
   }
 });
 
-// Fix 5: GET /health — unauthenticated liveness/readiness probe for Docker and k8s.
-// Returns gate states and circuit breaker status so orchestrators can assess health.
-app.get('/health', (_req: express.Request, res: express.Response) => {
-  const circuitBreakerActive = checkCircuitBreaker();
-  const plmState = plmTracker.getState();
-  const ibpState = ibpTracker.getState();
-  const devopsState = devopsTracker.getState();
-  const allGatesPassing =
-    !!plmState.activeRequirementId &&
-    plmState.associatedTestsWritten &&
-    devopsState.pipelineVerified &&
-    ibpState.crossFunctionalSynthesized &&
-    ibpTracker.isBudgetAligned();
-
-  res.status(circuitBreakerActive ? 503 : 200).json({
-    status: circuitBreakerActive ? 'degraded' : 'ok',
-    version: '1.2.0-Enterprise',
-    uptime_seconds: Math.floor(process.uptime()),
-    circuit_breaker_active: circuitBreakerActive,
-    gates_passing: allGatesPassing,
-    timestamp: new Date().toISOString()
-  });
+registerModularRoutes(app, {
+  db,
+  requireAuth: requireAuth as RequireAuth,
+  log,
+  secureNumericId,
+  checkCircuitBreaker,
+  devopsTracker,
+  ibpTracker,
+  plmTracker,
+  broadcastWS,
+  dispatchWebhookAlert,
 });
 
 if (process.argv.includes('--mcp')) {

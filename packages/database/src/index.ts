@@ -1,7 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import {
+  AiRating,
+  DriftChangeType,
+  PrismaClient,
+} from '@prisma/client';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 
 function isProductionRuntime(): boolean {
@@ -9,12 +13,17 @@ function isProductionRuntime(): boolean {
 }
 
 function assertJsonFallbackAllowed(): void {
-  const production = isProductionRuntime();
-  if (production && !process.env.DATABASE_URL) {
-    throw new Error('JSON fallback forbidden; PostgreSQL DATABASE_URL is required.');
-  }
-  if (production) {
+  if (isProductionRuntime()) {
     throw new Error('JSON persistence is disabled in production; PostgreSQL is required.');
+  }
+  // When DATABASE_URL is configured, do not silently degrade to JSON unless opted in.
+  if (
+    process.env.DATABASE_URL &&
+    process.env.FIDUSGATE_ALLOW_JSON_FALLBACK !== 'true'
+  ) {
+    throw new Error(
+      'JSON fallback blocked while DATABASE_URL is set. Fix Prisma/PostgreSQL connectivity, or set FIDUSGATE_ALLOW_JSON_FALLBACK=true for demo JSON mode.'
+    );
   }
 }
 
@@ -374,7 +383,15 @@ export class FidusGateDatabase {
         if (isProductionRuntime()) {
           throw new Error(`PostgreSQL initialization failed: ${e.message}`);
         }
-        console.warn('⚠️  FidusGateDatabase: Failed to initialize Prisma client, falling back to JSON mock files:', e.message);
+        if (process.env.FIDUSGATE_ALLOW_JSON_FALLBACK !== 'true') {
+          throw new Error(
+            `PostgreSQL initialization failed and JSON fallback is disabled: ${e.message}`
+          );
+        }
+        console.warn(
+          'FidusGateDatabase: Failed to initialize Prisma client, falling back to JSON mock files:',
+          e.message
+        );
         this.usePostgres = false;
       }
     } else {
@@ -816,7 +833,7 @@ export class FidusGateDatabase {
             id: newEntry.id,
             timestamp: new Date(newEntry.timestamp),
             filePath: newEntry.filePath,
-            changeType: newEntry.changeType,
+            changeType: newEntry.changeType as DriftChangeType,
             diff: newEntry.diff,
             reconciled: false
           }
@@ -1009,7 +1026,7 @@ export class FidusGateDatabase {
             role: newEntry.role,
             requiredVotes: newEntry.requiredVotes,
             status: 'pending',
-            aiRating: newEntry.aiRating,
+            aiRating: newEntry.aiRating as AiRating,
             aiReason: newEntry.aiReason,
             adminOverridden: false
           },

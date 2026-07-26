@@ -7,31 +7,88 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum TransactionStatus {
+  pending
+  completed
+  failed
+  flagged
+}
+
+enum PolicyDecision {
+  allow
+  deny
+}
+
+enum FindingSeverity {
+  High
+  Medium
+  Low
+  Info
+}
+
+enum LogLevel {
+  info
+  warn
+  error
+  security
+}
+
+enum CommandStatus {
+  success
+  failed
+}
+
+enum PendingActionStatus {
+  pending
+  approved
+  rejected
+  expired
+  completed
+}
+
+enum AiRating {
+  safe
+  suspicious
+  dangerous
+}
+
+enum DriftChangeType {
+  modified
+  added
+  deleted
+}
+
+enum BudgetExtensionStatus {
+  pending
+  approved
+  rejected
+}
+
 model Transaction {
-  id        String   @id
-  timestamp DateTime @default(now())
+  id        String            @id
+  timestamp DateTime          @default(now())
   sender    String
   recipient String
   amount    Float
   currency  String
-  status    String   // 'pending' | 'completed' | 'failed' | 'flagged'
-  maskedPii Boolean  @default(false)
+  status    TransactionStatus
+  maskedPii Boolean           @default(false)
 }
 
 model AuditReceipt {
-  id                  String   @id
-  type                String   @default("protectmcp:decision")
+  id                  String         @id
+  type                String         @default("protectmcp:decision")
   tool_name           String
-  decision            String   // 'allow' | 'deny'
+  decision            PolicyDecision
   policy_digest       String
-  issued_at           DateTime @default(now())
+  issued_at           DateTime       @default(now())
   issuer_id           String
   reason              String?
   claimed_issuer_tier Int?
-  signature_alg       String   @default("EdDSA")
+  signature_alg       String         @default("EdDSA")
   signature_sig       String
-  receiptHash         String   @default("")
-  previousReceiptHash String   @default("")
+  receiptHash         String         @default("")
+  previousReceiptHash String         @default("")
   actualTokensInput   Int?
   actualTokensOutput  Int?
   actualTokensCached  Int?
@@ -40,9 +97,9 @@ model AuditReceipt {
 }
 
 model SecurityFinding {
-  vector      String   @id
+  vector      String          @id
   title       String
-  severity    String   // 'High' | 'Medium' | 'Low' | 'Info'
+  severity    FindingSeverity
   file        String
   step        String
   impact      String
@@ -55,73 +112,69 @@ model SecurityFinding {
 model LogEntry {
   id        String   @id @default(uuid())
   timestamp DateTime @default(now())
-  level     String   // 'info' | 'warn' | 'error' | 'security'
+  level     LogLevel
   message   String
   metadata  Json?
 }
 
 model CommandLog {
-  id            String   @id
-  timestamp     DateTime @default(now())
+  id            String         @id
+  timestamp     DateTime       @default(now())
   command       String
   user          String
   role          String
-  status        String   // 'success' | 'failed'
+  status        CommandStatus
   exitCode      Int
-  cedarDecision String   // 'allow' | 'deny'
+  cedarDecision PolicyDecision
 }
 
 model PendingAction {
-  id             String              @id @default(uuid())
-  createdAt      DateTime            @default(now())
-  expiresAt      DateTime
-  command        String
-  initiator      String
-  role           String
-  requiredVotes  Int                 @default(2)
-  status         String              // 'pending' | 'approved' | 'rejected' | 'expired'
-  aiRating       String              @default("safe") // 'safe' | 'suspicious' | 'dangerous'
-  aiReason       String              @default("")
+  id              String              @id @default(uuid())
+  createdAt       DateTime            @default(now())
+  expiresAt       DateTime
+  command         String
+  initiator       String
+  role            String
+  requiredVotes   Int                 @default(2)
+  status          PendingActionStatus
+  aiRating        AiRating            @default(safe)
+  aiReason        String              @default("")
   adminOverridden Boolean             @default(false)
-  approvals      ConsensusApproval[]
+  approvals       ConsensusApproval[]
 }
 
 model ConsensusApproval {
-  id              String        @id @default(uuid())
-  actionId        String
-  action          PendingAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
-  timestamp       DateTime      @default(now())
-  approver        String
-  role            String
-  signature       String        // Cryptographic Ed25519 signature of the approval
+  id        String        @id @default(uuid())
+  actionId  String
+  action    PendingAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  timestamp DateTime      @default(now())
+  approver  String
+  role      String
+  signature String
 }
 
 model FilesystemDrift {
-  id         String   @id @default(uuid())
-  timestamp  DateTime @default(now())
+  id         String          @id @default(uuid())
+  timestamp  DateTime        @default(now())
   filePath   String
-  changeType String   // 'modified' | 'added' | 'deleted'
-  diff       String?  @db.Text
-  reconciled Boolean  @default(false)
+  changeType DriftChangeType
+  diff       String?         @db.Text
+  reconciled Boolean         @default(false)
 }
 
 model SystemConfig {
-  id                  String   @id @default("active_config")
+  id                   String  @id @default("active_config")
   circuitBreakerActive Boolean @default(false)
-  agentTokenBudget    Float    @default(1000.0)
+  agentTokenBudget     Float   @default(1000.0)
 }
 
 model BudgetExtensionRequest {
-  id              String    @id
-  createdAt       DateTime  @default(now())
+  id              String                @id
+  createdAt       DateTime              @default(now())
   requestedAmount Float
   reason          String
   applicant       String
-  status          String    // 'pending' | 'approved' | 'rejected'
+  status          BudgetExtensionStatus
   reviewer        String?
   reviewedAt      DateTime?
 }
-
-
-
-
