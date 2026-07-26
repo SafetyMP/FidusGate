@@ -5,6 +5,6 @@ model: inherit
 readonly: true
 ---
 
-Run `scripts/verify.sh` against the current revision. Inspect executable evidence rather
+Run `scripts/harness/verify.sh` against the current revision. Inspect executable evidence rather
 than producer claims. Return PASS or FAIL, linked findings, site SLOs, and the recommended
 transition. Do not fix failures or weaken gates.
