@@ -2,11 +2,11 @@
   "schema": "corporate-site-site/v1",
   "site_id": "fidusgate",
   "corporate_program": "fidusgate-production",
-  "corporate_handoff_sha256": "e37feb005edf2af3e011d9e3c5e28a7c9d782e6977392733178de955b461593d",
+  "corporate_handoff_sha256": "a96a1856a400502dd45a5125f62a6b015fa8250affcb3d54fbb21e1f6139e12d",
   "verify_argv": [
-    "./scripts/verify.sh"
+    "./scripts/harness/verify.sh"
   ],
   "adversarial_argv": [
-    "./scripts/adversarial.sh"
+    "./scripts/harness/adversarial.sh"
   ]
 }
