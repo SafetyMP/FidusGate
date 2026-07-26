@@ -28,11 +28,11 @@ const outDir = path.join(repoRoot, "docs", "assets");
 const baseUrl = process.env.SCREENSHOT_BASE_URL ?? "http://localhost:3000";
 
 const tabs = [
-  { label: "Ledger & Transactions", file: "ledger.png", name: "Ledger & transactions" },
+  { label: "Transaction Ledger", file: "ledger.png", name: "Transaction Ledger" },
   {
-    label: "Compliance & Attestation",
+    label: "Compliance & Governance",
     file: "compliance.png",
-    name: "Compliance & attestation",
+    name: "Compliance & Governance",
   },
   {
     label: "Cedar Policy & Simulator",
@@ -71,7 +71,7 @@ function launchOptions() {
 
 async function waitForDashboard(page) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Ledger & Transactions" }).waitFor({
+  await page.getByRole("tab", { name: "Transaction Ledger" }).waitFor({
     state: "visible",
     timeout: 30_000,
   });
@@ -137,7 +137,7 @@ async function captureLive() {
   const gifFrames = [];
 
   for (const { label, file, name } of tabs) {
-    const tabButton = page.getByRole("button", { name: label });
+    const tabButton = page.getByRole("tab", { name: label });
     if (!(await tabButton.evaluate((el) => el.classList.contains("active")))) {
       await tabButton.click({ force: true });
     }
