@@ -116,10 +116,36 @@ for cid in deny_cells:
     if cid not in cell_set:
         print(f"BAD deny_case cell: {cid!r}", file=sys.stderr)
         raise SystemExit(1)
-adv = (root / "scripts/adversarial.sh").read_text()
+candidates = []
+site = root / ".corp-harness" / "site.json"
+if site.is_file():
+    import json
+    argv = json.loads(site.read_text()).get("adversarial_argv")
+    if isinstance(argv, list) and argv:
+        candidates.append(pathlib.Path(str(argv[0])))
+candidates.extend(
+    [
+        pathlib.Path("scripts/harness/adversarial.sh"),
+        pathlib.Path("scripts/adversarial.sh"),
+    ]
+)
+adv = ""
+adv_path = None
+for cand in candidates:
+    if cand.is_file():
+        body = cand.read_text()
+        # Skip thin wrappers that only exec another script
+        if "exec" in body and "/harness/" in body and len(body) < 400:
+            continue
+        adv = body
+        adv_path = cand
+        break
+if not adv:
+    print("TRACEABILITY: no adversarial body found", file=sys.stderr)
+    raise SystemExit(1)
 for did in deny_ids:
     if did not in adv:
-        print(f"TRACEABILITY: deny_case {did!r} not in adversarial.sh", file=sys.stderr)
+        print(f"TRACEABILITY: deny_case {did!r} not in {adv_path}", file=sys.stderr)
         raise SystemExit(1)
 print(f"yaml ok: {len(cell_ids)} cells, {len(deny_ids)} deny_cases")
 PY
