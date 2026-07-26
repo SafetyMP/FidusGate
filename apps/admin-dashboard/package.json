@@ -26,5 +26,13 @@
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
     "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "lightningcss-darwin-arm64": "1.33.0",
+    "lightningcss-darwin-x64": "1.33.0",
+    "lightningcss-linux-arm64-gnu": "1.33.0",
+    "lightningcss-linux-arm64-musl": "1.33.0",
+    "lightningcss-linux-x64-gnu": "1.33.0",
+    "lightningcss-linux-x64-musl": "1.33.0"
   }
 }
