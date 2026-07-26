@@ -1,34 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  /* HSL Color System - Curated Space Obsidian Theme */
-  --bg-primary: 224 24% 4%;
-  --bg-secondary: 224 20% 7%;
-  --bg-glass: 224 20% 7% / 0.55;
-  --bg-glass-active: 224 20% 12% / 0.75;
-  
-  --border-color: 224 16% 16% / 0.7;
-  --border-glow: 263 90% 64% / 0.15;
-  
-  --text-primary: 210 20% 98%;
-  --text-secondary: 215 16% 76%;
-  --text-muted: 215 12% 52%;
+  /* Light operational console — slate + deep teal (avoids purple-neon AI defaults) */
+  --bg-primary: 210 25% 97%;
+  --bg-secondary: 210 20% 94%;
+  --bg-glass: 0 0% 100% / 0.82;
+  --bg-glass-active: 210 24% 96% / 0.95;
 
-  /* Curated Neon/Vibrant Accents */
-  --primary: 263 90% 64%;          /* Premium Hyper Violet */
-  --primary-glow: 263 90% 64% / 0.35;
-  --success: 150 86% 43%;          /* Neo Emerald */
-  --success-glow: 150 86% 43% / 0.25;
-  --warning: 38 96% 53%;           /* Neon Gold/Amber */
-  --warning-glow: 38 96% 53% / 0.25;
-  --danger: 358 85% 58%;           /* Vivid Ruby */
-  --danger-glow: 358 85% 58% / 0.25;
-  --info: 194 92% 52%;             /* Electric Cyan */
-  --info-glow: 194 92% 52% / 0.25;
+  --border-color: 214 18% 82% / 0.95;
+  --border-glow: 174 45% 32% / 0.12;
 
-  /* Typography */
-  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-primary: 222 28% 12%;
+  --text-secondary: 215 14% 34%;
+  --text-muted: 215 10% 46%;
+
+  --primary: 174 48% 28%;
+  --primary-glow: 174 48% 28% / 0.18;
+  --success: 152 42% 32%;
+  --success-glow: 152 42% 32% / 0.16;
+  --warning: 32 78% 42%;
+  --warning-glow: 32 78% 42% / 0.14;
+  --danger: 4 68% 44%;
+  --danger-glow: 4 68% 44% / 0.14;
+  --info: 204 55% 38%;
+  --info-glow: 204 55% 38% / 0.14;
+
+  --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 }
 
 * {
@@ -64,31 +62,28 @@ body::before {
 body::after {
   content: '';
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
+  inset: 0;
   z-index: -1;
-  background: 
-    radial-gradient(circle at 30% 30%, hsla(var(--primary), 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 75% 20%, hsla(var(--info), 0.06) 0%, transparent 45%),
-    radial-gradient(circle at 60% 80%, hsla(var(--danger), 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 20% 70%, hsla(var(--success), 0.04) 0%, transparent 40%);
-  filter: blur(100px);
-  animation: auroraDrift 30s infinite alternate ease-in-out;
+  background:
+    linear-gradient(180deg, hsla(174, 30%, 92%, 0.55) 0%, transparent 42%),
+    radial-gradient(circle at 85% 12%, hsla(var(--info), 0.08) 0%, transparent 36%);
   pointer-events: none;
 }
 
-@keyframes auroraDrift {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-  50% {
-    transform: translate(-3%, 5%) rotate(45deg);
-  }
-  100% {
-    transform: translate(5%, -3%) rotate(90deg);
-  }
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
 }
 
 /* Custom Scrollbar */

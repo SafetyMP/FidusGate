@@ -22,11 +22,9 @@
 .brand-section h1 {
   font-family: var(--font-display);
   font-size: 2.4rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, #fff 20%, hsl(var(--primary)) 80%, hsl(var(--info)) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: hsl(var(--text-primary));
   display: flex;
   align-items: center;
   gap: 0.8rem;
@@ -43,9 +41,9 @@
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  background: hsla(var(--text-primary), 0.03);
+  background: hsl(var(--bg-secondary));
   padding: 0.55rem 1.1rem;
-  border-radius: 99px;
+  border-radius: 8px;
   border: 1px solid hsl(var(--border-color));
 }
 
@@ -54,8 +52,6 @@
   height: 9px;
   border-radius: 50%;
   background-color: hsl(var(--success));
-  box-shadow: 0 0 12px hsl(var(--success));
-  animation: pulseGlow 2.5s infinite ease-in-out;
 }
 
 .status-label {

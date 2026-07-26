@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, startTransition } from 'react';
 import './App.css';
 import { LedgerTab } from './tabs/LedgerTab';
 import { ComplianceTab } from './tabs/ComplianceTab';
@@ -6,16 +6,9 @@ import { PolicyTab } from './tabs/PolicyTab';
 import { ForensicsTab } from './tabs/ForensicsTab';
 import { SandboxTab } from './tabs/SandboxTab';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
-
-const API_BASE = '/api';
-const SAFE_RESOURCE_ID = /^[a-zA-Z0-9._@-]{1,128}$/;
-
-function assertSafeResourceId(value: string, label: string): string {
-  if (!SAFE_RESOURCE_ID.test(value)) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return value;
-}
+import { API_BASE, assertSafeResourceId } from './lib/api';
+import { useTransactionAction } from './hooks/useTransactionAction';
+import { TabNav, type TabId } from './components/TabNav';
 
 export default function App() {
   // State variables
@@ -73,13 +66,44 @@ export default function App() {
     return headers;
   }, [authToken]);
 
-  // Form states
-  const [txSender, setTxSender] = useState('');
-  const [txRecipient, setTxRecipient] = useState('');
-  const [txAmount, setTxAmount] = useState('');
-  const [txCurrency, setTxCurrency] = useState('USD');
-  const [txLoading, setTxLoading] = useState(false);
-  const [txNotification, setTxNotification] = useState<{message: string, type: 'success' | 'warn'} | null>(null);
+  // Terminal Console state (declared before transaction action so onCreated can append)
+  const [consoleLines, setConsoleLines] = useState<string[]>([
+    'FidusGate Unified Security Shell v1.2.0 initialized.',
+    'Local environment verified. Docker daemon detected (Active).',
+    'Cedar policy governance gateway online (Dual-Mode active).',
+    'Standing by for live sandbox command execution. Type "help" to list workflows.',
+  ]);
+  const [consoleInput, setConsoleInput] = useState('');
+
+  const transactionAction = useTransactionAction({
+    getHeaders,
+    onCreated: (tx) => {
+      startTransition(() => {
+        setTransactions((prev) => [tx, ...prev]);
+        setConsoleLines((prev) => [
+          ...prev,
+          `[LEDGER] New Transaction Registered: ${tx.id} | Amount: ${tx.amount} ${tx.currency}`,
+          tx.maskedPii
+            ? '[PRIVACY] PII Filter Triggered. Sensitive fields masked successfully.'
+            : '[PII] No direct PII detected. Stored transparently.',
+        ]);
+      });
+    },
+  });
+  const {
+    sender: txSender,
+    setSender: setTxSender,
+    recipient: txRecipient,
+    setRecipient: setTxRecipient,
+    amount: txAmount,
+    setAmount: setTxAmount,
+    currency: txCurrency,
+    setCurrency: setTxCurrency,
+    formAction: txFormAction,
+    isPending: txLoading,
+    state: txFormState,
+  } = transactionAction;
+  const txNotification = txFormState.notification;
 
   // Verifier tool states
   const [receiptInput, setReceiptInput] = useState('');
@@ -88,21 +112,12 @@ export default function App() {
     message: string;
     payload?: any;
   }>({ status: 'idle', message: '' });
-
-  // Terminal Console state
-  const [consoleLines, setConsoleLines] = useState<string[]>([
-    '🚀 FidusGate Unified Security Shell v1.2.0 initialized.',
-    '⚙️  Local environment verified. Docker daemon detected (Active).',
-    '🛡️  Cedar policy governance gateway online (Dual-Mode active).',
-    '📡 Standing by for live sandbox command execution. Type "help" to list workflows.'
-  ]);
-  const [consoleInput, setConsoleInput] = useState('');
   const [latestAutofix, setLatestAutofix] = useState<{ target: string, replacement: string } | null>(null);
   const [activePlaybook, setActivePlaybook] = useState<string | null>(null);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const [showArchPanel, setShowArchPanel] = useState(false);
   const [selectedArchComp, setSelectedArchComp] = useState<string | null>('gateway');
-  const [activeTab, setActiveTab] = useState<'ledger' | 'compliance' | 'policy' | 'forensics' | 'sandbox'>('ledger');
+  const [activeTab, setActiveTab] = useState<TabId>('ledger');
   const [forensicSearch, setForensicSearch] = useState('');
   const [forensicStatusFilter, setForensicStatusFilter] = useState<'all' | 'success' | 'failed' | 'denied'>('all');
 
@@ -926,65 +941,6 @@ export default function App() {
     }
   };
 
-  // Form submission: Create Transaction
-  const handleCreateTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!txSender || !txRecipient || !txAmount) return;
-
-    setTxLoading(true);
-    setTxNotification(null);
-
-    try {
-      const res = await fetch(`${API_BASE}/transactions`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          sender: txSender,
-          recipient: txRecipient,
-          amount: parseFloat(txAmount),
-          currency: txCurrency
-        })
-      });
-
-      if (res.ok) {
-        const tx: Transaction = await res.json();
-        setTransactions(prev => [tx, ...prev]);
-        
-        if (tx.maskedPii) {
-          setTxNotification({
-            message: `🛡️ Transaction Registered! PII Detected: Sender or Recipient was automatically filtered and masked for privacy preservation.`,
-            type: 'warn'
-          });
-        } else {
-          setTxNotification({
-            message: `✅ Transaction completed successfully! Registered Ledger ID: ${tx.id}`,
-            type: 'success'
-          });
-        }
-
-        // Add to simulated console
-        setConsoleLines(prev => [
-          ...prev,
-          `🚀 [LEDGER] New Transaction Registered: ${tx.id} | Amount: ${tx.amount} ${tx.currency}`,
-          tx.maskedPii ? `🛡️ [PRIVACY] PII Filter Triggered! Sensitive fields masked successfully.` : `✅ [PII] No direct PII detected. Stored transparently.`
-        ]);
-
-        // Reset form
-        setTxSender('');
-        setTxRecipient('');
-        setTxAmount('');
-      } else {
-        const err = await res.json();
-        alert(`Authentication/Privilege Error: ${err.error}`);
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Failed to register transaction. Secure Gateway may be offline.');
-    } finally {
-      setTxLoading(false);
-    }
-  };
-
   // Submit Feedback
   const handleLogFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1785,7 +1741,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-container animate-fade-in">
+    <div className="app-container animate-fade-in" role="main">
       {/* Header */}
       <header className="app-header" id="brand-header">
         <div className="brand-section">
@@ -1869,72 +1825,15 @@ export default function App() {
         </div>
       </section>
 
-      {/* Tab Navigation */}
-      <nav className="tabs-navigation">
-        <button 
-          className={`tab-btn ${activeTab === 'ledger' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ledger')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          Ledger & Transactions
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'compliance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('compliance')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Compliance & Attestation
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'policy' ? 'active' : ''}`}
-          onClick={() => setActiveTab('policy')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <circle cx="12" cy="11" r="2" />
-            <path d="M12 13v3" />
-          </svg>
-          Cedar Policy & Simulator
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'forensics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('forensics')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            <line x1="11" y1="8" x2="11" y2="14" />
-            <line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-          Forensics & Verifier
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'sandbox' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sandbox')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="4 17 10 11 4 5" />
-            <line x1="12" y1="19" x2="20" y2="19" />
-          </svg>
-          Interactive Sandbox
-        </button>
-      </nav>
+      <TabNav activeTab={activeTab} onChange={setActiveTab} />
 
       {/* Tab Panels */}
       <div className="tab-content-panel">
-{activeTab === 'ledger' && (
+        {activeTab === 'ledger' && (
           <LedgerTab
             transactions={transactions}
             txNotification={txNotification}
+            txError={txFormState.error}
             txSender={txSender}
             setTxSender={setTxSender}
             txRecipient={txRecipient}
@@ -1944,7 +1843,7 @@ export default function App() {
             txCurrency={txCurrency}
             setTxCurrency={setTxCurrency}
             txLoading={txLoading}
-            handleCreateTransaction={handleCreateTransaction}
+            formAction={txFormAction}
           />
         )}
         {activeTab === 'compliance' && (

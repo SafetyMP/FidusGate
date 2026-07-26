@@ -11,12 +11,17 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "vite": "8.0.10"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "build:wasm": "node scripts/build-wasm.js",
     "test": "turbo run test",
-    "lint": "turbo run lint",
+    "lint": "biome check apps/admin-dashboard/src apps/secure-gateway/src/routes apps/secure-gateway/src/middleware packages/core-types/src && turbo run lint",
     "ci": "bash scripts/ci-verify.sh",
     "bootstrap": "node scripts/build-wasm.js && bash scripts/bootstrap.sh",
     "sandbox": "bash scripts/sandbox-execute.sh",
@@ -33,8 +38,9 @@
     "gifenc": "^1.0.3",
     "playwright": "^1.52.0",
     "pngjs": "^7.0.0",
-    "semantic-release": "^25.0.7",
-    "turbo": "^2.0.4",
-    "typescript": "^5.4.5"
+    "semantic-release": "^25.0.8",
+    "turbo": "^2.10.5",
+    "typescript": "^5.9.3",
+    "@biomejs/biome": "^2.2.4"
   }
 }

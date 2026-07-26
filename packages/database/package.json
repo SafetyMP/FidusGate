@@ -10,11 +10,11 @@
     "test": "npm run build && node --test dist/production-persistence.test.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.20.0",
+    "@prisma/client": "^6.19.2",
     "@fidusgate/core-types": "1.0.0"
   },
   "devDependencies": {
-    "prisma": "^5.20.0",
-    "typescript": "^5.4.5"
+    "prisma": "^6.19.2",
+    "typescript": "^5.9.3"
   }
 }
