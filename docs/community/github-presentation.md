@@ -41,13 +41,13 @@ Rebuild the GIF from committed PNGs without a browser:
 npm run screenshots:rebuild-gif
 ```
 
-Re-capture when the admin console layout changes materially so the storefront does not drift from the product.
+Re-capture when the admin console layout changes materially so the storefront does not drift from the product. The capture script clicks dashboard tabs by accessible name (`Transaction Ledger`, `Compliance & Governance`, etc.).
 
 ## Social preview (Open Graph card)
 
-1. Source asset: [`docs/assets/social-preview.svg`](../assets/social-preview.svg) (1280×640).
-2. Committed render: [`docs/assets/social-preview.png`](../assets/social-preview.png) (1280×640).
-3. Upload: **Settings → General → Social preview** on the GitHub repo (GitHub has no API for this field — UI upload required).
+1. Source asset: [`docs/assets/social-preview.svg`](../assets/social-preview.svg) (1280×640). Keep UTF-8 only (no control characters).
+2. Committed render: [`docs/assets/social-preview.png`](../assets/social-preview.png) (1280×640). Regenerate after SVG edits (e.g. open the SVG in a browser at 1280×640 and export, or use your usual SVG→PNG pipeline).
+3. Upload: **Settings → General → Social preview** on the GitHub repo (GitHub has no API for this field — UI upload required; the committed PNG is not auto-applied).
 4. Verify: paste the repo URL into Slack/LinkedIn and confirm the custom card renders.
 
 ## Community profile

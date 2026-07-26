@@ -24,8 +24,8 @@ FidusGate shifts security left: programmatic access controls, signature verifica
 
 ### Screenshots
 
-| Ledger & transactions | Compliance & attestation | Cedar policy simulator |
-|-----------------------|--------------------------|-------------------------|
+| Transaction Ledger | Compliance & Governance | Cedar policy simulator |
+|--------------------|--------------------------|-------------------------|
 | ![Ledger](docs/assets/ledger.png) | ![Compliance](docs/assets/compliance.png) | ![Policy simulator](docs/assets/policy-simulator.png) |
 
 | Forensics & verifier | Interactive sandbox |
