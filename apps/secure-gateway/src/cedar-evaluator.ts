@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export type ASTNode =
   | { type: 'AND'; left: ASTNode; right: ASTNode }
@@ -38,13 +39,28 @@ export class CedarEvaluator {
     this.initWasm();
   }
 
+  private resolveWasmPath(): string | null {
+    const fromEnv = process.env.CEDAR_WASM_PATH;
+    if (fromEnv && fs.existsSync(fromEnv)) {
+      return fromEnv;
+    }
+    const candidates = [
+      path.resolve(process.cwd(), 'scripts/cedar-eval.wasm'),
+      path.resolve(__dirname, '../../../scripts/cedar-eval.wasm'),
+      path.resolve(__dirname, '../../../../scripts/cedar-eval.wasm'),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   private initWasm() {
     try {
-      const wasmPath = fs.existsSync('/Users/sagehart/Documents/Antigravity Test Project/antigravity-custom-dev/scripts/cedar-eval.wasm')
-        ? '/Users/sagehart/Documents/Antigravity Test Project/antigravity-custom-dev/scripts/cedar-eval.wasm'
-        : 'scripts/cedar-eval.wasm';
-      
-      if (fs.existsSync(wasmPath)) {
+      const wasmPath = this.resolveWasmPath();
+      if (wasmPath) {
         const wasmBuffer = fs.readFileSync(wasmPath);
         const wasmModule = new WebAssembly.Module(wasmBuffer);
         const self = this;

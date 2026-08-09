@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CedarEvaluator } from './cedar-evaluator';
 import { isCommandLineSecure, parseShellCommand } from './command-auditor';
@@ -12,6 +13,12 @@ import {
   IBPComplianceTracker,
   PLMComplianceTracker
 } from './compliance-trackers';
+
+
+test('cedar-evaluator source must not embed host home paths', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'cedar-evaluator.ts'), 'utf8');
+  assert.equal(src.includes('/Users/'), false, 'cedar-evaluator.ts must not hardcode /Users/ paths');
+});
 
 test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => {
   // Load standard policy.cedar from repo root
