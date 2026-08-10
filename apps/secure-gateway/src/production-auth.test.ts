@@ -10,7 +10,7 @@ import {
   verifyLegacyBearerAuthorization,
 } from './production-auth';
 
-test('production markers fail closed for demo authentication', (t) => {
+test('production markers fail closed for demo authentication', async (t) => {
   const productionOidc = {
     NODE_ENV: 'production',
     FIDUSGATE_OIDC_ISSUER: 'https://issuer.example.test',
@@ -18,7 +18,7 @@ test('production markers fail closed for demo authentication', (t) => {
     FIDUSGATE_JWKS_URL: 'https://issuer.example.test/jwks',
   };
 
-  t.test('rejects DISABLE_AUTH under either production marker', () => {
+  await t.test('rejects DISABLE_AUTH under either production marker', () => {
     assert.throws(
       () =>
         assertProductionAuthConfiguration({
@@ -30,7 +30,7 @@ test('production markers fail closed for demo authentication', (t) => {
     );
   });
 
-  t.test('rejects HS256 bootstrap configuration', () => {
+  await t.test('rejects HS256 bootstrap configuration', () => {
     assert.throws(
       () => assertProductionAuthConfiguration({ ...productionOidc, JWT_SECRET: 'legacy-secret' }),
       /legacy HS256 verifier/
@@ -41,7 +41,7 @@ test('production markers fail closed for demo authentication', (t) => {
     );
   });
 
-  t.test('rejects incomplete OIDC/JWKS configuration', () => {
+  await t.test('rejects incomplete OIDC/JWKS configuration', () => {
     assert.throws(
       () => assertProductionAuthConfiguration({ NODE_ENV: 'production' }),
       /missing required OIDC\/JWKS configuration/
