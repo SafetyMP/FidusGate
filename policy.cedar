@@ -142,6 +142,7 @@ forbid(
     resource.args.commandLine.contains("curl")
     || resource.args.commandLine.contains("wget")
     || resource.args.commandLine.contains("npm i ")
+    || resource.args.commandLine.contains("npm install")
     || resource.args.commandLine.contains("pip install")
   )
 };
