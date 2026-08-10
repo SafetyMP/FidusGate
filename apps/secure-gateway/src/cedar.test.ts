@@ -13,6 +13,7 @@ import {
   IBPComplianceTracker,
   PLMComplianceTracker
 } from './compliance-trackers';
+import { assertSafeRelativePath, canonicalizeRelativePath } from './security-sanitize';
 
 
 test('cedar-evaluator source must not embed host home paths', () => {
@@ -24,6 +25,22 @@ test('cedar-evaluator source must not embed host home paths', () => {
   assert.ok(srcPath, 'cedar-evaluator source/compiled file must exist');
   const src = fs.readFileSync(srcPath, 'utf8');
   assert.equal(src.includes('/Users/'), false, 'cedar-evaluator must not hardcode /Users/ paths');
+});
+
+test('canonicalizeRelativePath collapses dot segments and rejects escapes', () => {
+  assert.equal(canonicalizeRelativePath('apps/./secure-gateway/src/x.ts'), 'apps/secure-gateway/src/x.ts');
+  assert.equal(canonicalizeRelativePath('apps//secure-gateway/src/x.ts'), 'apps/secure-gateway/src/x.ts');
+  assert.equal(canonicalizeRelativePath('apps/../policy.cedar'), 'policy.cedar');
+  assert.equal(canonicalizeRelativePath('../policy.cedar'), null);
+  assert.equal(canonicalizeRelativePath('.'), null);
+});
+
+test('assertSafeRelativePath rejects non-canonical segments', () => {
+  assert.equal(assertSafeRelativePath('apps/other/src/x.ts', 'path'), 'apps/other/src/x.ts');
+  assert.equal(assertSafeRelativePath('.github/workflows/ci.yml', 'path'), '.github/workflows/ci.yml');
+  assert.throws(() => assertSafeRelativePath('apps/../policy.cedar', 'path'));
+  assert.throws(() => assertSafeRelativePath('apps/./secure-gateway/src/x.ts', 'path'));
+  assert.throws(() => assertSafeRelativePath('apps//secure-gateway/src/x.ts', 'path'));
 });
 
 test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => {
@@ -135,6 +152,46 @@ test('FidusGate Cedar Policy & Command Auditor Integration Tests', async (t) => 
       evaluator.isAuthorized(principal, 'multi_replace_file_content', { path: 'scripts/bootstrap.sh' }),
       'deny',
       'Modifying deployment scripts must be forbidden'
+    );
+  });
+
+  await t.test('Tier 2/8: non-canonical paths cannot bypass path-based forbids', () => {
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'write_file', { path: 'apps/./secure-gateway/src/x.ts' }, defaultCompliantContext),
+      'deny',
+      './ segment must not bypass secure-gateway SME forbid'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'write_file', { path: 'apps//secure-gateway/src/x.ts' }, defaultCompliantContext),
+      'deny',
+      '// segment must not bypass secure-gateway SME forbid'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'write_file', { path: 'packages/./database/prisma/schema.prisma' }, defaultCompliantContext),
+      'deny',
+      './ segment must not bypass database SME forbid'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'write_file', { path: 'apps/../policy.cedar' }, defaultCompliantContext),
+      'deny',
+      '.. traversal must not bypass policy.cedar forbid'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('sb:issuer:frontend-sme', 'write_file', { path: 'apps/admin-dashboard/../../policy.cedar' }, defaultCompliantContext),
+      'deny',
+      'SME principal must not traverse out of role scope into policy.cedar'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'write_file', { path: 'apps/../.github/workflows/evil.yml' }, defaultCompliantContext),
+      'deny',
+      '.. traversal must not bypass workflow SME forbid'
+    );
+    assert.strictEqual(
+      evaluator.isAuthorized('developer', 'execute_command', {
+        commandLine: 'bash scripts/sandbox-execute.sh "npm install evil" "."'
+      }, defaultCompliantContext),
+      'deny',
+      'npm install inside sandbox wrapper must be forbidden'
     );
   });
 
