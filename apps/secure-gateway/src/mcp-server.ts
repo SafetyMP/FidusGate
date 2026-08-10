@@ -11,7 +11,17 @@ import {
   IBPComplianceTracker,
   PLMComplianceTracker
 } from './compliance-trackers';
-import { sanitizeLogValue, safeRecordKey, untaintText, assertSafeRelativePath } from './security-sanitize';
+import {
+  sanitizeLogValue,
+  safeRecordKey,
+  untaintText,
+  assertSafeRelativePath,
+  resolveInsideWorkspace,
+} from './security-sanitize';
+
+function mcpWorkspaceRoot(): string {
+  return path.resolve(__dirname, '..', '..', '..');
+}
 import {
   MCP_PROTOCOL_2026,
   negotiateLegacyProtocolVersion,
@@ -798,11 +808,8 @@ export async function handleMcpRequest(req: any): Promise<any> {
       resetPrincipalViolations(callerPrincipal);
 
       try {
-        const workspacePath = path.resolve(__dirname, '..', '..', '..');
-        const resolvedPath = path.resolve(workspacePath, safeRelPath);
-        
-        // Enforce sandbox write boundaries
-        if (!resolvedPath.startsWith(workspacePath)) {
+        const resolvedPath = resolveInsideWorkspace(mcpWorkspaceRoot(), safeRelPath);
+        if (!resolvedPath) {
           return {
             jsonrpc: '2.0',
             result: {
@@ -860,15 +867,23 @@ export async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
-      const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const resolvedPath = path.resolve(workspacePath, filePath);
-      
-      // Sandbox boundary check
-      if (!resolvedPath.startsWith(workspacePath)) {
+      let safeRelPath: string;
+      try {
+        safeRelPath = assertSafeRelativePath(filePath, 'path');
+      } catch (err: any) {
+        return {
+          jsonrpc: '2.0',
+          error: { code: -32602, message: err?.message || 'Invalid path' },
+          id
+        };
+      }
+
+      const resolvedPath = resolveInsideWorkspace(mcpWorkspaceRoot(), safeRelPath);
+      if (!resolvedPath) {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot read outside workspace: ${filePath}` }],
+            content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot read outside workspace: ${safeRelPath}` }],
             isError: true
           },
           id
@@ -890,8 +905,8 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'read_file', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'read_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
@@ -899,7 +914,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
             content: [
               {
                 type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Read operation denied for path: ${filePath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
+                text: `❌ FidusGate Cedar Policy Blocker: Read operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
               }
             ],
             isError: true
@@ -912,7 +927,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
         if (!fs.existsSync(resolvedPath)) {
           return {
             jsonrpc: '2.0',
-            result: { content: [{ type: 'text', text: `❌ File not found: ${filePath}` }], isError: true },
+            result: { content: [{ type: 'text', text: `❌ File not found: ${safeRelPath}` }], isError: true },
             id
           };
         }
@@ -991,11 +1006,8 @@ export async function handleMcpRequest(req: any): Promise<any> {
       resetPrincipalViolations(callerPrincipal);
 
       try {
-        const workspacePath = path.resolve(__dirname, '..', '..', '..');
-        const resolvedPath = path.resolve(workspacePath, safeRelPath);
-        
-        // Enforce sandbox write boundaries
-        if (!resolvedPath.startsWith(workspacePath)) {
+        const resolvedPath = resolveInsideWorkspace(mcpWorkspaceRoot(), safeRelPath);
+        if (!resolvedPath) {
           return {
             jsonrpc: '2.0',
             result: {
@@ -1057,24 +1069,42 @@ export async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
-      const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const searchDir = searchPath ? path.resolve(workspacePath, searchPath) : workspacePath;
-
-      if (!searchDir.startsWith(workspacePath)) {
-        return {
-          jsonrpc: '2.0',
-          result: {
-            content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot search outside workspace: ${searchPath}` }],
-            isError: true
-          },
-          id
-        };
+      const workspacePath = mcpWorkspaceRoot();
+      let searchDir = workspacePath;
+      let safeSearchPath: string | undefined;
+      if (searchPath) {
+        try {
+          safeSearchPath = assertSafeRelativePath(searchPath, 'searchPath');
+        } catch (err: any) {
+          return {
+            jsonrpc: '2.0',
+            error: { code: -32602, message: err?.message || 'Invalid searchPath' },
+            id
+          };
+        }
+        const resolvedSearch = resolveInsideWorkspace(workspacePath, safeSearchPath);
+        if (!resolvedSearch) {
+          return {
+            jsonrpc: '2.0',
+            result: {
+              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot search outside workspace: ${safeSearchPath}` }],
+              isError: true
+            },
+            id
+          };
+        }
+        searchDir = resolvedSearch;
       }
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = await getFullContext(callerPrincipal, { query, searchPath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'search_code', { query, searchPath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { query, searchPath: safeSearchPath });
+      const evaluation = evaluator.evaluateSimulator(
+        callerPrincipal,
+        'search_code',
+        { query, searchPath: safeSearchPath },
+        contextObj
+      );
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
@@ -1122,14 +1152,23 @@ export async function handleMcpRequest(req: any): Promise<any> {
         };
       }
 
-      const workspacePath = path.resolve(__dirname, '..', '..', '..');
-      const resolvedPath = path.resolve(workspacePath, filePath);
+      let safeRelPath: string;
+      try {
+        safeRelPath = assertSafeRelativePath(filePath, 'path');
+      } catch (err: any) {
+        return {
+          jsonrpc: '2.0',
+          error: { code: -32602, message: err?.message || 'Invalid path' },
+          id
+        };
+      }
 
-      if (!resolvedPath.startsWith(workspacePath)) {
+      const resolvedPath = resolveInsideWorkspace(mcpWorkspaceRoot(), safeRelPath);
+      if (!resolvedPath) {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot list outside workspace: ${filePath}` }],
+            content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot list outside workspace: ${safeRelPath}` }],
             isError: true
           },
           id
@@ -1138,8 +1177,8 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
-      const contextObj = await getFullContext(callerPrincipal, { path: filePath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'list_directory', { path: filePath }, contextObj);
+      const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
+      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'list_directory', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
