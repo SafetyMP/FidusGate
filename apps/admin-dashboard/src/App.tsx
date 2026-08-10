@@ -877,16 +877,13 @@ export default function App() {
 
     setConsensusLoading(true);
     try {
-      const mockAttestationSignature = `sig_attest_${Math.random().toString(36).substring(2)}_${btoa(authEmail).substring(0, 16)}`;
-
+      // Server issues the role-bound Ed25519 attestation after JWT auth.
+      // Do not send client-invented mock signatures — they are rejected.
       const res = await fetch(`${API_BASE}/consensus/requests/approve`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
-          actionId,
-          signature: mockAttestationSignature,
-          approverEmail: authEmail,
-          approverRole: authRole
+          actionId
         })
       });
 
