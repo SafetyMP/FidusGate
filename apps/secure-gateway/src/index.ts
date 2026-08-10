@@ -41,6 +41,7 @@ import { createProxyVerifier } from './proxy-verifier';
 import {
   assertProductionAuthConfiguration,
   isProductionRuntime,
+  resolveJwtSecret,
   verifyLegacyBearerAuthorization,
 } from './production-auth';
 import { assertProductionPrerequisites } from './production-profile';
@@ -357,14 +358,14 @@ assertProductionAuthConfiguration();
 assertProductionPrerequisites();
 
 const JWT_SECRET: string = (() => {
-  const secret =
-    process.env.JWT_SECRET ||
-    (process.env.NODE_ENV === 'production' ? undefined : 'fidusgate-dev-jwt-secret-local-only');
-  if (!secret) {
-    console.error('❌ FATAL: JWT_SECRET environment variable is required in production mode!');
+  try {
+    return resolveJwtSecret(process.env, {
+      dataDir: path.resolve(process.cwd(), 'packages/database/data'),
+    });
+  } catch (err: any) {
+    console.error(`❌ FATAL: ${err?.message || err}`);
     process.exit(1);
   }
-  return secret;
 })();
 
 // Bootstrap token minting is registered BEFORE the circuit-breaker middleware so
