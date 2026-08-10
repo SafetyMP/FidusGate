@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { canonicalizeRelativePath } from './security-sanitize';
 
 export type ASTNode =
   | { type: 'AND'; left: ASTNode; right: ASTNode }
@@ -393,12 +394,35 @@ export class CedarEvaluator {
     return this.strings.length - 1;
   }
 
+  /**
+   * Canonicalize args.path before permit/forbid matching so literal path
+   * forbids cannot be skipped via `./`, `//`, or `..` segments.
+   * Returns null when the path escapes the workspace (caller must deny).
+   */
+  private normalizeEvalArgs(args?: Record<string, any>): Record<string, any> | null {
+    const base = args && typeof args === 'object' ? { ...args } : {};
+    if (typeof base.path !== 'string') {
+      return base;
+    }
+    const canonical = canonicalizeRelativePath(base.path);
+    if (canonical === null) {
+      return null;
+    }
+    base.path = canonical;
+    return base;
+  }
+
   public evaluateTSEngine(principal: string, toolName: string, args: Record<string, any>, contextObj?: Record<string, any>): 'allow' | 'deny' {
+    const normalizedArgs = this.normalizeEvalArgs(args);
+    if (normalizedArgs === null) {
+      return 'deny';
+    }
+
     const evalContext = {
       principal,
       resource: {
         tool_name: toolName,
-        args: args || {}
+        args: normalizedArgs
       },
       context: contextObj || {}
     };
@@ -526,11 +550,20 @@ export class CedarEvaluator {
       };
     }
 
+    const normalizedArgs = this.normalizeEvalArgs(args);
+    if (normalizedArgs === null) {
+      return {
+        decision: 'deny',
+        matchingPolicies: [],
+        reason: 'Denied: path could not be canonicalized (escapes workspace or is empty).'
+      };
+    }
+
     const evalContext = {
       principal,
       resource: {
         tool_name: toolName,
-        args: args || {}
+        args: normalizedArgs
       },
       context: contextObj || {}
     };

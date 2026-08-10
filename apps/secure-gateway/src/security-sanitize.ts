@@ -71,11 +71,61 @@ export function assertSafeSubagentId(value: unknown): string {
   return value;
 }
 
+/**
+ * Collapse `.` / empty segments and resolve `..` for policy evaluation.
+ * Returns null when the path escapes the workspace root or is empty/invalid.
+ */
+export function canonicalizeRelativePath(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 512) {
+    return null;
+  }
+  if (value.includes('\0')) {
+    return null;
+  }
+
+  const parts = value.replace(/\\/g, '/').split('/');
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part === '' || part === '.') {
+      continue;
+    }
+    if (part === '..') {
+      if (out.length === 0) {
+        return null;
+      }
+      out.pop();
+      continue;
+    }
+    out.push(part);
+  }
+  if (out.length === 0) {
+    return null;
+  }
+  return out.join('/');
+}
+
 export function assertSafeRelativePath(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !SAFE_RELATIVE_PATH_PATTERN.test(value) || value.includes('..')) {
+  if (typeof value !== 'string' || !SAFE_RELATIVE_PATH_PATTERN.test(value)) {
     throw new Error(`Invalid ${label}: path must be relative and must not contain ..`);
   }
-  return value;
+
+  // Reject empty / '.' segments up front so MCP entrypoints never accept
+  // non-canonical forms that previously slipped past literal Cedar forbids.
+  const segments = value.replace(/\\/g, '/').split('/');
+  for (const seg of segments) {
+    if (seg === '' || seg === '.') {
+      throw new Error(`Invalid ${label}: path must not contain empty or '.' segments`);
+    }
+    if (seg === '..') {
+      throw new Error(`Invalid ${label}: path must be relative and must not contain ..`);
+    }
+  }
+
+  const canonical = canonicalizeRelativePath(value);
+  if (!canonical) {
+    throw new Error(`Invalid ${label}: path must be relative and must not escape the workspace`);
+  }
+  return canonical;
 }
 
 export function safeRecordKey(value: unknown, label: string): string {
