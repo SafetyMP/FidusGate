@@ -26,6 +26,14 @@ import { runWasmCommand } from './wasi-runner';
 import { startConsensusExpiryWorker } from './cron-worker';
 import { isPromptSecure } from './ai-firewall';
 import { auditConsensusRequest } from './consensus-auditor';
+import {
+  buildConsensusApprovalPayload,
+  isConsensusRole,
+  loadConsensusRoleKeyStore,
+  signConsensusApproval,
+  verifyActionApprovals,
+  verifyConsensusApproval,
+} from './consensus-attestation';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
   assertSafeCedarDaemonUrl,
@@ -1002,27 +1010,13 @@ if (process.env.MASTER_PRIVATE_KEY_HEX && process.env.MASTER_PUBLIC_KEY_HEX) {
 PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'] = MASTER_ROOT_KEYS.publicKeyHex;
 
 // ==========================================
-// Consensus Gating: Role-specific SME Signing Keys (Simulated MuSig2)
-// In production, these would be derived from hardware security modules (HSM).
-// Each consensus role has a unique Ed25519 keypair for signature attestation.
+// Consensus Gating: Role-specific Ed25519 attestation keys
+// Real keypairs (cached under packages/database/data/). Production should
+// inject HSM/KMS-backed material via the same on-disk/env bootstrap path.
 // ==========================================
-const MUSIG2_ROLE_KEYS: Record<string, { privateKeyHex: string; publicKeyHex: string; label: string }> = {
-  admin: {
-    privateKeyHex: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
-    publicKeyHex: '302a300506032b6570032100aa11bb22cc33dd44ee55ff6677889900aabbccddeeff00112233445566778899',
-    label: 'Admin SME Key (K₁)'
-  },
-  developer: {
-    privateKeyHex: 'b2c3d4e5f6071829a3b4c5d6e7f89001b2c3d4e5f6071829a3b4c5d6e7f89001',
-    publicKeyHex: '302a300506032b6570032100bb22cc33dd44ee55ff6677889900aabbccddeeff0011223344556677889900aa',
-    label: 'Developer SME Key (K₂)'
-  },
-  auditor: {
-    privateKeyHex: 'c3d4e5f607182930b4c5d6e7f8900112c3d4e5f607182930b4c5d6e7f8900112',
-    publicKeyHex: '302a300506032b6570032100cc33dd44ee55ff6677889900aabbccddeeff00112233445566778899001122bb',
-    label: 'Auditor SME Key (K₃)'
-  }
-};
+const CONSENSUS_ROLE_KEYS = loadConsensusRoleKeyStore(
+  path.resolve(process.cwd(), 'packages/database/data')
+);
 
 
 const activeSessions: Record<string, {
@@ -1263,13 +1257,20 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
 
     let isConsensusBypass = false;
     if (approvedAction) {
+      if (!verifyActionApprovals(approvedAction, CONSENSUS_ROLE_KEYS)) {
+        log('security', `CONSENSUS BYPASS REJECTED: stored approvals failed cryptographic verification for action ${approvedAction.id}`);
+        res.status(403).json({
+          error: 'Consensus approvals failed cryptographic verification. Re-collect role attestations.'
+        });
+        return;
+      }
       isConsensusBypass = true;
       log('security', `🔓 CONSENSUS BYPASS GRANTED: Executing approved consensus action ID: ${approvedAction.id}`);
       await db.completeAction(approvedAction.id);
     }
 
-    // 2. Check circuit breaker ONLY if it is not an approved consensus bypass
-    if (!isConsensusBypass && checkCircuitBreaker()) {
+    // 2. Circuit breaker always applies — consensus does not override lockouts
+    if (checkCircuitBreaker()) {
       const remainingSecs = Math.max(0, Math.ceil((circuitBreakerCooldownUntil - Date.now()) / 1000));
       res.status(429).json({
         error: `Sandbox execution locked. SecOps Circuit Breaker tripped due to consecutive security violations. Lock releases in ${remainingSecs} seconds.`
@@ -1420,9 +1421,11 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       return;
     }
 
-    // Input command tokenized audit (Defense-in-Depth against bypasses)
+    // Input command tokenized audit (Defense-in-Depth against bypasses).
+    // Consensus approval never skips the command allowlist — it only skips
+    // re-queueing for additional human votes.
     const auditResult = isCommandLineSecure(command);
-    if (!isConsensusBypass && !auditResult.secure) {
+    if (!auditResult.secure) {
       log('security', `BLOCKED WEB CONSOLE COMMAND: Forbidden command execution attempted. Reason: ${auditResult.reason}`, { command });
       
       handleViolation();
@@ -1902,43 +1905,33 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
+    if (!isConsensusRole(userRole)) {
+      res.status(403).json({ error: 'Authenticated role is not eligible for consensus attestation.' });
+      return;
+    }
+
     const alreadyApproved = action.approvals.some(
-      (approval: { approver: string }) => approval.approver === userEmail
+      (approval: { approver: string; role: string }) =>
+        approval.approver === userEmail || approval.role === userRole
     );
     if (alreadyApproved) {
-      res.status(400).json({ error: 'You have already approved this action.' });
+      res.status(400).json({ error: 'This role or approver has already attested this action.' });
       return;
     }
 
-    // Mathematically verify the approver's cryptographic signature.
-    // Only trust a key that is explicitly registered for the SME-derived
-    // issuer id — never accept a caller-controlled fallback (CodeQL
-    // js/user-controlled-bypass).
-    const approverIssuer = `sb:issuer:${userEmail.split('@')[0]}`;
-    const publicKeyHex = PUBLIC_KEY_MAP[approverIssuer];
-    if (!publicKeyHex) {
-      log('security', 'CONSENSUS APPROVAL REJECTED: no registered issuer key for approver', { approverIssuer });
-      res.status(403).json({ error: `No registered issuer key for approver '${approverIssuer}'.` });
-      return;
-    }
-
-    // The payload signed by the approver is the actionId
-    const { verifyReceipt } = require('@fidusgate/crypto-utils');
-    const isValid = verifyReceipt({
-      payload: {
-        type: 'consensus:approval',
-        tool_name: 'approve',
-        decision: 'allow',
-        policy_digest: 'actionId:' + actionId,
-        issued_at: new Date().toISOString(),
-        issuer_id: `sb:issuer:${userEmail.split('@')[0]}`
-      },
-      signature: {
-        alg: 'EdDSA',
-        kid: `sb:issuer:${userEmail.split('@')[0]}`,
-        sig: signature
-      }
-    }, publicKeyHex);
+    // Verify Ed25519 attestation bound to actionId+command+role+createdAt
+    // using the authenticated consensus role key (not email-derived issuer map).
+    const approvalPayload = buildConsensusApprovalPayload(
+      action.id,
+      action.command,
+      userRole,
+      action.createdAt
+    );
+    const isValid = verifyConsensusApproval(
+      approvalPayload,
+      signature,
+      CONSENSUS_ROLE_KEYS.getPublicKey(userRole)
+    );
 
     if (!isValid) {
       res.status(400).json({ error: 'Cryptographic signature verification failed.' });
@@ -2819,20 +2812,44 @@ app.get('/api/consensus/requests', requireAuth(['developer', 'admin', 'auditor']
 // POST /api/consensus/requests/approve - Attest cryptographic signature and approve action (Role: admin, developer, auditor)
 app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', 'auditor']), async (req, res) => {
   try {
-    const { actionId, signature } = req.body;
-    if (!actionId || !signature) {
-      res.status(400).json({ error: 'Missing required parameters: actionId, signature' });
+    const actionId = typeof req.body?.actionId === 'string' ? req.body.actionId : '';
+    if (!actionId) {
+      res.status(400).json({ error: 'Missing required parameter: actionId' });
       return;
     }
 
     const email = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
-    const role = (req as AuthenticatedRequest).user?.role || 'admin';
+    const role = (req as AuthenticatedRequest).user?.role;
+    if (!isConsensusRole(role)) {
+      res.status(403).json({ error: 'Authenticated role is not eligible for consensus attestation.' });
+      return;
+    }
 
     // Fetch the target action to check safety rating blocks
     const actions = await db.getPendingActions();
     const action = actions.find(a => a.id === actionId);
     if (!action) {
       res.status(404).json({ error: 'Pending action request not found.' });
+      return;
+    }
+
+    if (action.status !== 'pending') {
+      res.status(400).json({ error: `Pending action is already in ${action.status} state.` });
+      return;
+    }
+
+    if (action.initiator === email) {
+      res.status(400).json({ error: 'Action initiator cannot approve their own consensus request.' });
+      return;
+    }
+
+    if (
+      Array.isArray(action.approvals) &&
+      action.approvals.some(
+        (app: { role: string; approver: string }) => app.role === role || app.approver === email
+      )
+    ) {
+      res.status(400).json({ error: 'This role or approver has already attested this action.' });
       return;
     }
 
@@ -2845,22 +2862,80 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
       return;
     }
 
+    // Bind attestation to actionId + command + role + action.createdAt.
+    // Server issues the Ed25519 signature with the authenticated role key so
+    // client-supplied mock signatures cannot forge consensus.
+    const approvalPayload = buildConsensusApprovalPayload(
+      action.id,
+      action.command,
+      role,
+      action.createdAt
+    );
+    const clientSignature = typeof req.body?.signature === 'string' ? req.body.signature : '';
+    let signature: string;
+    if (clientSignature) {
+      if (
+        !verifyConsensusApproval(
+          approvalPayload,
+          clientSignature,
+          CONSENSUS_ROLE_KEYS.getPublicKey(role)
+        )
+      ) {
+        log('security', `CONSENSUS APPROVAL REJECTED: invalid client signature for ${actionId} by ${email}`);
+        res.status(400).json({ error: 'Cryptographic signature verification failed.' });
+        return;
+      }
+      signature = clientSignature;
+    } else {
+      signature = signConsensusApproval(approvalPayload, CONSENSUS_ROLE_KEYS.getPrivateKey(role));
+    }
+
     log('info', `✍️ CONSENSUS APPROVAL SUBMITTED: Action ID: ${actionId} by ${email} (${role.toUpperCase()})`);
 
-    const updatedAction = await db.addConsensusApproval({
-      actionId,
-      approver: email,
-      role,
-      signature
-    });
+    let updatedAction: any;
+    try {
+      updatedAction = await db.addConsensusApproval({
+        actionId,
+        approver: email,
+        role,
+        signature
+      });
+    } catch (err: any) {
+      if (err?.code === 'CONSENSUS_DUPLICATE') {
+        res.status(400).json({ error: 'This role or approver has already attested this action.' });
+        return;
+      }
+      throw err;
+    }
 
     if (!updatedAction) {
       res.status(404).json({ error: 'Pending action request not found.' });
       return;
     }
 
-    // If consensus is met, trigger sandbox execution in background
+    // If consensus is met, re-verify every stored attestation before execute
     if (updatedAction.status === 'approved') {
+      if (!verifyActionApprovals(updatedAction, CONSENSUS_ROLE_KEYS)) {
+        log('security', `CONSENSUS MET BUT CRYPTO FAILED: refusing execution for ${actionId}`);
+        res.status(403).json({
+          error: 'Consensus approvals failed cryptographic verification.'
+        });
+        return;
+      }
+
+      const auditResult = isCommandLineSecure(updatedAction.command);
+      if (!auditResult.secure) {
+        log('security', `CONSENSUS APPROVED BUT COMMAND AUDITOR DENIED: ${auditResult.reason}`, {
+          command: updatedAction.command
+        });
+        res.status(403).json({
+          error: `Command execution forbidden after consensus. Reason: ${auditResult.reason}`,
+          remediationSuggestion: auditResult.remediationSuggestion,
+          suggestedAutofix: auditResult.suggestedAutofix
+        });
+        return;
+      }
+
       log('security', `✅ CONSENSUS MET: Action ID: ${actionId} has gathered required approvals and is now APPROVED.`);
       broadcastWS('consensus_approved', { actionId, status: 'approved' });
 
@@ -2954,7 +3029,9 @@ app.post('/api/consensus/requests/:actionId/aggregate', requireAuth(['admin', 'd
       role: app.role,
       approver: app.approver,
       signature: app.signature,
-      publicKey: MUSIG2_ROLE_KEYS[app.role]?.publicKeyHex || 'unknown'
+      publicKey: isConsensusRole(app.role)
+        ? CONSENSUS_ROLE_KEYS.getPublicKey(app.role)
+        : 'unknown'
     }));
 
     // Consensus Signature Aggregation Simulation

@@ -1063,6 +1063,25 @@ export class FidusGateDatabase {
 
     if (this.usePostgres && this.prisma) {
       try {
+        const existing = await this.prisma.pendingAction.findUnique({
+          where: { id: approval.actionId },
+          include: { approvals: true }
+        });
+        if (!existing) {
+          return null;
+        }
+        // Mirror JSON-store uniqueness: one vote per role and per approver.
+        if (
+          existing.approvals.some(
+            (app: { role: string; approver: string }) =>
+              app.role === approval.role || app.approver === approval.approver
+          )
+        ) {
+          const err = new Error('Duplicate consensus approval for role or approver');
+          (err as Error & { code?: string }).code = 'CONSENSUS_DUPLICATE';
+          throw err;
+        }
+
         await this.prisma.consensusApproval.create({
           data: {
             id: newApproval.id,
@@ -1090,33 +1109,49 @@ export class FidusGateDatabase {
         }
         return action;
       } catch (err: any) {
+        if (err?.code === 'CONSENSUS_DUPLICATE') {
+          throw err;
+        }
         console.warn('⚠️  Prisma ConsensusApproval insertion failed, falling back to JSON storage:', err.message);
       }
     }
 
     const ACTIONS_FILE = path.join(DATA_DIR, 'pending-actions.json');
     let returnedAction: any = null;
+    let duplicate = false;
     lockAndModify(ACTIONS_FILE, (list: any[]) => {
       const action = list.find(a => a.id === approval.actionId);
       if (action) {
-        // Prevent duplicate approval roles
-        if (!action.approvals.some((app: any) => app.role === approval.role)) {
-          action.approvals.push({
-            id: newApproval.id,
-            actionId: newApproval.actionId,
-            timestamp: newApproval.timestamp,
-            approver: newApproval.approver,
-            role: newApproval.role,
-            signature: newApproval.signature
-          });
-          if (action.approvals.length >= action.requiredVotes && action.status === 'pending') {
-            action.status = 'approved';
-          }
+        // Prevent duplicate approval roles or repeat votes by the same approver
+        if (
+          action.approvals.some(
+            (app: any) => app.role === approval.role || app.approver === approval.approver
+          )
+        ) {
+          duplicate = true;
+          returnedAction = action;
+          return list;
+        }
+        action.approvals.push({
+          id: newApproval.id,
+          actionId: newApproval.actionId,
+          timestamp: newApproval.timestamp,
+          approver: newApproval.approver,
+          role: newApproval.role,
+          signature: newApproval.signature
+        });
+        if (action.approvals.length >= action.requiredVotes && action.status === 'pending') {
+          action.status = 'approved';
         }
         returnedAction = action;
       }
       return list;
     });
+    if (duplicate) {
+      const err = new Error('Duplicate consensus approval for role or approver');
+      (err as Error & { code?: string }).code = 'CONSENSUS_DUPLICATE';
+      throw err;
+    }
     return returnedAction;
   }
 
