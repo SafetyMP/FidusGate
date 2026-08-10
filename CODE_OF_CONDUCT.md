@@ -34,7 +34,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at **community@fidusgate.io**. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported privately to the SafetyMP organization owners on GitHub (do not post sensitive enforcement details in public issues). The former `community@fidusgate.io` address is unavailable until DNS/MX is provisioned. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

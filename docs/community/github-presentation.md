@@ -54,6 +54,16 @@ Re-capture when the admin console layout changes materially so the storefront do
 
 Target **100%** on **Insights → Community Standards**: README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue templates, and a PR template. Issue templates live under [`.github/ISSUE_TEMPLATE/`](../../.github/ISSUE_TEMPLATE/). GitHub Discussions is intentionally not enabled; open-ended questions route through the documentation issue template (see [`.github/ISSUE_TEMPLATE/config.yml`](../../.github/ISSUE_TEMPLATE/config.yml)).
 
+### Private vulnerability reporting (required for SECURITY.md)
+
+[`SECURITY.md`](../../SECURITY.md) directs researchers to GitHub Security Advisories. A repo admin must keep this enabled:
+
+1. **Settings → Code security** (or **Security → Code security and analysis**)
+2. Enable **Privately report a security vulnerability**
+3. Confirm `https://github.com/SafetyMP/FidusGate/security/advisories/new` does not 404
+
+Do not list `*@fidusgate.io` addresses until the domain has working public DNS/MX — bounced security mailboxes block responsible disclosure ([#54](https://github.com/SafetyMP/FidusGate/issues/54)).
+
 ## Optional, later
 
 - **OpenSSF Best Practices badge** — enroll at [bestpractices.dev](https://www.bestpractices.dev/en) after community files and CI are stable on `main` (complements Scorecard).

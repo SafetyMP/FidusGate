@@ -13,9 +13,11 @@ Only the latest active release on `main` is supported for security updates:
 
 FidusGate takes repository governance and AI sandbox containment security very seriously. If you discover a vulnerability, access-control bypass (e.g. in the Cedar policy logic), container jailbreak (e.g. escaping the gVisor sandbox), or a prompt-injection vulnerability:
 
-1. **Do not open a public GitHub issue.** Instead, report the vulnerability privately by emailing the security engineering team at `security@fidusgate.io`.
-2. Please provide detailed steps, sample payloads, and configurations to reproduce the vulnerability.
-3. Our security team will acknowledge receipt of your report within 24 hours and provide an estimated timeline for remediation.
-4. We coordinate updates and patches under a standard **90-day responsible disclosure window** before publishing details.
+1. **Do not open a public GitHub issue.**
+2. Report privately via **[GitHub Security Advisories](https://github.com/SafetyMP/FidusGate/security/advisories/new)** (preferred).
+3. If that link returns 404, ask a repo admin to enable **Settings → Code security → Privately report a security vulnerability**, then retry.
+4. Do **not** email `security@fidusgate.io` — that domain currently has no public DNS/MX and reports will bounce.
+5. Include detailed steps, sample payloads, and configurations to reproduce where safe.
+6. We aim to acknowledge within **72 hours** and coordinate patches under a **90-day responsible disclosure window** before publishing details.
 
 Thank you for helping keep FidusGate secure!
