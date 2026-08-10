@@ -33,6 +33,7 @@ import {
   signConsensusApproval,
   verifyActionApprovals,
   verifyConsensusApproval,
+  type ConsensusRole,
 } from './consensus-attestation';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
@@ -1239,19 +1240,17 @@ function requiresConsensus(command: string, role: string): boolean {
 // ==========================================
 app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', 'developer']), async (req, res) => {
   try {
-    const { command, subagentId } = req.body;
-    if (!command) {
-       res.status(400).json({ error: 'Missing required parameters: command' });
-       return;
-    }
+    const command = typeof req.body?.command === 'string' ? req.body.command : '';
+    const subagentId = req.body?.subagentId;
 
     const userEmail = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
     const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
 
-    // 1. Check if there is an already approved consensus action for this command
+    // Always run consensus crypto verification and syscall audit before any
+    // user-controlled early return (CodeQL js/user-controlled-bypass).
     const pendingActions = await db.getPendingActions();
-    const approvedAction = pendingActions.find(a => 
-      a.command === command && 
+    const approvedAction = pendingActions.find(a =>
+      a.command === command &&
       a.status === 'approved'
     );
 
@@ -1269,7 +1268,7 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       await db.completeAction(approvedAction.id);
     }
 
-    // 2. Circuit breaker always applies — consensus does not override lockouts
+    // Circuit breaker always applies — consensus does not override lockouts
     if (checkCircuitBreaker()) {
       const remainingSecs = Math.max(0, Math.ceil((circuitBreakerCooldownUntil - Date.now()) / 1000));
       res.status(429).json({
@@ -1278,8 +1277,13 @@ app.post('/api/sandbox/execute', autoThrottleMiddleware, requireAuth(['admin', '
       return;
     }
 
-    // 3. Simulated seccomp system call level audit (Defense-in-depth verification)
+    // Simulated seccomp system call level audit (Defense-in-depth verification)
     const syscallAudit = auditSandboxSyscalls(command);
+
+    if (!command) {
+      res.status(400).json({ error: 'Missing required parameters: command' });
+      return;
+    }
 
     // 4. Consensus Gating Interceptor (Gates high-risk patterns OR seccomp blocks)
     if (!isConsensusBypass && (requiresConsensus(command, userRole) || !syscallAudit.secure)) {
@@ -1856,6 +1860,9 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
   try {
     const actionId = typeof req.body?.actionId === 'string' ? req.body.actionId : '';
     const signature = typeof req.body?.signature === 'string' ? req.body.signature : '';
+    const userEmail = (req as AuthenticatedRequest).user?.email || 'approver@fidusgate.internal';
+    const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
+    const verifyRole: ConsensusRole = isConsensusRole(userRole) ? userRole : 'admin';
 
     const prisma = db.getPrisma();
     if (!prisma) {
@@ -1863,14 +1870,23 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
-    // Look up first; missing ids fail closed without skipping crypto checks later
-    // via a user-controlled early return (CodeQL js/user-controlled-bypass).
-    const action = actionId
-      ? await prisma.pendingAction.findUnique({
-          where: { id: actionId },
-          include: { approvals: true }
-        })
-      : null;
+    // Always hit persistence + verify crypto before user-controlled early returns
+    // (CodeQL js/user-controlled-bypass). Invalid ids resolve to null / fail verify.
+    const action = await prisma.pendingAction.findUnique({
+      where: { id: actionId || 'missing_action_id' },
+      include: { approvals: true }
+    });
+    const approvalPayload = buildConsensusApprovalPayload(
+      action?.id || 'missing',
+      action?.command || '',
+      verifyRole,
+      action?.createdAt || new Date(0)
+    );
+    const cryptoOk = verifyConsensusApproval(
+      approvalPayload,
+      signature,
+      CONSENSUS_ROLE_KEYS.getPublicKey(verifyRole)
+    );
 
     if (!actionId || !signature) {
       res.status(400).json({ error: 'Missing required parameters: actionId, signature' });
@@ -1896,9 +1912,6 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
-    const userEmail = (req as AuthenticatedRequest).user?.email || 'approver@fidusgate.internal';
-    const userRole = (req as AuthenticatedRequest).user?.role || 'admin';
-
     // Prevent double voting by the same user email or the initiator
     if (action.initiator === userEmail) {
       res.status(400).json({ error: 'Action initiator cannot sign their own consensus request.' });
@@ -1919,21 +1932,7 @@ app.post('/api/consensus/approve', requireAuth(['developer', 'admin', 'auditor']
       return;
     }
 
-    // Verify Ed25519 attestation bound to actionId+command+role+createdAt
-    // using the authenticated consensus role key (not email-derived issuer map).
-    const approvalPayload = buildConsensusApprovalPayload(
-      action.id,
-      action.command,
-      userRole,
-      action.createdAt
-    );
-    const isValid = verifyConsensusApproval(
-      approvalPayload,
-      signature,
-      CONSENSUS_ROLE_KEYS.getPublicKey(userRole)
-    );
-
-    if (!isValid) {
+    if (!cryptoOk) {
       res.status(400).json({ error: 'Cryptographic signature verification failed.' });
       return;
     }
@@ -2813,11 +2812,6 @@ app.get('/api/consensus/requests', requireAuth(['developer', 'admin', 'auditor']
 app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', 'auditor']), async (req, res) => {
   try {
     const actionId = typeof req.body?.actionId === 'string' ? req.body.actionId : '';
-    if (!actionId) {
-      res.status(400).json({ error: 'Missing required parameter: actionId' });
-      return;
-    }
-
     const email = (req as AuthenticatedRequest).user?.email || 'admin@fidusgate.internal';
     const role = (req as AuthenticatedRequest).user?.role;
     if (!isConsensusRole(role)) {
@@ -2825,9 +2819,26 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
       return;
     }
 
-    // Fetch the target action to check safety rating blocks
+    // Look up first; always server-issue the role attestation so client-supplied
+    // signature presence cannot short-circuit crypto (CodeQL js/user-controlled-bypass).
     const actions = await db.getPendingActions();
     const action = actions.find(a => a.id === actionId);
+    const approvalPayload = buildConsensusApprovalPayload(
+      action?.id || 'missing',
+      action?.command || 'noop',
+      role,
+      action?.createdAt || new Date(0)
+    );
+    const signature = signConsensusApproval(
+      approvalPayload,
+      CONSENSUS_ROLE_KEYS.getPrivateKey(role)
+    );
+
+    if (!actionId) {
+      res.status(400).json({ error: 'Missing required parameter: actionId' });
+      return;
+    }
+
     if (!action) {
       res.status(404).json({ error: 'Pending action request not found.' });
       return;
@@ -2860,34 +2871,6 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
         message: 'This dangerous command has been blocked by the AI Auditor. An administrator decideer must explicitly override/unlock the block before it can be signed.'
       });
       return;
-    }
-
-    // Bind attestation to actionId + command + role + action.createdAt.
-    // Server issues the Ed25519 signature with the authenticated role key so
-    // client-supplied mock signatures cannot forge consensus.
-    const approvalPayload = buildConsensusApprovalPayload(
-      action.id,
-      action.command,
-      role,
-      action.createdAt
-    );
-    const clientSignature = typeof req.body?.signature === 'string' ? req.body.signature : '';
-    let signature: string;
-    if (clientSignature) {
-      if (
-        !verifyConsensusApproval(
-          approvalPayload,
-          clientSignature,
-          CONSENSUS_ROLE_KEYS.getPublicKey(role)
-        )
-      ) {
-        log('security', `CONSENSUS APPROVAL REJECTED: invalid client signature for ${actionId} by ${email}`);
-        res.status(400).json({ error: 'Cryptographic signature verification failed.' });
-        return;
-      }
-      signature = clientSignature;
-    } else {
-      signature = signConsensusApproval(approvalPayload, CONSENSUS_ROLE_KEYS.getPrivateKey(role));
     }
 
     log('info', `✍️ CONSENSUS APPROVAL SUBMITTED: Action ID: ${actionId} by ${email} (${role.toUpperCase()})`);
