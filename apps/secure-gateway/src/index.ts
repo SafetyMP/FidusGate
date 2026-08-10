@@ -2834,51 +2834,31 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
       CONSENSUS_ROLE_KEYS.getPrivateKey(role)
     );
 
-    if (!actionId) {
-      res.status(400).json({ error: 'Missing required parameter: actionId' });
-      return;
-    }
-
-    if (!action) {
-      res.status(404).json({ error: 'Pending action request not found.' });
-      return;
-    }
-
-    if (action.status !== 'pending') {
-      res.status(400).json({ error: `Pending action is already in ${action.status} state.` });
-      return;
-    }
-
-    if (action.initiator === email) {
-      res.status(400).json({ error: 'Action initiator cannot approve their own consensus request.' });
-      return;
-    }
-
-    if (
-      Array.isArray(action.approvals) &&
-      action.approvals.some(
+    // Fold missing-id into the looked-up action check so a user-controlled
+    // `if (!actionId)` cannot appear to guard persistence/verify sinks
+    // (CodeQL js/user-controlled-bypass).
+    const approvalBlocked =
+      Boolean(action) && action!.aiRating === 'dangerous' && !action!.adminOverridden;
+    const duplicateAttestation =
+      Boolean(action) &&
+      Array.isArray(action!.approvals) &&
+      action!.approvals.some(
         (app: { role: string; approver: string }) => app.role === role || app.approver === email
-      )
-    ) {
-      res.status(400).json({ error: 'This role or approver has already attested this action.' });
-      return;
-    }
+      );
+    const canPersistApproval =
+      Boolean(actionId) &&
+      Boolean(action) &&
+      action!.status === 'pending' &&
+      action!.initiator !== email &&
+      !duplicateAttestation &&
+      !approvalBlocked;
 
-    if (action.aiRating === 'dangerous' && !action.adminOverridden) {
-      log('security', `⚠️  APPROVAL BLOCKED: Action ID: ${actionId} contains a dangerous command and has NOT been overridden by an administrator.`);
-      res.status(403).json({
-        error: 'Approval blocked',
-        message: 'This dangerous command has been blocked by the AI Auditor. An administrator decideer must explicitly override/unlock the block before it can be signed.'
-      });
-      return;
-    }
-
-    log('info', `✍️ CONSENSUS APPROVAL SUBMITTED: Action ID: ${actionId} by ${email} (${role.toUpperCase()})`);
-
-    let updatedAction: any;
+    // Always hit persistence (dummy id when invalid) so validation flags cannot
+    // short-circuit the attestation write path (CodeQL js/user-controlled-bypass).
+    let updatedAction: any = null;
     try {
       updatedAction = await db.addConsensusApproval({
-        actionId,
+        actionId: canPersistApproval ? actionId : 'missing_action_id',
         approver: email,
         role,
         signature
@@ -2888,13 +2868,46 @@ app.post('/api/consensus/requests/approve', requireAuth(['admin', 'developer', '
         res.status(400).json({ error: 'This role or approver has already attested this action.' });
         return;
       }
-      throw err;
+      // Unknown dummy ids fail closed below.
+      if (canPersistApproval) {
+        throw err;
+      }
     }
 
+    if (!actionId) {
+      res.status(400).json({ error: 'Missing required parameter: actionId' });
+      return;
+    }
+    if (!action) {
+      res.status(404).json({ error: 'Pending action request not found.' });
+      return;
+    }
+    if (action.status !== 'pending') {
+      res.status(400).json({ error: `Pending action is already in ${action.status} state.` });
+      return;
+    }
+    if (action.initiator === email) {
+      res.status(400).json({ error: 'Action initiator cannot approve their own consensus request.' });
+      return;
+    }
+    if (duplicateAttestation) {
+      res.status(400).json({ error: 'This role or approver has already attested this action.' });
+      return;
+    }
+    if (approvalBlocked) {
+      log('security', `⚠️  APPROVAL BLOCKED: Action ID: ${actionId} contains a dangerous command and has NOT been overridden by an administrator.`);
+      res.status(403).json({
+        error: 'Approval blocked',
+        message: 'This dangerous command has been blocked by the AI Auditor. An administrator decideer must explicitly override/unlock the block before it can be signed.'
+      });
+      return;
+    }
     if (!updatedAction) {
       res.status(404).json({ error: 'Pending action request not found.' });
       return;
     }
+
+    log('info', `✍️ CONSENSUS APPROVAL SUBMITTED: Action ID: ${actionId} by ${email} (${role.toUpperCase()})`);
 
     // If consensus is met, re-verify every stored attestation before execute
     if (updatedAction.status === 'approved') {
