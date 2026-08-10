@@ -1,6 +1,18 @@
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import jwt from 'jsonwebtoken';
 
 export type RuntimeEnvironment = NodeJS.ProcessEnv;
+
+/** Well-known secrets that must never be accepted — including the former hardcoded default. */
+export const INSECURE_JWT_SECRETS = new Set([
+  'fidusgate-dev-jwt-secret-local-only',
+  'secret',
+  'changeme',
+  'password',
+  'jwt-secret',
+]);
 
 export interface AuthenticatedClaims {
   id: string;
@@ -48,6 +60,66 @@ export function assertProductionAuthConfiguration(env: RuntimeEnvironment = proc
   throw new Error(
     'Production authentication startup denied: the OIDC BFF/JWKS verifier is not installed; legacy HS256 is unavailable in production.'
   );
+}
+
+/**
+ * Resolve the HS256 demo JWT secret for non-production runtimes.
+ * Never returns a well-known hardcoded default. If JWT_SECRET is unset, mint a
+ * per-checkout secret under dataDir (gitignored) so offline forging against a
+ * public constant is impossible.
+ */
+export function resolveJwtSecret(
+  env: RuntimeEnvironment = process.env,
+  options?: { dataDir?: string }
+): string {
+  if (isProductionRuntime(env)) {
+    throw new Error(
+      'JWT_SECRET resolution is unavailable in production; configure the OIDC BFF/JWKS verifier instead.'
+    );
+  }
+
+  const fromEnv = env.JWT_SECRET?.trim();
+  if (fromEnv) {
+    if (INSECURE_JWT_SECRETS.has(fromEnv)) {
+      throw new Error(
+        'JWT_SECRET matches a well-known insecure default. Set a unique secret of at least 32 characters.'
+      );
+    }
+    if (fromEnv.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters.');
+    }
+    return fromEnv;
+  }
+
+  const dataDir = options?.dataDir || path.resolve(process.cwd(), 'packages/database/data');
+  // Keep the `.json` suffix so packages/database/data/*.json gitignore applies.
+  const secretPath = path.join(dataDir, 'jwt-dev-secret.json');
+  try {
+    const existing = fs.readFileSync(secretPath, 'utf8').trim();
+    if (existing.length >= 32 && !INSECURE_JWT_SECRETS.has(existing)) {
+      return existing;
+    }
+  } catch (err: any) {
+    if (err && err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      throw err;
+    }
+  }
+
+  const generated = crypto.randomBytes(48).toString('base64url');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const tempPath = `${secretPath}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(tempPath, `${generated}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  fs.renameSync(tempPath, secretPath);
+  try {
+    fs.chmodSync(secretPath, 0o600);
+  } catch {
+    // Best-effort on platforms without POSIX modes.
+  }
+  console.warn(
+    '[auth] JWT_SECRET unset — generated a per-checkout secret at packages/database/data/jwt-dev-secret.json. ' +
+      'Set JWT_SECRET explicitly for shared/staging environments.'
+  );
+  return generated;
 }
 
 export function verifyLegacyBearerAuthorization(

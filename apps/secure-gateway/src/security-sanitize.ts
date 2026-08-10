@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9._@-]{1,128}$/;
 const SAFE_PRINCIPAL_PATTERN = /^[a-zA-Z0-9._@:/-]{1,256}$/;
 const SAFE_SUBAGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -108,24 +111,87 @@ export function assertSafeRelativePath(value: unknown, label: string): string {
   if (typeof value !== 'string' || !SAFE_RELATIVE_PATH_PATTERN.test(value)) {
     throw new Error(`Invalid ${label}: path must be relative and must not contain ..`);
   }
-
-  // Reject empty / '.' segments up front so MCP entrypoints never accept
+  // Pattern alone allows a leading '/'; reject absolute POSIX/Windows paths.
+  if (value.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(value)) {
+    throw new Error(`Invalid ${label}: path must be relative (no absolute paths)`);
+  }
+  // Reject empty / '.' / '..' segments so MCP entrypoints never accept
   // non-canonical forms that previously slipped past literal Cedar forbids.
   const segments = value.replace(/\\/g, '/').split('/');
   for (const seg of segments) {
-    if (seg === '' || seg === '.') {
-      throw new Error(`Invalid ${label}: path must not contain empty or '.' segments`);
-    }
-    if (seg === '..') {
-      throw new Error(`Invalid ${label}: path must be relative and must not contain ..`);
+    if (seg === '' || seg === '.' || seg === '..') {
+      throw new Error(`Invalid ${label}: path must not contain empty, '.', or '..' segments`);
     }
   }
-
   const canonical = canonicalizeRelativePath(value);
   if (!canonical) {
     throw new Error(`Invalid ${label}: path must be relative and must not escape the workspace`);
   }
   return canonical;
+}
+
+/**
+ * Resolve `relativePath` under `workspaceRoot` with a separator-safe prefix check
+ * and symlink-aware realpath validation. Returns null on escape attempts
+ * (including sibling dirs like `FidusGate-evil` vs `FidusGate`).
+ */
+export function resolveInsideWorkspace(workspaceRoot: string, relativePath: string): string | null {
+  if (typeof workspaceRoot !== 'string' || typeof relativePath !== 'string') {
+    return null;
+  }
+  if (!workspaceRoot || !relativePath) {
+    return null;
+  }
+
+  const rootResolved = path.resolve(workspaceRoot);
+  let rootReal = rootResolved;
+  try {
+    rootReal = fs.realpathSync(rootResolved);
+  } catch {
+    return null;
+  }
+  const rootPrefix = rootReal.endsWith(path.sep) ? rootReal : `${rootReal}${path.sep}`;
+  const candidate = path.resolve(rootReal, relativePath);
+
+  if (candidate !== rootReal && !candidate.startsWith(rootPrefix)) {
+    return null;
+  }
+
+  if (fs.existsSync(candidate)) {
+    try {
+      const real = fs.realpathSync(candidate);
+      if (real !== rootReal && !real.startsWith(rootPrefix)) {
+        return null;
+      }
+      return real;
+    } catch {
+      return null;
+    }
+  }
+
+  // Non-existent targets (writes): realpath the nearest existing ancestor.
+  let ancestor = path.dirname(candidate);
+  while (!fs.existsSync(ancestor)) {
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) {
+      return null;
+    }
+    ancestor = parent;
+  }
+  try {
+    const realAncestor = fs.realpathSync(ancestor);
+    if (realAncestor !== rootReal && !realAncestor.startsWith(rootPrefix)) {
+      return null;
+    }
+    const rel = path.relative(ancestor, candidate);
+    const reconstructed = rel ? path.resolve(realAncestor, rel) : realAncestor;
+    if (reconstructed !== rootReal && !reconstructed.startsWith(rootPrefix)) {
+      return null;
+    }
+    return reconstructed;
+  } catch {
+    return null;
+  }
 }
 
 export function safeRecordKey(value: unknown, label: string): string {
