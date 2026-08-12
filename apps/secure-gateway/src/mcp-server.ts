@@ -18,14 +18,20 @@ import {
   assertSafeRelativePath,
   resolveInsideWorkspace,
 } from './security-sanitize';
-
-function mcpWorkspaceRoot(): string {
-  return path.resolve(__dirname, '..', '..', '..');
-}
+import {
+  boundedCommandLine,
+  boundedPath,
+  daemonFailureMustDeny,
+  queryCedarDaemon,
+} from './cedar-remote';
 import {
   MCP_PROTOCOL_2026,
   negotiateLegacyProtocolVersion,
 } from './mcp-http';
+
+function mcpWorkspaceRoot(): string {
+  return path.resolve(__dirname, '..', '..', '..');
+}
 
 function logSecurity(message: unknown): void {
   // sanitizeLogValue strips CR/LF/C0 before the console sink (CodeQL js/log-injection).
@@ -218,6 +224,46 @@ async function getFullContext(principal: string, additional?: Record<string, any
       feedback_aligned: plmState.feedbackAligned
     }
   };
+}
+
+async function mcpCedarDecision(
+  principal: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  contextObj: Record<string, unknown>,
+): Promise<{ decision: 'allow' | 'deny'; matchingPolicies: string[] }> {
+  const pathArg = typeof args.path === 'string' ? args.path : '';
+  const commandLine = typeof args.commandLine === 'string' ? args.commandLine : '';
+  const remote = await queryCedarDaemon({
+    principal,
+    action: toolName,
+    resource: toolName,
+    path: boundedPath(pathArg),
+    commandLine: boundedCommandLine(commandLine),
+    context: {
+      path: boundedPath(pathArg),
+      commandLine: boundedCommandLine(commandLine),
+      quarantine: contextObj.quarantine,
+      devops: contextObj.devops,
+      ibp: contextObj.ibp,
+      plm: contextObj.plm,
+    },
+  });
+
+  let decision: 'allow' | 'deny';
+  if (remote.ok) {
+    decision = remote.decision;
+  } else if (daemonFailureMustDeny()) {
+    decision = 'deny';
+  } else {
+    decision = evaluator.isAuthorized(principal, toolName, args, contextObj);
+  }
+
+  if (decision === 'deny') {
+    const simulation = evaluator.evaluateSimulator(principal, toolName, args, contextObj);
+    return { decision, matchingPolicies: simulation.matchingPolicies };
+  }
+  return { decision, matchingPolicies: [] };
 }
 
 function patchFileHelper(filePath: string, targetContent: string, replacementContent: string, startLine?: number, endLine?: number) {
@@ -683,7 +729,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       // 2. Cedar Policy Check
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       const contextObj = await getFullContext(callerPrincipal, { commandLine });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'execute_command', { commandLine }, contextObj);
+      const evaluation = await mcpCedarDecision(callerPrincipal, 'execute_command', { commandLine }, contextObj);
       if (evaluation.decision === 'deny') {
         await recordPrincipalViolation(callerPrincipal);
         await db.addCommandLog({
@@ -787,7 +833,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       // Cedar Policy Check
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'write_file', { path: safeRelPath }, contextObj);
+      const evaluation = await mcpCedarDecision(callerPrincipal, 'write_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         await recordPrincipalViolation(callerPrincipal);
         return {
@@ -906,7 +952,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
       const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'read_file', { path: safeRelPath }, contextObj);
+      const evaluation = await mcpCedarDecision(callerPrincipal, 'read_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',
@@ -985,7 +1031,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
 
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'patch_file', { path: safeRelPath }, contextObj);
+      const evaluation = await mcpCedarDecision(callerPrincipal, 'patch_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         await recordPrincipalViolation(callerPrincipal);
         return {
@@ -1099,7 +1145,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
       const contextObj = await getFullContext(callerPrincipal, { query, searchPath: safeSearchPath });
-      const evaluation = evaluator.evaluateSimulator(
+      const evaluation = await mcpCedarDecision(
         callerPrincipal,
         'search_code',
         { query, searchPath: safeSearchPath },
@@ -1178,7 +1224,7 @@ export async function handleMcpRequest(req: any): Promise<any> {
       const callerPrincipal = args.principal || 'mcp-agent@fidusgate.internal';
       // Cedar Policy Check
       const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
-      const evaluation = evaluator.evaluateSimulator(callerPrincipal, 'list_directory', { path: safeRelPath }, contextObj);
+      const evaluation = await mcpCedarDecision(callerPrincipal, 'list_directory', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
         return {
           jsonrpc: '2.0',

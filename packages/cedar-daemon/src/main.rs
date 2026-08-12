@@ -182,20 +182,26 @@ fn handle_authorize(
         duration, auth_req.principal, auth_req.action, response.decision()
     ));
 
-    // 8. Extract diagnostics and return
-    let decision = match response.decision() {
-        Decision::Allow => "allow".to_string(),
-        Decision::Deny => "deny".to_string(),
+    // 8. Extract diagnostics and return.
+    // Evaluation errors (e.g. String.contains type errors) skip the broken
+    // policy. If a permit still matches, cedar-policy returns Allow — fail closed.
+    let errors: Vec<String> = response.diagnostics()
+        .errors()
+        .map(|e| e.to_string())
+        .collect();
+
+    let decision = if !errors.is_empty() {
+        "deny".to_string()
+    } else {
+        match response.decision() {
+            Decision::Allow => "allow".to_string(),
+            Decision::Deny => "deny".to_string(),
+        }
     };
 
     let reason = response.diagnostics()
         .reason()
         .map(|r| r.to_string())
-        .collect();
-
-    let errors = response.diagnostics()
-        .errors()
-        .map(|e| e.to_string())
         .collect();
 
     Ok(AuthorizeResponse {
@@ -209,8 +215,9 @@ fn handle_authorize(
 // ==========================================
 
 fn main() {
-    let port = 50051;
-    let addr = format!("0.0.0.0:{}", port);
+    let port = std::env::var("CEDAR_DAEMON_PORT").unwrap_or_else(|_| "50051".to_string());
+    let bind = std::env::var("CEDAR_DAEMON_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let addr = format!("{}:{}", bind, port);
     
     let server = match Server::http(&addr) {
         Ok(s) => s,
@@ -258,6 +265,24 @@ fn main() {
                 let _ = request.respond(response);
             }
             (&Method::Post, "/authorize") => {
+                if let Some(expected) = std::env::var("CEDAR_DAEMON_TOKEN").ok().filter(|s| !s.is_empty()) {
+                    let presented = request.headers().iter().find_map(|h| {
+                        if h.field.as_str().as_str().eq_ignore_ascii_case("X-Cedar-Daemon-Token") {
+                            Some(h.value.as_str().to_string())
+                        } else {
+                            None
+                        }
+                    });
+                    if presented.as_deref() != Some(expected.as_str()) {
+                        log_error("Authorization handler rejected: missing or invalid daemon token");
+                        let response = Response::from_string(r#"{"error":"Unauthorized"}"#)
+                            .with_status_code(401)
+                            .with_header(json_header.clone());
+                        let _ = request.respond(response);
+                        continue;
+                    }
+                }
+
                 let mut body = String::new();
                 if let Err(e) = request.as_reader().read_to_string(&mut body) {
                     log_error(&format!("Failed to read request stream body: {}", e));

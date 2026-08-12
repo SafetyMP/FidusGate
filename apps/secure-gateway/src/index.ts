@@ -37,7 +37,6 @@ import {
 } from './consensus-attestation';
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
-  assertSafeCedarDaemonUrl,
   assertSafePolicyText,
   assertSafeSubagentId,
   assertVerifiedRole,
@@ -53,7 +52,13 @@ import {
   resolveJwtSecret,
   verifyLegacyBearerAuthorization,
 } from './production-auth';
-import { assertProductionPrerequisites } from './production-profile';
+import { assertProductionPrerequisites, shouldFailClosedOnDaemonError } from './production-profile';
+import {
+  boundedCommandLine,
+  boundedPath,
+  daemonFailureMustDeny,
+  queryCedarDaemon,
+} from './cedar-remote';
 import * as ws from 'ws';
 import { registerModularRoutes } from './routes/register';
 import type { RequireAuth } from './routes/types';
@@ -355,7 +360,13 @@ if (process.env.FIDUSGATE_TEST !== 'true' && process.env.NODE_ENV !== 'test') {
   });
 }
 
-app.use(cors());
+app.use(cors({
+  origin: (process.env.FIDUSGATE_CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/api/', apiRateLimiter);
@@ -785,17 +796,6 @@ app.post('/api/sessions/sign', requireAuth(['developer', 'admin']), (req, res) =
 // Recommendation #3: Rust-Native Cedar Daemon Resolver
 // ==========================================
 async function evaluateCedarPolicy(principal: string, action: string, resource: string, context: any): Promise<'allow' | 'deny'> {
-  // Validate the daemon URL against a strict allowlist so that disk-loaded
-  // tracker state cannot be exfiltrated to an arbitrary host via a rogue
-  // CEDAR_DAEMON_URL value (CodeQL js/file-access-to-http).
-  const rawDaemonUrl = process.env.CEDAR_DAEMON_URL || 'http://localhost:50051/authorize';
-  let daemonUrl: string;
-  try {
-    daemonUrl = assertSafeCedarDaemonUrl(rawDaemonUrl);
-  } catch {
-    daemonUrl = 'http://localhost:50051/authorize';
-  }
-  
   // Record token usage for IBP budget enforcement
   // Fix 4: Use actual token counts when provided by the agent (accurate billing).
   // Subtract cached tokens because they are served from KV cache and don't burn new compute.
@@ -876,58 +876,58 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
   };
 
   const decision = await (async () => {
-    try {
-      const response = await fetch(daemonUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Untaint reconstructed context before the network sink
-        // (CodeQL js/file-access-to-http).
-        // Rebuild the POST body from primitives/literals only so disk-sourced
-        // tracker fields cannot taint the outbound request (js/file-access-to-http).
-        body: JSON.stringify({
-          principal: String(principal ?? ''),
-          action: String(action ?? ''),
-          resource: String(resource ?? ''),
-          context: {
-            quarantine: { active: fullContext.quarantine.active === true },
-            devops: {
-              pipeline_passed: fullContext.devops.pipeline_passed === true,
-              security_audited: fullContext.devops.security_audited === true,
-              ham_drift_checked: fullContext.devops.ham_drift_checked === true
-            },
-            ibp: {
-              cross_functional_synthesized: fullContext.ibp.cross_functional_synthesized === true,
-              budget_aligned: fullContext.ibp.budget_aligned === true,
-              budget_exhaustion_percentage: Number(fullContext.ibp.budget_exhaustion_percentage) || 0
-            },
-            plm: {
-              active_requirement_id:
-                typeof fullContext.plm.active_requirement_id === 'string'
-                  ? fullContext.plm.active_requirement_id
-                  : null,
-              associated_tests_written: fullContext.plm.associated_tests_written === true,
-              has_api_drift: fullContext.plm.has_api_drift === true,
-              drift_verified: fullContext.plm.drift_verified === true,
-              release_version_updated: fullContext.plm.release_version_updated === true,
-              changelog_updated: fullContext.plm.changelog_updated === true,
-              has_active_feedback: fullContext.plm.has_active_feedback === true,
-              feedback_aligned: fullContext.plm.feedback_aligned === true
-            }
-          }
-        }),
-        signal: AbortSignal.timeout(500) // Fast 500ms timeout to prevent hanging the gateway
-      });
-      
-      if (response.ok) {
-        const result = await response.json() as any;
-        log('info', `📡 Cedar Rust Daemon returned formal authorization decision: ${result.decision.toUpperCase()}`);
-        return result.decision as 'allow' | 'deny';
+    const daemonContext = {
+      path: boundedPath(context?.path),
+      commandLine: boundedCommandLine(context?.commandLine),
+      quarantine: { active: fullContext.quarantine.active === true },
+      devops: {
+        pipeline_passed: fullContext.devops.pipeline_passed === true,
+        security_audited: fullContext.devops.security_audited === true,
+        ham_drift_checked: fullContext.devops.ham_drift_checked === true
+      },
+      ibp: {
+        cross_functional_synthesized: fullContext.ibp.cross_functional_synthesized === true,
+        budget_aligned: fullContext.ibp.budget_aligned === true,
+        budget_exhaustion_percentage: Number(fullContext.ibp.budget_exhaustion_percentage) || 0
+      },
+      plm: {
+        active_requirement_id:
+          typeof fullContext.plm.active_requirement_id === 'string'
+            ? fullContext.plm.active_requirement_id
+            : null,
+        associated_tests_written: fullContext.plm.associated_tests_written === true,
+        has_api_drift: fullContext.plm.has_api_drift === true,
+        drift_verified: fullContext.plm.drift_verified === true,
+        release_version_updated: fullContext.plm.release_version_updated === true,
+        changelog_updated: fullContext.plm.changelog_updated === true,
+        has_active_feedback: fullContext.plm.has_active_feedback === true,
+        feedback_aligned: fullContext.plm.feedback_aligned === true
       }
-    } catch (err: any) {
-      // Quiet fallback to TS Cedar evaluator
+    };
+
+    const remote = await queryCedarDaemon({
+      principal,
+      action,
+      resource: resource ?? action,
+      path: daemonContext.path,
+      commandLine: daemonContext.commandLine,
+      context: daemonContext,
+    });
+
+    if (remote.ok) {
+      if (remote.decision === 'deny') {
+        log('info', 'Cedar daemon returned DENY');
+      } else {
+        log('info', 'Cedar daemon returned ALLOW');
+      }
+      return remote.decision;
     }
 
-    // TS-Native AST Cedar Policy Parser & Evaluator (passing nested fullContext as 4th argument)
+    if (daemonFailureMustDeny() || shouldFailClosedOnDaemonError()) {
+      log('security', 'Cedar daemon unreachable or errored; failing closed');
+      return 'deny';
+    }
+
     const tsDecision = cedarEvaluator.isAuthorized(
       principal,
       action,
@@ -938,7 +938,7 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
       fullContext
     );
     
-    log('info', `🛡️  TypeScript Cedar Parser returned dynamic authorization decision: ${tsDecision.toUpperCase()}`);
+    log('info', `TypeScript Cedar Parser returned ${tsDecision.toUpperCase()}`);
     return tsDecision;
   })();
 
@@ -3139,7 +3139,7 @@ app.post('/api/sandbox/restore', requireAuth(['developer', 'admin']), async (req
 const metricsPort = process.env.METRICS_PORT || 3002;
 const metricsServer = http.createServer(async (req, res) => {
   // Enable CORS for dashboard browser requests
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -3450,7 +3450,8 @@ if (process.argv.includes('--mcp')) {
     });
   });
 
-  metricsServer.listen(metricsPort, () => {
-    log('info', `FidusGate SRE Telemetry Server listening on Port ${metricsPort}`);
+  const metricsBind = process.env.METRICS_BIND || '127.0.0.1';
+  metricsServer.listen(Number(metricsPort), metricsBind, () => {
+    log('info', `FidusGate SRE Telemetry Server listening on ${metricsBind}:${metricsPort}`);
   });
 }

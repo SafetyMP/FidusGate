@@ -8,8 +8,8 @@
     "build": "tsc",
     "dev": "tsc && node dist/index.js",
     "start": "node dist/index.js",
-    "test": "npm run build && node --test dist/consensus-attestation.test.js && node --test dist/production-auth.test.js && node --test dist/security-sanitize.test.js && node --test dist/cedar.test.js && node --test dist/subagent.test.js && node --test dist/mcp-protocol.test.js && sh -c 'test \"${CI:-}\" = true || node --test dist/bypass-validation.test.js'",
-    "test:ci": "npm run build && node --test dist/consensus-attestation.test.js && node --test dist/production-auth.test.js && node --test dist/security-sanitize.test.js && node --test dist/cedar.test.js && node --test dist/subagent.test.js && node --test dist/mcp-protocol.test.js",
+    "test": "npm run build && node --test dist/consensus-attestation.test.js && node --test dist/production-auth.test.js && node --test dist/production-profile.test.js && node --test dist/cedar-remote.test.js && node --test dist/security-sanitize.test.js && node --test dist/cedar.test.js && node --test dist/subagent.test.js && node --test dist/mcp-protocol.test.js && sh -c 'test \"${CI:-}\" = true || node --test dist/bypass-validation.test.js'",
+    "test:ci": "npm run build && node --test dist/consensus-attestation.test.js && node --test dist/production-auth.test.js && node --test dist/production-profile.test.js && node --test dist/cedar-remote.test.js && node --test dist/security-sanitize.test.js && node --test dist/cedar.test.js && node --test dist/subagent.test.js && node --test dist/mcp-protocol.test.js",
     "lint": "biome check src/middleware src/routes"
   },
   "dependencies": {
