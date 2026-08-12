@@ -48,5 +48,8 @@ pub fn is_authorized(
     let authorizer = Authorizer::new();
     let answer = authorizer.is_authorized(&request, &policies, &Entities::empty());
 
+    if answer.diagnostics().errors().next().is_some() {
+        return false;
+    }
     answer.decision() == cedar_policy::Decision::Allow
 }

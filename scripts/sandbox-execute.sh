@@ -50,7 +50,8 @@ echo "🛡️  Initializing isolated Docker sandbox for [$MOUNT_DIR]..."
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
     if [ "$FIDUSGATE_ALLOW_HOST_FALLBACK" = "true" ]; then
         echo "⚠️  Docker not found or daemon not running. Falling back to host execution bypass..."
-        eval "$COMMAND"
+        # Subprocess shell — do not eval in this process (extra expansion / current-shell side effects).
+        bash -c "$COMMAND"
         exit $?
     else
         echo "❌ Error: Docker sandbox is unavailable and host execution fallback is disabled."

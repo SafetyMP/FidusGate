@@ -2,6 +2,10 @@
 // FidusGate Cedar Access-Control Policies
 // ==========================================
 // Evaluates AI Agent tool calls against strict, risk-tiered development rules.
+//
+// Cedar `.contains()` is Set membership only. `args.path` and `args.commandLine`
+// are schema Strings — substring/glob checks MUST use `like` (`*` wildcards).
+// A type-incorrect forbid is skipped by cedar-policy / cedar-python (fail-open).
 
 // ------------------------------------------
 // TIER 0: Quarantined Principals
@@ -75,7 +79,7 @@ forbid(
     resource.args.path == "policy.cedar"
     || resource.args.path == "protect-mcp.config.json"
     || resource.args.path like "scripts/*"
-    || resource.args.path.contains(".env")
+    || resource.args.path like "*.env*"
   )
   && !(principal == "sb:issuer:security-sme")
 };
@@ -122,8 +126,8 @@ forbid(
 ) when {
   resource.tool_name == "execute_command"
   && resource has args
-  && !resource.args.commandLine.contains("sandbox-execute.sh")
-  && !resource.args.commandLine.contains("ci-verify.sh")
+  && !(resource.args.commandLine like "*sandbox-execute.sh*")
+  && !(resource.args.commandLine like "*ci-verify.sh*")
 };
 
 // ------------------------------------------
@@ -139,11 +143,11 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("curl")
-    || resource.args.commandLine.contains("wget")
-    || resource.args.commandLine.contains("npm i ")
-    || resource.args.commandLine.contains("npm install")
-    || resource.args.commandLine.contains("pip install")
+    resource.args.commandLine like "*curl*"
+    || resource.args.commandLine like "*wget*"
+    || resource.args.commandLine like "*npm i *"
+    || resource.args.commandLine like "*npm install*"
+    || resource.args.commandLine like "*pip install*"
   )
 };
 
@@ -161,8 +165,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && !context.devops.pipeline_passed
 };
@@ -177,8 +181,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && !context.devops.security_audited
 };
@@ -193,8 +197,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && !context.devops.ham_drift_checked
 };
@@ -212,8 +216,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && !context.ibp.cross_functional_synthesized
 };
@@ -228,8 +232,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("sandbox-execute.sh")
-    || resource.args.commandLine.contains("ci-verify.sh")
+    resource.args.commandLine like "*sandbox-execute.sh*"
+    || resource.args.commandLine like "*ci-verify.sh*"
   )
   && context.ibp.budget_exhaustion_percentage > 95
 };
@@ -281,8 +285,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && !context.plm.associated_tests_written
 };
@@ -297,8 +301,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && context.plm.has_api_drift
   && !context.plm.drift_verified
@@ -313,7 +317,7 @@ forbid(
 ) when {
   resource.tool_name == "execute_command"
   && resource has args
-  && resource.args.commandLine.contains("npm publish")
+  && resource.args.commandLine like "*npm publish*"
   && (
     !context.plm.release_version_updated
     || !context.plm.changelog_updated
@@ -330,8 +334,8 @@ forbid(
   resource.tool_name == "execute_command"
   && resource has args
   && (
-    resource.args.commandLine.contains("git commit")
-    || resource.args.commandLine.contains("npm publish")
+    resource.args.commandLine like "*git commit*"
+    || resource.args.commandLine like "*npm publish*"
   )
   && context.plm.has_active_feedback
   && !context.plm.feedback_aligned
@@ -386,8 +390,8 @@ forbid(
   )
   && resource has args
   && (
-    resource.args.path.contains(".test.")
-    || resource.args.path.contains(".spec.")
+    resource.args.path like "*.test.*"
+    || resource.args.path like "*.spec.*"
   )
   && !(principal == "sb:issuer:qa-sme")
 };
@@ -405,7 +409,7 @@ forbid(
   && resource has args
   && (
     resource.args.path like ".github/workflows/*"
-    || resource.args.path.contains("Dockerfile")
+    || resource.args.path like "*Dockerfile*"
   )
   && !(principal == "sb:issuer:devops-sme")
 };
@@ -474,7 +478,7 @@ permit(
   && resource has args
   && (
     resource.args.path like ".github/workflows/*"
-    || resource.args.path.contains("Dockerfile")
+    || resource.args.path like "*Dockerfile*"
   )
   && principal == "sb:issuer:devops-sme"
 };
