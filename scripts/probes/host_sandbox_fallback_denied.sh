@@ -10,4 +10,9 @@ require_file "$PROFILE"
 require_pattern "host_sandbox_fallback" 'FIDUSGATE_ALLOW_HOST_FALLBACK="\$\{FIDUSGATE_ALLOW_HOST_FALLBACK:-false\}"' "$SANDBOX"
 require_pattern "host_sandbox_fallback" "host execution fallback is disabled" "$SANDBOX"
 require_pattern "host_sandbox_fallback" "FIDUSGATE_ALLOW_HOST_FALLBACK is forbidden in production" "$PROFILE"
+if grep -q 'eval "$COMMAND"' "$SANDBOX"; then
+  echo "fail: host_sandbox_fallback still uses eval for COMMAND" >&2
+  exit 1
+fi
+require_pattern "host_sandbox_fallback" 'bash -c "\$COMMAND"' "$SANDBOX"
 echo "ok: host_sandbox_fallback_denied"

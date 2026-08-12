@@ -46,6 +46,32 @@ test('production-profile', async (t) => {
     );
   });
 
+  await t.test('requires CEDAR_DAEMON_TOKEN when daemon URL is set in production', () => {
+    assert.throws(
+      () =>
+        assertProductionPrerequisites({
+          FIDUSGATE_RUNTIME: 'production',
+          DATABASE_URL: 'postgres://x',
+          OIDC_ISSUER: 'https://issuer.example',
+          OIDC_AUDIENCE: 'fidusgate',
+          KMS_PROVIDER: 'aws',
+          CEDAR_DAEMON_URL: 'http://localhost:50051/authorize',
+        }),
+      /CEDAR_DAEMON_TOKEN/
+    );
+    assert.doesNotThrow(() =>
+      assertProductionPrerequisites({
+        FIDUSGATE_RUNTIME: 'production',
+        DATABASE_URL: 'postgres://x',
+        OIDC_ISSUER: 'https://issuer.example',
+        OIDC_AUDIENCE: 'fidusgate',
+        KMS_PROVIDER: 'aws',
+        CEDAR_DAEMON_URL: 'http://localhost:50051/authorize',
+        CEDAR_DAEMON_TOKEN: 'test-daemon-token-not-for-production',
+      })
+    );
+  });
+
   await t.test('fail-closed cedar daemon when configured in production', () => {
     assert.strictEqual(
       shouldFailClosedOnDaemonError({

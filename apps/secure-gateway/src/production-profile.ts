@@ -74,6 +74,12 @@ export function assertProductionPrerequisites(env: EnvLike = process.env): void 
     );
   }
 
+  if (env.CEDAR_DAEMON_URL?.trim() && !env.CEDAR_DAEMON_TOKEN?.trim()) {
+    throw new ProductionPrerequisiteError(
+      'CEDAR_DAEMON_TOKEN is required in production when CEDAR_DAEMON_URL is set'
+    );
+  }
+
   if (env.JWT_ALG === 'HS256' || env.ALLOW_HS256_BOOTSTRAP === 'true') {
     throw new ProductionPrerequisiteError(
       'HS256 bootstrap is forbidden in production; use OIDC/JWKS'

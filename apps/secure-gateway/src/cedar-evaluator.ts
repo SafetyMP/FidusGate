@@ -442,9 +442,11 @@ export class CedarEvaluator {
           }
         }
       } catch (err) {
-        // Fix 6: Surface evaluation failures as warnings so policy authors can debug broken conditions.
-        // Behavior is unchanged (fails closed — the rule is skipped, effectively a deny).
-        console.warn(`[CedarEvaluator] Rule evaluation failed (rule skipped, fails closed):`, err);
+        // Skipping a broken forbid while a permit already matched is fail-open
+        // (cedar-python / cedar-policy type errors on String.contains). Deny the
+        // whole request when any rule cannot be evaluated.
+        console.warn(`[CedarEvaluator] Rule evaluation failed (fail closed):`, err);
+        return 'deny';
       }
     }
 
@@ -584,8 +586,12 @@ export class CedarEvaluator {
           }
         }
       } catch (err) {
-        // Fix 6: Surface evaluation failures as warnings so policy authors can debug broken conditions.
-        console.warn(`[CedarEvaluator][Simulator] Rule #${idx + 1} evaluation failed (rule skipped, fails closed):`, err);
+        console.warn(`[CedarEvaluator][Simulator] Rule #${idx + 1} evaluation failed (fail closed):`, err);
+        return {
+          decision: 'deny',
+          matchingPolicies: [...triggeredPermits, ...triggeredForbids],
+          reason: 'Denied: a policy rule failed to evaluate (fail closed on type/eval errors).'
+        };
       }
     }
 
