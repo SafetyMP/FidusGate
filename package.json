@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/git": "^11.0.1",
     "@playwright/test": "^1.62.1",
     "gifenc": "^1.0.3",
     "playwright": "^1.62.1",
