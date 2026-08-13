@@ -21,8 +21,7 @@ import {
 import {
   boundedCommandLine,
   boundedPath,
-  daemonFailureMustDeny,
-  queryCedarDaemon,
+  resolveCedarDecision,
 } from './cedar-remote';
 import {
   MCP_PROTOCOL_2026,
@@ -234,30 +233,24 @@ async function mcpCedarDecision(
 ): Promise<{ decision: 'allow' | 'deny'; matchingPolicies: string[] }> {
   const pathArg = typeof args.path === 'string' ? args.path : '';
   const commandLine = typeof args.commandLine === 'string' ? args.commandLine : '';
-  const remote = await queryCedarDaemon({
-    principal,
-    action: toolName,
-    resource: toolName,
-    path: boundedPath(pathArg),
-    commandLine: boundedCommandLine(commandLine),
-    context: {
+  const decision = await resolveCedarDecision(
+    {
+      principal,
+      action: toolName,
+      resource: toolName,
       path: boundedPath(pathArg),
       commandLine: boundedCommandLine(commandLine),
-      quarantine: contextObj.quarantine,
-      devops: contextObj.devops,
-      ibp: contextObj.ibp,
-      plm: contextObj.plm,
+      context: {
+        path: boundedPath(pathArg),
+        commandLine: boundedCommandLine(commandLine),
+        quarantine: contextObj.quarantine,
+        devops: contextObj.devops,
+        ibp: contextObj.ibp,
+        plm: contextObj.plm,
+      },
     },
-  });
-
-  let decision: 'allow' | 'deny';
-  if (remote.ok) {
-    decision = remote.decision;
-  } else if (daemonFailureMustDeny()) {
-    decision = 'deny';
-  } else {
-    decision = evaluator.isAuthorized(principal, toolName, args, contextObj);
-  }
+    () => evaluator.isAuthorized(principal, toolName, args, contextObj),
+  );
 
   if (decision === 'deny') {
     const simulation = evaluator.evaluateSimulator(principal, toolName, args, contextObj);

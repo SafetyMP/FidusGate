@@ -1,5 +1,6 @@
 // FidusGate Stateful Development Cycle Execution Marker
 process.env.FIDUSGATE_TEST = 'true';
+process.env.FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK = 'true';
 import test from 'node:test';
 import assert from 'node:assert';
 import * as path from 'node:path';

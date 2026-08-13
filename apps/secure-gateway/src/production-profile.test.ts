@@ -2,7 +2,9 @@ process.env.FIDUSGATE_TEST = 'true';
 import test from 'node:test';
 import assert from 'node:assert';
 import {
+  allowTsEvaluatorFallback,
   assertProductionPrerequisites,
+  isExplicitDemoRuntime,
   isProductionRuntime,
   ProductionPrerequisiteError,
   shouldFailClosedOnDaemonError,
@@ -15,11 +17,31 @@ test('production-profile', async (t) => {
     assert.strictEqual(isProductionRuntime({ NODE_ENV: 'development' }), false);
   });
 
-  await t.test('allows demo without prerequisites', () => {
-    assert.doesNotThrow(() => assertProductionPrerequisites({ NODE_ENV: 'development' }));
+  await t.test('DISABLE_AUTH requires explicit demo runtime', () => {
+    assert.strictEqual(isExplicitDemoRuntime({ FIDUSGATE_RUNTIME: 'demo' }), true);
+    assert.strictEqual(isExplicitDemoRuntime({ NODE_ENV: 'development' }), false);
+    assert.strictEqual(
+      isExplicitDemoRuntime({ FIDUSGATE_RUNTIME: 'demo', NODE_ENV: 'production' }),
+      false
+    );
   });
 
-  await t.test('denies DISABLE_AUTH in production', () => {
+  await t.test('unset defaults deny TS fallback and host/auth bypass flags', () => {
+    assert.strictEqual(allowTsEvaluatorFallback({}), false);
+    assert.strictEqual(shouldFailClosedOnDaemonError({}), true);
+    assert.strictEqual(allowTsEvaluatorFallback({ FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK: 'true' }), true);
+    assert.strictEqual(
+      allowTsEvaluatorFallback({
+        FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK: 'true',
+        NODE_ENV: 'production',
+      }),
+      false
+    );
+  });
+
+  await t.test('allows demo without prerequisites', () => {
+    assert.doesNotThrow(() => assertProductionPrerequisites({ NODE_ENV: 'development' }));
+    assert.doesNotThrow(() => assertProductionPrerequisites({ FIDUSGATE_RUNTIME: 'demo' }));
     assert.throws(
       () =>
         assertProductionPrerequisites({
@@ -72,17 +94,18 @@ test('production-profile', async (t) => {
     );
   });
 
-  await t.test('fail-closed cedar daemon when configured in production', () => {
-    assert.strictEqual(
-      shouldFailClosedOnDaemonError({
-        FIDUSGATE_RUNTIME: 'production',
-        CEDAR_DAEMON_URL: 'http://localhost:50051/authorize',
-      }),
-      true
-    );
-    assert.strictEqual(
-      shouldFailClosedOnDaemonError({ NODE_ENV: 'development', CEDAR_DAEMON_URL: 'http://localhost:50051/authorize' }),
-      false
+  await t.test('forbids TS evaluator fallback flag in production', () => {
+    assert.throws(
+      () =>
+        assertProductionPrerequisites({
+          FIDUSGATE_RUNTIME: 'production',
+          DATABASE_URL: 'postgres://x',
+          OIDC_ISSUER: 'https://issuer.example',
+          OIDC_AUDIENCE: 'fidusgate',
+          KMS_PROVIDER: 'aws',
+          FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK: 'true',
+        }),
+      /FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK/
     );
   });
 });

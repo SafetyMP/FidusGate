@@ -52,13 +52,13 @@ import {
   resolveJwtSecret,
   verifyLegacyBearerAuthorization,
 } from './production-auth';
-import { assertProductionPrerequisites, shouldFailClosedOnDaemonError } from './production-profile';
+import { assertProductionPrerequisites, isExplicitDemoRuntime } from './production-profile';
 import {
   boundedCommandLine,
   boundedPath,
-  daemonFailureMustDeny,
-  queryCedarDaemon,
+  resolveCedarDecision,
 } from './cedar-remote';
+import { evaluateCircuitBreakerGate } from './circuit-breaker-gate';
 import * as ws from 'ws';
 import { registerModularRoutes } from './routes/register';
 import type { RequireAuth } from './routes/types';
@@ -443,36 +443,29 @@ app.post('/api/auth/token', authTokenRateLimiter, (req, res) => {
 // active. Path-based allowlists are intentionally absent (CodeQL
 // js/user-controlled-bypass). Token minting is mounted above this middleware.
 app.use(async (req, res, next) => {
-  try {
-    const systemConfig = await db.getSystemConfig();
-    if (!systemConfig.circuitBreakerActive) {
-      return next();
-    }
-
-    // Access is granted only when jwt.verify succeeds AND the verified role is
-    // admin. Do not branch on Authorization header shape before verify
-    // (CodeQL js/user-controlled-bypass) — empty/malformed tokens throw.
-    let verifiedRole: 'developer' | 'admin' | 'auditor' | null = null;
-    try {
-      const raw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
-      const token = raw.replace(/^Bearer\s+/i, '');
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { role?: unknown };
-      verifiedRole = assertVerifiedRole(decoded?.role);
-    } catch {
-      verifiedRole = null;
-    }
-
-    if (verifiedRole === 'admin') {
-      return next();
-    }
-
-    res.status(503).json({
-      error: 'AGENTIC_CIRCUIT_BREAKER_ACTIVE',
-      message: '🛡️ Emergency Stop Activated: All autonomous agent tool calls and command evaluations are temporarily suspended by administrative decree.'
-    });
-    return;
-  } catch (e) {}
-  next();
+  const outcome = await evaluateCircuitBreakerGate(
+    () => db.getSystemConfig(),
+    async () => {
+      try {
+        const raw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+        const token = raw.replace(/^Bearer\s+/i, '');
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { role?: unknown };
+        return assertVerifiedRole(decoded?.role) === 'admin';
+      } catch {
+        return false;
+      }
+    },
+  );
+  if (outcome === 'next') {
+    return next();
+  }
+  const error =
+    outcome === 'fault' ? 'AGENTIC_CIRCUIT_BREAKER_FAULT' : 'AGENTIC_CIRCUIT_BREAKER_ACTIVE';
+  const message =
+    outcome === 'fault'
+      ? 'Emergency stop configuration could not be read; refusing tool execution (fail closed).'
+      : '🛡️ Emergency Stop Activated: All autonomous agent tool calls and command evaluations are temporarily suspended by administrative decree.';
+  res.status(503).json({ error, message });
 });
 
 // Logger helper with security tagging.
@@ -683,7 +676,7 @@ function requestBaseUrl(req: express.Request): string {
 function requireAuth(allowedRoles: ('developer' | 'admin' | 'auditor')[], options?: { mcpResource?: boolean }) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // Standard bypass helper if enabled via env (defaults to false for strict authentication gating)
-    const isBypass = !isProductionRuntime() && process.env.DISABLE_AUTH === 'true';
+    const isBypass = isExplicitDemoRuntime() && process.env.DISABLE_AUTH === 'true';
     if (isBypass) {
       (req as AuthenticatedRequest).user = { id: 'usr_bypass', role: 'admin', email: 'admin@fidusgate.internal' };
       return next();
@@ -905,41 +898,32 @@ async function evaluateCedarPolicy(principal: string, action: string, resource: 
       }
     };
 
-    const remote = await queryCedarDaemon({
-      principal,
-      action,
-      resource: resource ?? action,
-      path: daemonContext.path,
-      commandLine: daemonContext.commandLine,
-      context: daemonContext,
-    });
-
-    if (remote.ok) {
-      if (remote.decision === 'deny') {
-        log('info', 'Cedar daemon returned DENY');
-      } else {
-        log('info', 'Cedar daemon returned ALLOW');
-      }
-      return remote.decision;
-    }
-
-    if (daemonFailureMustDeny() || shouldFailClosedOnDaemonError()) {
-      log('security', 'Cedar daemon unreachable or errored; failing closed');
-      return 'deny';
-    }
-
-    const tsDecision = cedarEvaluator.isAuthorized(
-      principal,
-      action,
+    const remoteDecision = await resolveCedarDecision(
       {
-        path: context?.path || '',
-        commandLine: context?.commandLine || ''
+        principal,
+        action,
+        resource: resource ?? action,
+        path: daemonContext.path,
+        commandLine: daemonContext.commandLine,
+        context: daemonContext,
       },
-      fullContext
+      () =>
+        cedarEvaluator.isAuthorized(
+          principal,
+          action,
+          {
+            path: context?.path || '',
+            commandLine: context?.commandLine || ''
+          },
+          fullContext
+        ),
     );
-    
-    log('info', `TypeScript Cedar Parser returned ${tsDecision.toUpperCase()}`);
-    return tsDecision;
+    if (remoteDecision === 'deny') {
+      log('info', 'Cedar evaluation returned DENY');
+    } else {
+      log('info', 'Cedar evaluation returned ALLOW');
+    }
+    return remoteDecision;
   })();
 
   if (decision === 'allow') {

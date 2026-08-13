@@ -25,8 +25,9 @@ export function verifyAuthorizePrincipalSignature(
   args: Record<string, unknown> | undefined,
   signatureHex: string | undefined,
 ): boolean {
+  // Missing, unsigned, or unknown principals fail closed (FO-004).
   if (!principal || !principal.startsWith("sb:issuer:")) {
-    return true;
+    return false;
   }
   const publicKeyHex = PUBLIC_KEY_MAP[principal];
   if (!publicKeyHex) {
@@ -108,6 +109,17 @@ export function policyCodePassesSafetyChecks(policyCode: string): { ok: true } |
   }
   if (containsPrivilegedPermit(policyCode) && !policyCode.includes('signature')) {
     return { ok: false, reason: "Privileged principal permits require signature attestation in policy comments." };
+  }
+  const live = policyCode
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  if (/\.contains\s*\(/.test(live)) {
+    return {
+      ok: false,
+      reason:
+        "Cedar .contains() on schema String fields fail-opens under cedar-policy; use like instead (GHSA-jqc6-6pxv-g2ww).",
+    };
   }
   return { ok: true };
 }
