@@ -13,6 +13,22 @@ export function isDemoRuntime(env: EnvLike = process.env): boolean {
   return !isProductionRuntime(env);
 }
 
+/** Explicit demo profile (FIDUSGATE_RUNTIME=demo). Not merely "not production". */
+export function isExplicitDemoRuntime(env: EnvLike = process.env): boolean {
+  return env.FIDUSGATE_RUNTIME === 'demo' && !isProductionRuntime(env);
+}
+
+/**
+ * TS evaluator fallback is never implicit. Requires FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true
+ * and a non-production runtime (FO-002).
+ */
+export function allowTsEvaluatorFallback(env: EnvLike = process.env): boolean {
+  if (isProductionRuntime(env)) {
+    return false;
+  }
+  return env.FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK === 'true';
+}
+
 export class ProductionPrerequisiteError extends Error {
   constructor(message: string) {
     super(message);
@@ -21,11 +37,10 @@ export class ProductionPrerequisiteError extends Error {
 }
 
 /**
- * When production runtime has an explicit Cedar daemon URL, daemon failures
- * must deny — no quiet fallback to the TS evaluator (ADR-0003).
+ * Daemon failures deny unless an explicit non-production TS fallback flag is set (FO-002).
  */
 export function shouldFailClosedOnDaemonError(env: EnvLike = process.env): boolean {
-  return isProductionRuntime(env) && Boolean(env.CEDAR_DAEMON_URL?.trim());
+  return !allowTsEvaluatorFallback(env);
 }
 
 /**
@@ -64,6 +79,12 @@ export function assertProductionPrerequisites(env: EnvLike = process.env): void 
   if (env.FIDUSGATE_ALLOW_LOCAL_KMS_FALLBACK === 'true') {
     throw new ProductionPrerequisiteError(
       'FIDUSGATE_ALLOW_LOCAL_KMS_FALLBACK is forbidden in production'
+    );
+  }
+
+  if (env.FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK === 'true') {
+    throw new ProductionPrerequisiteError(
+      'FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK is forbidden in production'
     );
   }
 

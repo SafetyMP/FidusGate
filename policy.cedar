@@ -81,7 +81,7 @@ forbid(
     || resource.args.path like "scripts/*"
     || resource.args.path like "*.env*"
   )
-  && !(principal == "sb:issuer:security-sme")
+  && !(principal == User::"sb:issuer:security-sme")
 };
 
 // ------------------------------------------
@@ -270,7 +270,7 @@ forbid(
     || resource.args.path like "packages/*"
   )
   && (
-    !context.plm has active_requirement_id
+    ! (context.plm has active_requirement_id)
     || context.plm.active_requirement_id == ""
   )
 };
@@ -360,7 +360,7 @@ forbid(
     resource.args.path like "packages/database/*"
     || resource.args.path == "packages/database/prisma/schema.prisma"
   )
-  && !(principal == "sb:issuer:backend-sme")
+  && !(principal == User::"sb:issuer:backend-sme")
 };
 
 // Enforce frontend-sme role for screen and visual component updates
@@ -375,7 +375,7 @@ forbid(
   )
   && resource has args
   && resource.args.path like "apps/admin-dashboard/*"
-  && !(principal == "sb:issuer:frontend-sme")
+  && !(principal == User::"sb:issuer:frontend-sme")
 };
 
 // Enforce qa-sme role for test suites
@@ -393,7 +393,7 @@ forbid(
     resource.args.path like "*.test.*"
     || resource.args.path like "*.spec.*"
   )
-  && !(principal == "sb:issuer:qa-sme")
+  && !(principal == User::"sb:issuer:qa-sme")
 };
 
 // Enforce devops-sme role for workflows and docker configurations
@@ -411,7 +411,7 @@ forbid(
     resource.args.path like ".github/workflows/*"
     || resource.args.path like "*Dockerfile*"
   )
-  && !(principal == "sb:issuer:devops-sme")
+  && !(principal == User::"sb:issuer:devops-sme")
 };
 
 // Enforce security-sme role for policies and configuration
@@ -429,7 +429,7 @@ forbid(
     resource.args.path == "policy.cedar"
     || resource.args.path == "protect-mcp.config.json"
   )
-  && !(principal == "sb:issuer:security-sme")
+  && !(principal == User::"sb:issuer:security-sme")
 };
 
 // Enforce security-sme role for secure-gateway source code
@@ -444,7 +444,7 @@ forbid(
   )
   && resource has args
   && resource.args.path like "apps/secure-gateway/*"
-  && !(principal == "sb:issuer:security-sme")
+  && !(principal == User::"sb:issuer:security-sme")
 };
 
 
@@ -460,7 +460,7 @@ forbid(
   )
   && resource has args
   && resource.args.path == "CHANGELOG.md"
-  && !(principal == "sb:issuer:pm-sme")
+  && !(principal == User::"sb:issuer:pm-sme")
 };
 
 
@@ -480,7 +480,7 @@ permit(
     resource.args.path like ".github/workflows/*"
     || resource.args.path like "*Dockerfile*"
   )
-  && principal == "sb:issuer:devops-sme"
+  && principal == User::"sb:issuer:devops-sme"
 };
 
 // Permit security-sme to modify policy files in the root
@@ -498,7 +498,7 @@ permit(
     resource.args.path == "policy.cedar"
     || resource.args.path == "protect-mcp.config.json"
   )
-  && (principal == "sb:issuer:security-sme")
+  && (principal == User::"sb:issuer:security-sme")
 };
 
 // Permit pm-sme to modify changelogs in the root
@@ -513,7 +513,7 @@ permit(
   )
   && resource has args
   && resource.args.path == "CHANGELOG.md"
-  && (principal == "sb:issuer:pm-sme")
+  && (principal == User::"sb:issuer:pm-sme")
 };
 
 // ------------------------------------------
@@ -527,7 +527,7 @@ permit(
   action == Action::"call_tool",
   resource
 ) when {
-  principal == "mcp-agent@fidusgate.internal"
+  principal == User::"mcp-agent@fidusgate.internal"
   && (
     resource.tool_name == "read_file"
     || resource.tool_name == "list_directory"

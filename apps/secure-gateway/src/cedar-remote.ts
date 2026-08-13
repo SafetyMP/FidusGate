@@ -25,8 +25,9 @@ export async function queryCedarDaemon(
   let daemonUrl: string;
   try {
     daemonUrl = assertSafeCedarDaemonUrl(rawDaemonUrl);
-  } catch {
-    daemonUrl = 'http://localhost:50051/authorize';
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unsafe cedar daemon url';
+    return { ok: false, reason: message };
   }
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -72,6 +73,24 @@ export async function queryCedarDaemon(
 
 export function daemonFailureMustDeny(env: NodeJS.ProcessEnv = process.env): boolean {
   return shouldFailClosedOnDaemonError(env);
+}
+
+/**
+ * Shared HTTP/MCP Cedar decision: daemon first; TS fallback only when explicitly allowed.
+ */
+export async function resolveCedarDecision(
+  input: CedarDaemonQuery,
+  tsFallback: () => CedarDecision,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CedarDecision> {
+  const remote = await queryCedarDaemon(input, env);
+  if (remote.ok) {
+    return remote.decision;
+  }
+  if (daemonFailureMustDeny(env)) {
+    return 'deny';
+  }
+  return tsFallback();
 }
 
 export function boundedCommandLine(value: unknown): string {
