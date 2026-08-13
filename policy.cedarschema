@@ -19,6 +19,9 @@ action "call_tool" appliesTo {
     context: {
         path: String,
         commandLine: String,
+        quarantine?: {
+            active: Bool
+        },
         devops: {
             pipeline_passed: Bool,
             security_audited: Bool,

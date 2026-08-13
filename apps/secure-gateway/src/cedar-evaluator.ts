@@ -194,7 +194,7 @@ export class CedarEvaluator {
       } else {
         // Words, identifiers, properties, paths or operators
         let start = i;
-        while (i < expr.length && !' \t\n\r&|!()[]"><='.includes(expr[i])) {
+        while (i < expr.length && !' \t\n\r&|!()[]"><="'.includes(expr[i])) {
           i++;
         }
         tokens.push(expr.substring(start, i));
@@ -220,6 +220,22 @@ export class CedarEvaluator {
         throw new Error(`Expected token '${expected}', got '${token}'`);
       }
       return token;
+    }
+
+    /** String literals, numbers, bools, or entity UIDs like User::"sb:issuer:pm-sme". */
+    function parseCedarEqualsValue(): unknown {
+      const valToken = consume();
+      if (valToken.startsWith('"') || valToken === 'true' || valToken === 'false' || /^-?\d+(\.\d+)?$/.test(valToken)) {
+        return JSON.parse(valToken);
+      }
+      if (/^[A-Za-z_][\w]*::$/.test(valToken) && peek()?.startsWith('"')) {
+        return JSON.parse(consume());
+      }
+      const uid = valToken.match(/^[A-Za-z_][\w]*::("[\s\S]*")$/);
+      if (uid) {
+        return JSON.parse(uid[1]);
+      }
+      return JSON.parse(valToken);
     }
 
     function parseOr(): ASTNode {
@@ -269,8 +285,7 @@ export class CedarEvaluator {
         return { type: 'IN', path, values };
       } else if (next === '==') {
         consume('==');
-        const valToken = consume();
-        const value = JSON.parse(valToken);
+        const value = parseCedarEqualsValue();
         return { type: 'EQUALS', path, value };
       } else if (next === '>') {
         consume('>');
