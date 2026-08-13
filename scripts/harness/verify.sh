@@ -22,6 +22,11 @@ npm run test
 
 echo "verify: ok (ci/web parity)"
 
+if [[ -f ./scripts/cedar-validate.sh ]]; then
+  echo "==> cedar validate"
+  bash ./scripts/cedar-validate.sh
+fi
+
 if [[ -f ./scripts/check-threat-model.sh ]]; then
   echo "==> threat model gate"
   bash ./scripts/check-threat-model.sh

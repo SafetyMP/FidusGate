@@ -27,6 +27,22 @@ jobs:
       - name: Hermetic verify
         run: ./scripts/verify.sh
 
+  cedar-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - run: chmod +x scripts/*.sh
+      - name: Install cedar CLI
+        run: ./scripts/install-cedar-cli.sh
+      - name: Cedar validate
+        env:
+          REQUIRE_CEDAR_CLI: "true"
+        run: ./scripts/cedar-validate.sh
+
   integration:
     runs-on: ubuntu-latest
     needs: verify
