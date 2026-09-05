@@ -1,7 +1,18 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
-import { assertSafeRelativePath, assertSafeSubagentId, capString, untaintText } from './security-sanitize';
+import { assertSafeRelativePath, assertSafeSubagentId, capString, resolveJailedWritePath, untaintText } from './security-sanitize';
+
+const TRACKER_MEMORY_JAIL = '.memory';
+
+function jailedTrackerStatePath(fileName: string): string {
+  const relative = `${TRACKER_MEMORY_JAIL}/${fileName}`;
+  const jailed = resolveJailedWritePath(process.cwd(), relative, TRACKER_MEMORY_JAIL);
+  if (!jailed) {
+    throw new Error(`Tracker state path escaped the .memory jail: ${fileName}`);
+  }
+  return jailed;
+}
 
 /** Hard caps applied to any untrusted, HTTP-derived text that is persisted to disk. */
 const MAX_SYNTHESIS_REPORT_LEN = 32 * 1024;
@@ -16,13 +27,24 @@ const MAX_STATE_FILE_BYTES = 2 * 1024 * 1024;
  * Payload is untainted before the filesystem sink (CodeQL js/http-to-file-access).
  */
 function atomicWriteJson(filePath: string, data: unknown): void {
-  const dir = path.dirname(filePath);
+  const workspace = process.cwd();
+  const relative = path.relative(workspace, filePath);
+  const jailedPath = resolveJailedWritePath(workspace, relative, TRACKER_MEMORY_JAIL);
+  if (!jailedPath) {
+    throw new Error('Refusing tracker write outside the .memory jail.');
+  }
+  const dir = path.dirname(jailedPath);
   fs.mkdirSync(dir, { recursive: true });
   const suffix = crypto.randomBytes(6).toString('hex');
-  const tempPath = path.join(dir, `${path.basename(filePath)}.${suffix}.tmp`);
+  const tempRel = path.join(path.dirname(relative), `${path.basename(jailedPath)}.${suffix}.tmp`);
+  const tempPath = resolveJailedWritePath(workspace, tempRel, TRACKER_MEMORY_JAIL);
+  if (!tempPath) {
+    throw new Error('Refusing tracker temp write outside the .memory jail.');
+  }
   const payload = untaintText(JSON.stringify(data, null, 2), MAX_STATE_FILE_BYTES);
+  // codeql[js/http-to-file-access] dest is resolveJailedWritePath(cwd, .memory/<constant>); HTTP fields are cap/untaint only and cannot choose the path
   fs.writeFileSync(tempPath, Buffer.from(payload, 'utf8'));
-  fs.renameSync(tempPath, filePath);
+  fs.renameSync(tempPath, jailedPath);
 }
 
 /**
@@ -55,7 +77,7 @@ export interface DevOpsComplianceState {
 }
 
 export class DevOpsComplianceTracker {
-  private statePath = path.resolve(process.cwd(), '.memory/devops-compliance-state.json');
+  private statePath = jailedTrackerStatePath('devops-compliance-state.json');
   private state: DevOpsComplianceState = {
     pipelineVerified: true,
     securityAudited: true,
@@ -138,7 +160,7 @@ export interface IBPComplianceState {
 }
 
 export class IBPComplianceTracker {
-  private statePath = path.resolve(process.cwd(), '.memory/ibp-compliance-state.json');
+  private statePath = jailedTrackerStatePath('ibp-compliance-state.json');
   private state: IBPComplianceState = {
     currentSprintGoal: "Standardize Antigravity Project Compliance and Security Integration",
     tokenBudget: 80000,
@@ -310,7 +332,7 @@ export interface PLMComplianceState {
 }
 
 export class PLMComplianceTracker {
-  private statePath = path.resolve(process.cwd(), '.memory/plm-compliance-state.json');
+  private statePath = jailedTrackerStatePath('plm-compliance-state.json');
   // Tracks last seen version per package.json path for version-bump detection (Fix 3)
   private _lastKnownPackageVersion: Record<string, string> = {};
   private state: PLMComplianceState = {

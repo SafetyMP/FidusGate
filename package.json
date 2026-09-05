@@ -14,7 +14,8 @@
   "overrides": {
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "vite": "8.1.5"
+    "vite": "8.1.5",
+    "ip-address": "10.3.1"
   },
   "scripts": {
     "dev": "turbo run dev",
@@ -32,15 +33,16 @@
     "screenshots:rebuild-gif": "node scripts/capture-screenshots.mjs --from-existing"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "@playwright/test": "^1.62.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@playwright/test": "^1.62.1",
+    "browserslist": "4.28.9",
     "gifenc": "^1.0.3",
     "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
     "semantic-release": "^25.0.8",
     "turbo": "^2.10.5",
-    "typescript": "^5.9.3",
-    "@biomejs/biome": "^2.5.8"
+    "typescript": "^5.9.3"
   }
 }
