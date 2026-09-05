@@ -41,6 +41,6 @@
     "semantic-release": "^25.0.8",
     "turbo": "^2.10.5",
     "typescript": "^5.9.3",
-    "@biomejs/biome": "^2.2.4"
+    "@biomejs/biome": "^2.5.8"
   }
 }
