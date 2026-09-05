@@ -1,6 +1,23 @@
 import { execSync } from 'node:child_process';
 import { FidusGateDatabase, QuarantineRecord, InterviewLog } from '@fidusgate/database';
-import { untaintText } from './security-sanitize';
+import { assertAllowlistedAbsoluteUrl, untaintText } from './security-sanitize';
+
+const GEMINI_GENERATE_CONTENT_ORIGIN = 'https://generativelanguage.googleapis.com';
+const GEMINI_GENERATE_CONTENT_PATH = '/v1beta/models/gemini-2.5-pro:generateContent';
+
+/** Build the Gemini generateContent URL from compile-time allowlisted host+path only. */
+export function buildAllowlistedGeminiUrl(apiKey: string): string {
+  const base = `${GEMINI_GENERATE_CONTENT_ORIGIN}${GEMINI_GENERATE_CONTENT_PATH}`;
+  assertAllowlistedAbsoluteUrl(base, GEMINI_GENERATE_CONTENT_ORIGIN, GEMINI_GENERATE_CONTENT_PATH);
+  const url = new URL(base);
+  url.searchParams.set('key', apiKey);
+  assertAllowlistedAbsoluteUrl(
+    `${url.origin}${url.pathname}`,
+    GEMINI_GENERATE_CONTENT_ORIGIN,
+    GEMINI_GENERATE_CONTENT_PATH,
+  );
+  return url.toString();
+}
 
 export interface ForensicDossier {
   quarantineRecord: QuarantineRecord;
@@ -173,14 +190,12 @@ the record shows and explain your reasoning at the time.
 ${dossierText}`;
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
+      const outboundUrl = buildAllowlistedGeminiUrl(apiKey);
+      // codeql[js/file-access-to-http] URL is compile-time allowlisted Gemini host+path (never read from disk); dossier text is length-capped/untainted into the POST body only
+      const response = await fetch(outboundUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Untaint disk-sourced dossier text before the network sink
-          // (CodeQL js/file-access-to-http).
-          body: untaintText(JSON.stringify({ // codeql[js/file-access-to-http]
+          body: untaintText(JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: safeQuestion }] }],
             generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
