@@ -6,10 +6,10 @@ Audience: **maintainers**. This page captures the repository's GitHub "storefron
 
 Set in **Settings** or the gear icon next to About on the repo home. Keep it to a single sentence so it reads well in search results and the sidebar:
 
-> Evergreen OSS reference for zero-trust AI agent governance — Cedar policy gates, Ed25519 receipts, and a runnable admin console demo. Not a production-hardened security product.
+> Signed Ed25519 receipts for MCP tool calls — Cedar authorization plus a runnable admin console (ledger, simulator, verifier). Not a production-hardened security product.
 
 - **Website:** `https://github.com/SafetyMP/FidusGate#demo` (or a future hosted demo URL).
-- **Topics:** `ai-agents`, `agent-security`, `zero-trust`, `cedar`, `mcp`, `devsecops`, `reference-architecture`, `open-source`, `typescript`, `react`, `nodejs`, `docker`, `supply-chain-security`.
+- **Topics:** `ai-agents`, `agent-security`, `cedar`, `ed25519`, `devsecops`, `reference-architecture`, `open-source`, `typescript`, `react`, `nodejs`, `docker`, `supply-chain-security`. Keep `mcp` only if the gateway is a listed MCP server; otherwise drop it (see [DESIGN-PIVOT.md](../DESIGN-PIVOT.md)).
 
 ## README badges
 

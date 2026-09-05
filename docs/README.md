@@ -10,6 +10,8 @@ Use the links below to navigate our primary documentation suite:
 
 | Document Guide | Path | Focus & Target Audience |
 | :--- | :--- | :--- |
+| **Design pivot (September 2026)** | [DESIGN-PIVOT.md](./DESIGN-PIVOT.md) | Receipts + admin console positioning vs Cedar sidecars (OpenFirma and others) |
+| **Factory / site overlay** | [factory-overlay.md](./factory-overlay.md) | Internal harness contract; community agents start at [`AGENTS.md`](../AGENTS.md) |
 | **GitHub storefront (maintainers)** | [community/github-presentation.md](./community/github-presentation.md) | About panel, demo GIF regen, badges, social preview, community-health target |
 | **Branch protection (maintainers)** | [community/github-branch-protection.md](./community/github-branch-protection.md) | Optional required checks on `main` |
 | **Marketing assets index** | [assets/README.md](./assets/README.md) | `demo.gif`, screenshots, social preview source |
@@ -28,8 +30,10 @@ Use the links below to navigate our primary documentation suite:
 FidusGate models security boundaries by mapping available operations to dedicated, domain-scoped playbooks under the `skills/` tree. These files establish context variables parsed by Cedar policies:
 
 ### Governance & Security Skills
+* **`cedar-mcp-receipts`** | [SKILL.md](../.github/skills/cedar-mcp-receipts/SKILL.md)  
+  *Authorize MCP tool calls with Cedar and verify Ed25519 receipts (adapted from scopeblind; not a prompt-injection classifier).*
 * **`protect-mcp-governance`** | [SKILL.md](../skills/protect-mcp-governance/SKILL.md)  
-  *Main Cedar authorization template rules, transaction verification standards, and public-key audits.*
+  *Historical copy of the same skill under the older name.*
 * **`agentic-actions-auditor`** | [SKILL.md](../skills/agentic-actions-auditor/SKILL.md)  
   *Static analysis definitions mapping prompt injection vulnerabilities and hardening workflows.*
 * **`security-sme`** | [SKILL.md](../skills/security-sme/SKILL.md)  
