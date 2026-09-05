@@ -8,18 +8,42 @@ const SAFE_RELATIVE_PATH_PATTERN = /^[a-zA-Z0-9/_.@-]{1,512}$/;
 const SAFE_ROLE_PATTERN = /^(developer|admin|auditor)$/;
 const SAFE_ACTION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
 
+export const MAX_LOG_VALUE_LEN = 2048;
+
 /** Strip control characters and newlines from log output (CodeQL log-injection). */
-export function sanitizeLogValue(value: unknown): string {
+export function sanitizeLogValue(value: unknown, maxLen: number = MAX_LOG_VALUE_LEN): string {
   if (value === null || value === undefined) {
     return String(value);
   }
   const text = typeof value === 'string' ? value : JSON.stringify(value);
+  const limit =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0 ? Math.floor(maxLen) : MAX_LOG_VALUE_LEN;
   // Keep sanitizer as direct replace-chain so static analyzers recognize
-  // CR/LF neutralization before console.* sinks.
-  return text
+  // CR/LF neutralization before console.* sinks. Length-cap after stripping
+  // so a trailing CR cannot survive truncation.
+  const cleaned = text
     .replace(/\n/g, '?')
     .replace(/\r/g, '?')
     .replace(/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '?');
+  return cleaned.length > limit ? cleaned.slice(0, limit) : cleaned;
+}
+
+/** Redact an optional log meta object to length-capped structured fields. */
+export function sanitizeLogMeta(meta: unknown): string {
+  if (meta === undefined) {
+    return '';
+  }
+  if (typeof meta === 'string' || meta === null || typeof meta !== 'object') {
+    return sanitizeLogValue(meta);
+  }
+  if (meta instanceof Error) {
+    return sanitizeLogValue({ name: meta.name, message: meta.message });
+  }
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
+    fields[sanitizeLogValue(key, 64)] = sanitizeLogValue(value, 256);
+  }
+  return sanitizeLogValue(fields);
 }
 
 /** Untaint a boolean loaded from disk before embedding in outbound requests. */
@@ -142,7 +166,7 @@ export function resolveInsideWorkspace(workspaceRoot: string, relativePath: stri
   }
 
   const rootResolved = path.resolve(workspaceRoot);
-  let rootReal = rootResolved;
+  let rootReal: string;
   try {
     rootReal = fs.realpathSync(rootResolved);
   } catch {
@@ -220,6 +244,66 @@ export function assertSafeActionId(value: unknown): string {
     throw new Error('Invalid actionId: alphanumeric, underscore, and hyphen only (max 128 chars).');
   }
   return value;
+}
+
+/**
+ * Canonicalize `relativePath` and require the result to stay under
+ * `workspaceRoot`, optionally inside `jailRel` (for example `.memory`).
+ * HTTP callers must never supply the destination path — only a constant
+ * relative name that is then jailed here.
+ */
+export function resolveJailedWritePath(
+  workspaceRoot: string,
+  relativePath: string,
+  jailRel?: string,
+): string | null {
+  const canonical = canonicalizeRelativePath(relativePath);
+  if (!canonical) {
+    return null;
+  }
+  const resolved = resolveInsideWorkspace(workspaceRoot, canonical);
+  if (!resolved) {
+    return null;
+  }
+  if (!jailRel) {
+    return resolved;
+  }
+  const jailRoot = resolveInsideWorkspace(workspaceRoot, jailRel);
+  if (!jailRoot) {
+    return null;
+  }
+  const prefix = jailRoot.endsWith(path.sep) ? jailRoot : `${jailRoot}${path.sep}`;
+  if (resolved !== jailRoot && !resolved.startsWith(prefix)) {
+    return null;
+  }
+  return resolved;
+}
+
+/**
+ * Allowlist an absolute http(s) URL by origin + pathname.
+ * Query strings are ignored so API keys can be appended after the check.
+ */
+export function assertAllowlistedAbsoluteUrl(
+  value: unknown,
+  allowedOrigin: string,
+  allowedPath: string,
+): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
+    throw new Error('Invalid outbound URL.');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Invalid outbound URL.');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Invalid outbound URL scheme.');
+  }
+  if (parsed.origin !== allowedOrigin || parsed.pathname !== allowedPath) {
+    throw new Error('Outbound URL is not on the allowlist.');
+  }
+  return parsed.toString();
 }
 
 /** Restrict outbound URLs to an allowlist of hosts/schemes. */

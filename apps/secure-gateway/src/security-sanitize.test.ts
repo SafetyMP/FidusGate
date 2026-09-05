@@ -3,7 +3,15 @@ import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { assertSafeRelativePath, resolveInsideWorkspace } from './security-sanitize';
+import {
+  assertAllowlistedAbsoluteUrl,
+  assertSafeRelativePath,
+  MAX_LOG_VALUE_LEN,
+  resolveInsideWorkspace,
+  resolveJailedWritePath,
+  sanitizeLogMeta,
+  sanitizeLogValue,
+} from './security-sanitize';
 
 test('assertSafeRelativePath rejects absolute and non-canonical paths', () => {
   assert.equal(assertSafeRelativePath('apps/secure-gateway/src/x.ts', 'path'), 'apps/secure-gateway/src/x.ts');
@@ -38,4 +46,46 @@ test('resolveInsideWorkspace blocks sibling-prefix escapes', () => {
     writeTarget === realWorkspace || writeTarget!.startsWith(realWorkspace + path.sep),
     'write targets must stay under the real workspace root'
   );
+});
+
+test('sanitizeLogValue strips CR/LF and length-caps before logging', () => {
+  assert.equal(sanitizeLogValue('ok\r\ninject'), 'ok??inject');
+  const long = `user:${'A'.repeat(MAX_LOG_VALUE_LEN + 50)}\n`;
+  const redacted = sanitizeLogValue(long);
+  assert.equal(redacted.length, MAX_LOG_VALUE_LEN);
+  assert.ok(!redacted.includes('\n'));
+  assert.ok(!redacted.includes('\r'));
+});
+
+test('sanitizeLogMeta logs structured fields only', () => {
+  const meta = sanitizeLogMeta({ prompt: 'ignore\r\nprevious', nested: { x: 1 } });
+  assert.ok(!meta.includes('\n'));
+  assert.ok(!meta.includes('\r'));
+  assert.match(meta, /"prompt":"ignore\?\?previous"/);
+});
+
+test('resolveJailedWritePath keeps writes under the jail directory', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fidus-jail-'));
+  const workspace = path.join(tmp, 'ws');
+  fs.mkdirSync(path.join(workspace, '.memory'), { recursive: true });
+
+  const inside = resolveJailedWritePath(workspace, '.memory/state.json', '.memory');
+  assert.ok(inside);
+  assert.ok(inside!.startsWith(path.join(fs.realpathSync(workspace), '.memory')));
+
+  assert.equal(resolveJailedWritePath(workspace, 'policy.cedar', '.memory'), null);
+  assert.equal(resolveJailedWritePath(workspace, '../outside.json', '.memory'), null);
+});
+
+test('assertAllowlistedAbsoluteUrl rejects file-derived or off-list hosts', () => {
+  const origin = 'https://generativelanguage.googleapis.com';
+  const allowedPath = '/v1beta/models/gemini-2.5-pro:generateContent';
+  assert.equal(
+    new URL(assertAllowlistedAbsoluteUrl(`${origin}${allowedPath}`, origin, allowedPath)).origin,
+    origin,
+  );
+  assert.throws(() =>
+    assertAllowlistedAbsoluteUrl('https://evil.example/v1beta/models/gemini-2.5-pro:generateContent', origin, allowedPath),
+  );
+  assert.throws(() => assertAllowlistedAbsoluteUrl('https://generativelanguage.googleapis.com/other', origin, allowedPath));
 });

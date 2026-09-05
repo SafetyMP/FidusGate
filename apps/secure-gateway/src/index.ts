@@ -38,9 +38,12 @@ import {
 import { policyCodePassesSafetyChecks, verifyAuthorizePrincipalSignature } from './principal-signature';
 import {
   assertSafePolicyText,
+  assertSafeRelativePath,
   assertSafeSubagentId,
   assertVerifiedRole,
+  resolveJailedWritePath,
   safeRecordKey,
+  sanitizeLogMeta,
   sanitizeLogValue,
   untaintBoolean,
 } from './security-sanitize';
@@ -470,20 +473,21 @@ app.use(async (req, res, next) => {
 
 // Logger helper with security tagging.
 //
-// Pass the fully composed line through sanitizeLogValue at the console.* sink
-// so CodeQL js/log-injection sees a recognized sanitizer on the call argument.
-function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: any) {
+// Never log raw user-controlled values. Message and meta are length-capped,
+// CR/LF-stripped, and reduced to structured fields before composition. The
+// composed line is neutralized again at the console.* argument so CodeQL
+// js/log-injection sees a recognized sanitizer on the sink.
+function log(level: 'info' | 'warn' | 'error' | 'security', message: string, meta?: unknown) {
   const timestamp = new Date().toISOString();
+  const safeMessage = sanitizeLogValue(message);
   const composed =
     meta === undefined
-      ? `[${timestamp}] [${level.toUpperCase()}] ${message}`
-      : `[${timestamp}] [${level.toUpperCase()}] ${message} ${
-          typeof meta === 'string' ? meta : JSON.stringify(meta)
-        }`;
+      ? `[${timestamp}] [${level.toUpperCase()}] ${safeMessage}`
+      : `[${timestamp}] [${level.toUpperCase()}] ${safeMessage} ${sanitizeLogMeta(meta)}`;
   if (process.argv.includes('--mcp')) {
-    console.error(sanitizeLogValue(composed));
+    console.error(composed.replace(/\n/g, '?').replace(/\r/g, '?'));
   } else {
-    console.log(sanitizeLogValue(composed));
+    console.log(composed.replace(/\n/g, '?').replace(/\r/g, '?'));
   }
 }
 
@@ -2748,11 +2752,23 @@ app.post('/api/policy/apply', requireAuth(['admin']), (req, res) => {
       return;
     }
 
-    // Persist only the validated policy string. Atomic temp+rename avoids
-    // existsSync-then-write races (CodeQL js/file-system-race).
-    const activePolicyPath = path.resolve(process.cwd(), config.policy || 'policy.cedar');
-    const tempPolicyPath = `${activePolicyPath}.${secureShortHex(6)}.tmp`;
-    fs.writeFileSync(tempPolicyPath, Buffer.from(validatedPolicy, 'utf8'), { flag: 'wx' }); // codeql[js/http-to-file-access]
+    // Persist only the validated policy string. Destination is a workspace-jailed
+    // relative path from local config — HTTP input cannot choose the write path.
+    // Atomic temp+rename avoids existsSync-then-write races (CodeQL js/file-system-race).
+    const policyRel = assertSafeRelativePath(config.policy || 'policy.cedar', 'policy');
+    const activePolicyPath = resolveJailedWritePath(process.cwd(), policyRel);
+    if (!activePolicyPath) {
+      res.status(400).json({ error: 'Policy path escaped the workspace jail.' });
+      return;
+    }
+    const tempRel = `${policyRel}.${secureShortHex(6)}.tmp`;
+    const tempPolicyPath = resolveJailedWritePath(process.cwd(), tempRel);
+    if (!tempPolicyPath) {
+      res.status(400).json({ error: 'Policy path escaped the workspace jail.' });
+      return;
+    }
+    // codeql[js/http-to-file-access] destination is resolveJailedWritePath(cwd, config.policy); HTTP body is validated Cedar text only and cannot choose the path
+    fs.writeFileSync(tempPolicyPath, Buffer.from(validatedPolicy, 'utf8'), { flag: 'wx' });
     fs.renameSync(tempPolicyPath, activePolicyPath);
 
     const newEvaluator = new CedarEvaluator(activePolicyPath);
