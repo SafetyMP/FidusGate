@@ -6,6 +6,8 @@ Cedar evaluates each tool call; the gateway signs the decision; the dashboard le
 
 OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already run Cedar on the hot path. FidusGate’s job is the receipt and the console, not another generic “zero-trust agent governance platform.”
 
+> **In the SafetyMP thesis:** Agent path for **generic MCP tool calls**. This does not authorize EHS, clinical, or finance operations inside those systems of record. See the [portfolio README](https://github.com/SafetyMP/SafetyMP).
+
 ### Why not OpenFirma
 
 - OpenFirma is a sidecar that intercepts outbound agent calls and evaluates Cedar locally. FidusGate is a demo MCP gateway plus an admin console you can run.
