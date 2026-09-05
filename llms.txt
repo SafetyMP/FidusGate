@@ -1,0 +1,26 @@
+# FidusGate
+
+> Signed Ed25519 receipts for MCP tool calls, with Cedar authorization and a runnable admin console (ledger, policy simulator, receipt verifier). Reference implementation — not a production-hardened security product.
+
+FidusGate does not compete as a generic zero-trust agent governance platform. OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already put Cedar on the hot path. This repo’s product is the receipt plus the console.
+
+## Docs
+
+- [README](https://github.com/SafetyMP/FidusGate/blob/main/README.md): product lede, demo, quick start
+- [Design pivot](https://github.com/SafetyMP/FidusGate/blob/main/docs/DESIGN-PIVOT.md): receipts-and-console positioning vs Cedar sidecars
+- [AGENTS.md](https://github.com/SafetyMP/FidusGate/blob/main/AGENTS.md): community contract (commands, Cedar/receipt paths, fail-closed)
+- [Documentation portal](https://github.com/SafetyMP/FidusGate/blob/main/docs/README.md)
+- [Architecture](https://github.com/SafetyMP/FidusGate/blob/main/docs/ARCHITECTURE.md)
+- [Factory overlay](https://github.com/SafetyMP/FidusGate/blob/main/docs/factory-overlay.md): internal site/harness contract
+- [Security policy](https://github.com/SafetyMP/FidusGate/blob/main/.github/SECURITY.md)
+- [Contributing](https://github.com/SafetyMP/FidusGate/blob/main/CONTRIBUTING.md)
+
+## Skills
+
+- [cedar-mcp-receipts](https://github.com/SafetyMP/FidusGate/blob/main/.github/skills/cedar-mcp-receipts/SKILL.md): authorize MCP tool calls with Cedar and verify Ed25519 receipts (adapted from scopeblind/scopeblind-gateway; not a prompt-injection classifier)
+
+## Optional
+
+- [MCP 2026-07-28 migration](https://github.com/SafetyMP/FidusGate/blob/main/docs/mcp-2026-07-28-migration.md)
+- [OWASP MCP Top 10 ADR](https://github.com/SafetyMP/FidusGate/blob/main/docs/adr/0001-owasp-mcp-top-10.md)
+- [GitHub storefront playbook](https://github.com/SafetyMP/FidusGate/blob/main/docs/community/github-presentation.md)

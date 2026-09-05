@@ -1,63 +1,43 @@
-# Site contract
+# AGENTS.md
 
-## Gates
+Community contract for agents working in this repository. Internal factory/site overlay: [`docs/factory-overlay.md`](docs/factory-overlay.md). Positioning: [`docs/DESIGN-PIVOT.md`](docs/DESIGN-PIVOT.md).
 
-| Command | Purpose |
-|---|---|
-| `./scripts/harness/verify.sh` | Functional and static acceptance |
-| `./scripts/harness/adversarial.sh` | Authorized local adversarial probes |
-
-Record `verification_scripts` as the site directory `scripts/harness` (exactly those
-two scripts). Optional wrappers may remain at `scripts/verify.sh` /
-`scripts/adversarial.sh` for humans and CI; they are outside the digest boundary.
-
-The corporate handoff fixes scope. The site manager assigns ADRs; site specialists write;
-the root orchestrator dispatches nondelegating workers and runs gate commands; operations
-excellence reviews immutable root-produced evidence. Work in isolated roots, never edit
-corporate approval state, and never self-approve. A site role cannot return work to
-corporate design; that boundary requires an explicit user rework authorization.
-
-Site id: `fidusgate`. Prior Cursor Harness v4 (compose profile) is under `_archives/harness-v4/`.
-
-## Definition of Done
-
-Hermetic (PR verify job):
-
-```bash
-npx npm@10.9.2 ci
-./scripts/verify.sh
-```
-
-Integration (main repo root or CI `integration` job — never from `.worktrees/`):
-
-```bash
-./scripts/integration-smoke.sh
-./scripts/adversarial.sh
-```
-
-Do **not** put Docker or integration smoke inside `verify.sh`. Child green in a worktree does not imply main-stack green — see [`docs/harness/false-green-checklist.md`](docs/harness/false-green-checklist.md).
-
-CI (`.github/workflows/ci.yml`) mirrors this two-tier split:
-
-| Job | Runs |
-|-----|------|
-| `verify` | `./scripts/verify.sh` (stub canary → `npm ci` → lint → test → threat-model) |
-| `integration` | `./scripts/integration-smoke.sh` then `./scripts/adversarial.sh` |
-
-## Layout
-
-| Path | Purpose |
-|------|---------|
-| `.corp-harness/site.json` | Corp-site binding (unbound until a program) |
-| `specs/threat-model.yaml` | Adversarial deny cases |
-| `docs/adr/0000-threat-model.md` | Threat-model ADR |
-| `_archives/harness-v4/` | Archived Cursor Harness v4 compose surface |
+FidusGate issues **signed Ed25519 receipts for MCP tool calls** and ships a runnable admin console (ledger, Cedar simulator, receipt verifier). It is not a generic “zero-trust agent governance platform” and **not a production-hardened security product**.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `./scripts/verify.sh` | Hermetic Definition of Done |
-| `./scripts/integration-smoke.sh` | Integration E2E (CI + main root; not worktrees) |
-| `./scripts/adversarial.sh` | Tier-3 adversarial oracle (worktree denial) |
-| `./scripts/check-stub-canary.sh` | Stub/placeholder detector (via verify) |
+| `./scripts/harness/verify.sh` | Hermetic Definition of Done (lint, test, Cedar, threat-model) |
+| `./scripts/verify.sh` | Wrapper → harness verify |
+| `npm run bootstrap` | WASM build + local hooks |
+| `npm run dev` | Gateway `:3001` + admin console `:3000` |
+| `npm test` | Workspace tests |
+| `npm run lint` | Biome + workspace lint |
+| `bash scripts/cedar-validate.sh` | `policy.cedar` against `policy.cedarschema` |
+| `./scripts/adversarial.sh` | Authorized adversarial probes (main root / CI; not worktrees) |
+
+Do not claim green from prose. Run the verify script and keep the output.
+
+## Cedar and receipts
+
+| Path | Role |
+|------|------|
+| `policy.cedar` / `policy.cedarschema` | Authorization policy and schema |
+| `protect-mcp.config.json` | Gateway mode, issuer, receipts directory |
+| `packages/cedar-daemon` | Rust Cedar PDP |
+| `apps/secure-gateway` | MCP / `/api/authorize` hot path and receipt issuance |
+| `packages/crypto-utils` | Ed25519 sign and verify |
+| `apps/admin-dashboard` | Ledger, simulator, verifier |
+| `.github/skills/cedar-mcp-receipts/` | Skill for tool gates, shadow-to-enforce, receipt verification |
+| `docs/DESIGN-PIVOT.md` | Receipts-and-console positioning |
+
+Skill body is adapted from `scopeblind/scopeblind-gateway` (`source_repo` on the skill). Do not claim originality of that material.
+
+## Never weaken fail-closed
+
+Do not convert authorize, kill-switch, PDP, principal-signature, production-profile, or KMS-missing paths to fail-open. If Cedar, the daemon, or a production prerequisite is unavailable, **deny**. Shadow mode may log-without-block only when `protect-mcp.config.json` `mode` is explicitly `shadow` — never as a silent fallback from enforce.
+
+## Honesty
+
+Keep demo and mock surfaces labeled as demo (local keys, JSON datastore, simulated syscalls/OIDC). Do not add sidecar features to compete with OpenFirma, Vectimus, Symbiont, or Permit Cedar Agent. Deepen receipts and the console.

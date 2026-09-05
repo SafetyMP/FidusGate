@@ -1,10 +1,20 @@
 # FidusGate
 
-**Evergreen open-source reference** for zero-trust governance and runtime verification of **autonomous AI agent operations** — Cedar policy gates, Ed25519 receipts, MCP proxy enforcement, and a runnable admin console demo.
+**Signed Ed25519 receipts for MCP tool calls**, with Cedar authorization and a runnable admin console (ledger, policy simulator, receipt verifier).
 
-FidusGate shifts security left: programmatic access controls, signature verification, and sandboxed command auditing on active agentic workflows. It establishes explicit, policy-enforced boundaries around AI tool execution to reduce unauthorized modifications, privilege escalation, and prompt-injection-driven compromise.
+Cedar evaluates each tool call; the gateway signs the decision; the dashboard lets you inspect and verify the receipt. This is a reference implementation — **not** a production-hardened security product. See [Status, Maturity & Mocks](#-status-maturity--mocks) and [docs/DESIGN-PIVOT.md](docs/DESIGN-PIVOT.md).
 
-> **Scope:** Reference implementation and capability showcase — **not** a production-hardened security product. See [Status, Maturity & Mocks](#-status-maturity--mocks).
+OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already run Cedar on the hot path. FidusGate’s job is the receipt and the console, not another generic “zero-trust agent governance platform.”
+
+> **Permit rule:** A tool call without a verifiable receipt did not happen. This path is generic MCP, not EHS/clinical/finance writes in those SoRs. Same instinct: [SafetyMP](https://github.com/SafetyMP/SafetyMP).
+
+### Why not OpenFirma
+
+- OpenFirma is a sidecar that intercepts outbound agent calls and evaluates Cedar locally. FidusGate is a demo MCP gateway plus an admin console you can run.
+- OpenFirma signs capability tokens and sidecar audit events. FidusGate signs a per-tool-call Ed25519 decision receipt that the in-console verifier can check.
+- OpenFirma does not ship this ledger / Cedar simulator / paste-a-receipt UX. That operator loop is the product here.
+
+> **Scope:** Reference implementation and capability showcase — **not** a production-hardened security product.
 
 [![CI](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml)
 [![Docker Publish](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/docker-publish.yml)
