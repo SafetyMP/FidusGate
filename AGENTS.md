@@ -41,3 +41,9 @@ Do not convert authorize, kill-switch, PDP, principal-signature, production-prof
 ## Honesty
 
 Keep demo and mock surfaces labeled as demo (local keys, JSON datastore, simulated syscalls/OIDC). Do not add sidecar features to compete with OpenFirma, Vectimus, Symbiont, or Permit Cedar Agent. Deepen receipts and the console.
+
+## Coding standards (September 2026)
+
+Path-specific Copilot instructions: [`.github/instructions/`](.github/instructions/).
+Repository-wide Copilot file: [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+Copilot code review skill: [`.github/skills/code-review/SKILL.md`](.github/skills/code-review/SKILL.md).

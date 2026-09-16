@@ -24,3 +24,6 @@ FidusGate does not compete as a generic zero-trust agent governance platform. Op
 - [MCP 2026-07-28 migration](https://github.com/SafetyMP/FidusGate/blob/main/docs/mcp-2026-07-28-migration.md)
 - [OWASP MCP Top 10 ADR](https://github.com/SafetyMP/FidusGate/blob/main/docs/adr/0001-owasp-mcp-top-10.md)
 - [GitHub storefront playbook](https://github.com/SafetyMP/FidusGate/blob/main/docs/community/github-presentation.md)
+- [.github/copilot-instructions.md](.github/copilot-instructions.md): repository-wide Copilot coding standards
+- [.github/instructions/](.github/instructions/): path-specific Copilot coding standards (September 2026)
+- [.github/skills/code-review/SKILL.md](.github/skills/code-review/SKILL.md): Copilot code review skill

@@ -22,3 +22,7 @@ Read [`AGENTS.md`](../AGENTS.md) and [`docs/DESIGN-PIVOT.md`](../docs/DESIGN-PIV
 ## Key paths
 
 `policy.cedar`, `policy.cedarschema`, `protect-mcp.config.json`, `packages/cedar-daemon`, `apps/secure-gateway`, `packages/crypto-utils`, `apps/admin-dashboard`.
+
+## Coding standards
+
+Follow path-specific files in [`.github/instructions/`](instructions/). Copilot code review loads [`.github/skills/code-review/`](skills/code-review/).
