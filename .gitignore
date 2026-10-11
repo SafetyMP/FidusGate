@@ -140,6 +140,7 @@ apps/secure-gateway/.memory/
 
 # FidusGate local JSON database files
 packages/database/data/*.json
+apps/secure-gateway/packages/database/data/*.json
 !packages/database/data/templates/
 !packages/database/data/templates/*.json
 

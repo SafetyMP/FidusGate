@@ -1,18 +1,20 @@
 # FidusGate
 
-**Signed Ed25519 receipts for MCP tool calls**, with Cedar authorization and a runnable admin console (ledger, policy simulator, receipt verifier).
+Reference MCP gateway plus an admin console where you can inspect an allow or deny and paste an Ed25519 receipt to check it. **Not** a production security product. See [docs/DESIGN-PIVOT.md](docs/DESIGN-PIVOT.md).
 
-Cedar evaluates each tool call; the gateway signs the decision; the dashboard lets you inspect and verify the receipt. This is a reference implementation — **not** a production-hardened security product. See [Status, Maturity & Mocks](#-status-maturity--mocks) and [docs/DESIGN-PIVOT.md](docs/DESIGN-PIVOT.md).
+What `npm run dev` runs:
 
-OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already run Cedar on the hot path. FidusGate’s job is the receipt and the console, not another generic “zero-trust agent governance platform.”
+- Admin dashboard on port 3000 and the gateway on port 3001. The Rust Cedar daemon is not started.
+- Tool-call decisions call the daemon at `CEDAR_DAEMON_URL` (default `http://localhost:50051/authorize`, 500ms timeout). If that call fails, the gateway **denies**. The TypeScript parser in `apps/secure-gateway/src/cedar-evaluator.ts` runs only when `FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true` and the process is not production. Production forbids that flag.
+- That TypeScript file is a permit/forbid subset. `packages/cedar-daemon` (Cedar `cedar-policy`) is the Cedar engine. `scripts/cedar-eval.wasm`, `scripts/cedar.wasm`, and `scripts/compiler.wasm` are not a Cedar runtime.
+- `tools/call` writes `cedarDecision` on the command log. It does not mint an Ed25519 receipt. Signing is `signPayload` in `packages/crypto-utils`, used when a client submits a receipt or a session signs one. The dashboard can paste-verify that receipt. Local demo keys do not give you non-repudiation.
 
-> **Permit rule:** A tool call without a verifiable receipt did not happen. This path is generic MCP, not EHS/clinical/finance writes in those SoRs. Same instinct: [SafetyMP](https://github.com/SafetyMP/SafetyMP).
+> **Permit rule:** A tool call without a verifiable receipt did not happen. This repository does not yet attach that receipt on `tools/call`. This path is generic MCP, not EHS, clinical, or finance writes. Same instinct: [SafetyMP](https://github.com/SafetyMP/SafetyMP).
 
-### Why not OpenFirma
+### Why not OpenFirma or Permit Cedar Agent
 
-- OpenFirma is a sidecar that intercepts outbound agent calls and evaluates Cedar locally. FidusGate is a demo MCP gateway plus an admin console you can run.
-- OpenFirma signs capability tokens and sidecar audit events. FidusGate signs a per-tool-call Ed25519 decision receipt that the in-console verifier can check.
-- OpenFirma does not ship this ledger / Cedar simulator / paste-a-receipt UX. That operator loop is the product here.
+- [OpenFirma](https://github.com/Firma-AI/openfirma) evaluates Cedar on the agent path. [permitio/cedar-agent](https://github.com/permitio/cedar-agent) is a small Cedar HTTP service. FidusGate’s daemon is the same kind of service, and `npm run dev` does not start it.
+- The console job here is to show the decision and to verify a receipt you already hold.
 
 > **Scope:** Reference implementation and capability showcase — **not** a production-hardened security product.
 
@@ -58,10 +60,10 @@ OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already run Cedar on the h
 FidusGate is designed as a capability showcase and educational reference. It combines real security mechanisms with simulated components for demonstration purposes:
 
 *   **Real Security Controls:**
-    *   **Cedar Access Policy Engine:** Active, file-level policy gating parsing permissions written in the [policy.cedar](./policy.cedar) policy file.
+    *   **Cedar:** `packages/cedar-daemon` evaluates [policy.cedar](./policy.cedar) when that process is running. `npm run dev` does not start it. If the daemon is unreachable, the gateway denies the call unless `FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true` on a non-production process. The TypeScript file `apps/secure-gateway/src/cedar-evaluator.ts` is a permit/forbid subset, not the Cedar engine.
     *   **Native Tool Interception & Gating:** Strict blocking of native client-side IDE actions (such as `run_command`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `view_file`, `list_dir`, and `grep_search`) to guarantee agents only execute commands and edits through FidusGate MCP proxy APIs.
-    *   **Cryptographic Receipts:** Signed transaction receipts verified on the client dashboard using real Ed25519 public-key cryptography. (Note: While the Ed25519 receipt signing itself is real, because keys are stored in the local datastore for demo purposes, the non-repudiation property is illustrative, not enforceable in this configuration.)
-    *   **WASI Sandbox Runtime:** Direct execution of compiled `.wasm` modules inside the gateway process using Node's native `node:wasi` library, bypassing Docker VM startup latency and reducing tool execution overhead by 98% (under 50ms).
+    *   **Cryptographic receipts:** `packages/crypto-utils` signs and verifies Ed25519 receipts. `tools/call` does not mint one. The dashboard verifies a receipt you paste. Keys in the local demo store do not provide non-repudiation.
+    *   **WASI runner:** `apps/secure-gateway/src/wasi-runner.ts` can compile a wasm buffer with `node:wasi`. The files `scripts/cedar-eval.wasm`, `scripts/cedar.wasm`, and `scripts/compiler.wasm` are not that runtime.
     *   **KMS Transit Signing Providers:** Enterprise-grade cryptographic key routing integrations supporting GCP KMS, AWS KMS, and HashiCorp Vault asymmetric signature providers, dynamically fallback-routing to local Ed25519 keys during offline development.
     *   **Filesystem Drift Detection:** Live tracking of untracked/modified files using Git plumbing commands, with rollback options.
 *   **Simulated Components & Mocks:**
@@ -112,7 +114,7 @@ To verify the governance model and containment controls:
 FidusGate maps conceptually to control families in **NIST SP 800-53, ISO/IEC 27001, and SOC 2 Common Criteria**, demonstrating how corporate compliance structures can be translated into programmatic policy rules. Note that this is an illustrative, conceptual mapping, and FidusGate itself does not deliver an audited compliance posture or certification.
 
 *   **Separation of Duties (SoD):** Programmatically separates code compilation, infrastructure modification, and security policy modifications. AI agents are locked out of modifying policy boundaries (`policy.cedar`) or core scripts (`scripts/*`) directly.
-*   **Auditability & Non-Repudiation:** Generates cryptographically signed **Ed25519 receipts** for all gateway transactions, establishing a tamper-evident, append-only audit log of agent actions (illustrative for non-repudiation in this demo due to local key storage).
+*   **Auditability:** Ed25519 helpers can sign a receipt, and the dashboard can verify one you paste. `tools/call` records a Cedar decision on the command log and does not mint that receipt. Local demo keys do not provide non-repudiation.
 *   **Access Control & Least Privilege:** Restricts tool invocation in real-time based on risk severity, forcing high-risk terminal commands into isolated Docker sandboxes.
 *   **System Integrity Protection:** Automatically audits agentic pipelines to scan for dynamic prompt injection vectors and insecure runtime variables.
 *   **MCP July 2026 alignment:** Dual-era MCP — stdio keeps the legacy `initialize` handshake; `POST /mcp` speaks Streamable HTTP for **`2026-07-28`** with required `Mcp-Method` / `Mcp-Name` header/body consistency checks, `server/discover`, and demo RFC 9728 Protected Resource Metadata. See [docs/mcp-2026-07-28-migration.md](docs/mcp-2026-07-28-migration.md) and [OWASP MCP Top 10 mapping](docs/adr/0001-owasp-mcp-top-10.md).
@@ -192,8 +194,8 @@ graph TD
 2.  **`packages/crypto-utils`**: Encapsulates cryptographic signing and verification routines powered by **Ed25519** public-key cryptography.
 3.  **`packages/database`**: A demonstration database module utilizing a seeded local JSON store for offline capability verification, with pluggable support for standard SQL databases (e.g. PostgreSQL via Prisma). Production deployments require a real database configuration.
 4.  **`packages/github-action`**: A custom GitHub Action guard that validates workflows, scans for prompt injections, and verifies commit receipts.
-5.  **`packages/cedar-daemon`**: A high-performance Rust-native HTTP microservice wrapping the official Rust `cedar-policy` engine on Port 50051. The secure gateway queries this service to perform zero-trust policy decisions with sub-millisecond latencies.
-6.  **`apps/secure-gateway`**: Express microservice exposing transaction APIs with automatic PII (Personally Identifiable Information) masking and signature signing, querying the Cedar Rust daemon with a fallback to a local TypeScript parser.
+5.  **`packages/cedar-daemon`**: Rust HTTP service wrapping `cedar-policy` on port 50051. Start it yourself. The gateway does not launch it.
+6.  **`apps/secure-gateway`**: Express API. Cedar decisions use the daemon and deny when it is down, unless `FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true` on a non-production process. `tools/call` does not sign an Ed25519 receipt.
 7.  **`apps/admin-dashboard`**: A React operations dashboard with a receipt verifier, live logs, consensus attestation panels, and command console.
 
 ---
@@ -332,7 +334,7 @@ npm run build --workspace=packages/cedar-daemon
 # Start the container
 npm run start --workspace=packages/cedar-daemon
 ```
-*If the daemon is offline, the Secure Gateway backend automatically falls back to using the TypeScript-native AST evaluator.*
+`npm run dev` does not start the daemon. If it is offline, authorization **denies**. Set `FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true` only on a non-production process to use the TypeScript subset parser in `apps/secure-gateway/src/cedar-evaluator.ts`. Production rejects that flag.
 
 ### 🛡️ 3. Simulating a Sandboxed Security Audit
 You can execute a secure static audit of your workflows or local compilation within the unprivileged Docker container:
