@@ -2,6 +2,8 @@ import * as readline from 'node:readline';
 import { isCommandLineSecure } from './command-auditor';
 import { CedarEvaluator } from './cedar-evaluator';
 import { FidusGateDatabase } from '@fidusgate/database';
+import { signPayload } from '@fidusgate/crypto-utils';
+import { buildToolCallReceiptPayload, toolCallPolicyDigest, toolResultContent } from './tool-call-receipt';
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -37,8 +39,10 @@ function logSecurity(message: unknown): void {
   console.error(sanitizeLogValue(message));
 }
 
+const TOOL_CALL_RECEIPT_KID = 'sb:issuer:de073ae64e43';
+
 const PUBLIC_KEY_MAP: Record<string, string> = {
-  'sb:issuer:de073ae64e43': '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
+  [TOOL_CALL_RECEIPT_KID]: '302a300506032b6570032100df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
   'sb:issuer:pm-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de81',
   'sb:issuer:architecture-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de82',
   'sb:issuer:backend-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83',
@@ -48,16 +52,38 @@ const PUBLIC_KEY_MAP: Record<string, string> = {
   'sb:issuer:devops-sme': '302a300506032b6570032100cf20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de87'
 };
 
-// Check if we have a cached dev keypair in packages/database/data/test-keys.json to avoid breaking signatures across restarts
-const devKeysPath = path.resolve(process.cwd(), 'packages/database/data/test-keys.json');
-if (fs.existsSync(devKeysPath)) {
-  try {
-    const cachedKeys = JSON.parse(fs.readFileSync(devKeysPath, 'utf8'));
-    if (cachedKeys && cachedKeys.publicKeyHex) {
-      PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'] = cachedKeys.publicKeyHex;
+// Same demo key the gateway already loads for local signing. Do not generate a new key file.
+// index.ts may write test-keys.json during startup, after this module is imported, so mint reads again if the first load missed it.
+let demoReceiptPrivateKeyHex = '';
+const devKeysCandidates = [
+  path.resolve(process.cwd(), 'packages/database/data/test-keys.json'),
+  path.resolve(__dirname, '..', '..', '..', 'packages/database/data/test-keys.json'),
+];
+
+function loadDemoReceiptKey(): void {
+  if (process.env.MASTER_PRIVATE_KEY_HEX && process.env.MASTER_PUBLIC_KEY_HEX) {
+    demoReceiptPrivateKeyHex = process.env.MASTER_PRIVATE_KEY_HEX;
+    PUBLIC_KEY_MAP[TOOL_CALL_RECEIPT_KID] = process.env.MASTER_PUBLIC_KEY_HEX;
+    return;
+  }
+  for (const candidate of devKeysCandidates) {
+    try {
+      const cachedKeys = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      if (!cachedKeys || typeof cachedKeys.privateKeyHex !== 'string' || cachedKeys.privateKeyHex.length === 0) {
+        continue;
+      }
+      demoReceiptPrivateKeyHex = cachedKeys.privateKeyHex;
+      if (typeof cachedKeys.publicKeyHex === 'string' && cachedKeys.publicKeyHex.length > 0) {
+        PUBLIC_KEY_MAP[TOOL_CALL_RECEIPT_KID] = cachedKeys.publicKeyHex;
+      }
+      return;
+    } catch {
+      // Missing file is the fresh-start path. The gateway writes the key before it serves calls.
     }
-  } catch (e) {}
+  }
 }
+
+loadDemoReceiptKey();
 
 function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
   const principal = args.principal;
@@ -115,6 +141,53 @@ function verifyAgentPrincipalSignature(toolName: string, args: any): boolean {
 }
 
 const db = new FidusGateDatabase();
+
+async function mintToolCallReceipt(input: {
+  toolName: string;
+  decision: 'allow' | 'deny';
+  policyDigest: string;
+  reason?: string;
+}): Promise<string | undefined> {
+  try {
+    if (!demoReceiptPrivateKeyHex) {
+      loadDemoReceiptKey();
+    }
+    if (!demoReceiptPrivateKeyHex) {
+      logSecurity('[FidusGate] tools/call receipt skipped: demo signing key unavailable');
+      return undefined;
+    }
+    const payload = buildToolCallReceiptPayload({
+      toolName: input.toolName,
+      decision: input.decision,
+      reason: input.reason,
+      issuedAt: new Date().toISOString(),
+      policyDigest: input.policyDigest,
+      issuerId: TOOL_CALL_RECEIPT_KID,
+    });
+    const signed = signPayload(payload, demoReceiptPrivateKeyHex, TOOL_CALL_RECEIPT_KID);
+    await db.addAuditReceipt(signed);
+    const stored = await db.getAuditReceipts();
+    const match = stored.find((item) => item.signature.sig === signed.signature.sig);
+    return match?.receiptHash || TOOL_CALL_RECEIPT_KID;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'receipt signing failed';
+    logSecurity(`[FidusGate] tools/call receipt signing failed: ${sanitizeLogValue(message)}`);
+    return undefined;
+  }
+}
+
+async function withToolCallReceipt(
+  text: string,
+  input: {
+    toolName: string;
+    decision: 'allow' | 'deny';
+    policyDigest: string;
+    reason?: string;
+  },
+): Promise<Array<{ type: 'text'; text: string }>> {
+  const receiptRef = await mintToolCallReceipt(input);
+  return toolResultContent(text, receiptRef);
+}
 
 const principalViolationCounts: Record<string, number> = {};
 
@@ -707,12 +780,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Security Gatekeeper Denied: Command execution forbidden. Reason: ${auditResult.reason}\n💡 Suggested Remediation: ${auditResult.remediationSuggestion}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Security Gatekeeper Denied: Command execution forbidden. Reason: ${auditResult.reason}\n💡 Suggested Remediation: ${auditResult.remediationSuggestion}`
-              }
-            ],
+                toolName: 'execute_command',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('command-audit'),
+                reason: auditResult.reason,
+              },
+            ),
             isError: true
           },
           id
@@ -739,12 +815,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: Execution denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Execution denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'execute_command',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -774,7 +853,12 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: logs }]
+            content: await withToolCallReceipt(logs, {
+              toolName: 'execute_command',
+              decision: 'allow',
+              policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+              reason: 'sandbox success',
+            }),
           },
           id
         };
@@ -794,7 +878,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ Sandboxed Execution Error:\n${errorLogs}` }],
+            content: await withToolCallReceipt(
+              `❌ Sandboxed Execution Error:\n${errorLogs}`,
+              {
+                toolName: 'execute_command',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'sandbox error',
+              },
+            ),
             isError: true
           },
           id
@@ -832,12 +924,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: Write operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Write operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'write_file',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -852,7 +947,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
           return {
             jsonrpc: '2.0',
             result: {
-              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot write outside workspace: ${safeRelPath}` }],
+              content: await withToolCallReceipt(
+                `❌ FidusGate Directory Boundary Violation: Cannot write outside workspace: ${safeRelPath}`,
+                {
+                  toolName: 'write_file',
+                  decision: 'allow',
+                  policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                  reason: 'workspace boundary',
+                },
+              ),
               isError: true
             },
             id
@@ -880,7 +983,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `✅ File successfully written to: ${safeRelPath}` }]
+            content: await withToolCallReceipt(
+              `✅ File successfully written to: ${safeRelPath}`,
+              {
+                toolName: 'write_file',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'write_file success',
+              },
+            ),
           },
           id
         };
@@ -888,7 +999,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ Write Error: ${err.message}` }],
+            content: await withToolCallReceipt(
+              `❌ Write Error: ${err.message}`,
+              {
+                toolName: 'write_file',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'write_file error',
+              },
+            ),
             isError: true
           },
           id
@@ -935,7 +1054,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ FidusGate Security Gatekeeper Denied: Access to sensitive file ${filename} is blocked.` }],
+            content: await withToolCallReceipt(
+              `❌ FidusGate Security Gatekeeper Denied: Access to sensitive file ${filename} is blocked.`,
+              {
+                toolName: 'read_file',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('sensitive-file'),
+                reason: 'sensitive file',
+              },
+            ),
             isError: true
           },
           id
@@ -947,15 +1074,19 @@ export async function handleMcpRequest(req: any): Promise<any> {
       const contextObj = await getFullContext(callerPrincipal, { path: safeRelPath });
       const evaluation = await mcpCedarDecision(callerPrincipal, 'read_file', { path: safeRelPath }, contextObj);
       if (evaluation.decision === 'deny') {
+        await recordPrincipalViolation(callerPrincipal);
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: Read operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Read operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'read_file',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -966,7 +1097,18 @@ export async function handleMcpRequest(req: any): Promise<any> {
         if (!fs.existsSync(resolvedPath)) {
           return {
             jsonrpc: '2.0',
-            result: { content: [{ type: 'text', text: `❌ File not found: ${safeRelPath}` }], isError: true },
+            result: {
+              content: await withToolCallReceipt(
+                `❌ File not found: ${safeRelPath}`,
+                {
+                  toolName: 'read_file',
+                  decision: 'allow',
+                  policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                  reason: 'file not found',
+                },
+              ),
+              isError: true,
+            },
             id
           };
         }
@@ -985,7 +1127,12 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: resultText }]
+            content: await withToolCallReceipt(resultText, {
+              toolName: 'read_file',
+              decision: 'allow',
+              policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+              reason: 'read_file success',
+            }),
           },
           id
         };
@@ -993,7 +1140,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ Read Error: ${err.message}` }],
+            content: await withToolCallReceipt(
+              `❌ Read Error: ${err.message}`,
+              {
+                toolName: 'read_file',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'read_file error',
+              },
+            ),
             isError: true
           },
           id
@@ -1030,12 +1185,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: Patch operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Patch operation denied for path: ${safeRelPath}. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'patch_file',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -1050,7 +1208,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
           return {
             jsonrpc: '2.0',
             result: {
-              content: [{ type: 'text', text: `❌ FidusGate Directory Boundary Violation: Cannot patch outside workspace: ${safeRelPath}` }],
+              content: await withToolCallReceipt(
+                `❌ FidusGate Directory Boundary Violation: Cannot patch outside workspace: ${safeRelPath}`,
+                {
+                  toolName: 'patch_file',
+                  decision: 'allow',
+                  policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                  reason: 'workspace boundary',
+                },
+              ),
               isError: true
             },
             id
@@ -1082,7 +1248,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `✅ File successfully patched: ${safeRelPath}` }]
+            content: await withToolCallReceipt(
+              `✅ File successfully patched: ${safeRelPath}`,
+              {
+                toolName: 'patch_file',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'patch_file success',
+              },
+            ),
           },
           id
         };
@@ -1090,7 +1264,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ Patch Error: ${err.message}` }],
+            content: await withToolCallReceipt(
+              `❌ Patch Error: ${err.message}`,
+              {
+                toolName: 'patch_file',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'patch_file error',
+              },
+            ),
             isError: true
           },
           id
@@ -1148,12 +1330,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: Search denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: Search denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'search_code',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -1165,7 +1350,12 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
+            content: await withToolCallReceipt(JSON.stringify(results, null, 2), {
+              toolName: 'search_code',
+              decision: 'allow',
+              policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+              reason: 'search_code success',
+            }),
           },
           id
         };
@@ -1173,7 +1363,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ Search Error: ${err.message}` }],
+            content: await withToolCallReceipt(
+              `❌ Search Error: ${err.message}`,
+              {
+                toolName: 'search_code',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'search_code error',
+              },
+            ),
             isError: true
           },
           id
@@ -1222,12 +1420,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [
+            content: await withToolCallReceipt(
+              `❌ FidusGate Cedar Policy Blocker: List directory denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`,
               {
-                type: 'text',
-                text: `❌ FidusGate Cedar Policy Blocker: List directory denied. Matching policies: ${evaluation.matchingPolicies.join(', ')}`
-              }
-            ],
+                toolName: 'list_directory',
+                decision: 'deny',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: evaluation.matchingPolicies.join(', ') || 'cedar deny',
+              },
+            ),
             isError: true
           },
           id
@@ -1238,7 +1439,18 @@ export async function handleMcpRequest(req: any): Promise<any> {
         if (!fs.existsSync(resolvedPath)) {
           return {
             jsonrpc: '2.0',
-            result: { content: [{ type: 'text', text: `❌ Directory not found: ${filePath}` }], isError: true },
+            result: {
+              content: await withToolCallReceipt(
+                `❌ Directory not found: ${filePath}`,
+                {
+                  toolName: 'list_directory',
+                  decision: 'allow',
+                  policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                  reason: 'directory not found',
+                },
+              ),
+              isError: true,
+            },
             id
           };
         }
@@ -1246,7 +1458,18 @@ export async function handleMcpRequest(req: any): Promise<any> {
         if (!stat.isDirectory()) {
           return {
             jsonrpc: '2.0',
-            result: { content: [{ type: 'text', text: `❌ Path is not a directory: ${filePath}` }], isError: true },
+            result: {
+              content: await withToolCallReceipt(
+                `❌ Path is not a directory: ${filePath}`,
+                {
+                  toolName: 'list_directory',
+                  decision: 'allow',
+                  policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                  reason: 'not a directory',
+                },
+              ),
+              isError: true,
+            },
             id
           };
         }
@@ -1270,7 +1493,12 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
+            content: await withToolCallReceipt(JSON.stringify(results, null, 2), {
+              toolName: 'list_directory',
+              decision: 'allow',
+              policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+              reason: 'list_directory success',
+            }),
           },
           id
         };
@@ -1278,7 +1506,15 @@ export async function handleMcpRequest(req: any): Promise<any> {
         return {
           jsonrpc: '2.0',
           result: {
-            content: [{ type: 'text', text: `❌ List Directory Error: ${err.message}` }],
+            content: await withToolCallReceipt(
+              `❌ List Directory Error: ${err.message}`,
+              {
+                toolName: 'list_directory',
+                decision: 'allow',
+                policyDigest: toolCallPolicyDigest('cedar', evaluation.matchingPolicies[0]),
+                reason: 'list_directory error',
+              },
+            ),
             isError: true
           },
           id
