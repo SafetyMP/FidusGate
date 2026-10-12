@@ -12,7 +12,7 @@ FidusGate does not compete as a generic zero-trust agent governance platform. Op
 - [Documentation portal](https://github.com/SafetyMP/FidusGate/blob/main/docs/README.md)
 - [Architecture](https://github.com/SafetyMP/FidusGate/blob/main/docs/ARCHITECTURE.md)
 - [Factory overlay](https://github.com/SafetyMP/FidusGate/blob/main/docs/factory-overlay.md): internal site/harness contract
-- [Security policy](https://github.com/SafetyMP/FidusGate/blob/main/.github/SECURITY.md)
+- [Security policy](https://github.com/SafetyMP/FidusGate/blob/main/SECURITY.md)
 - [Contributing](https://github.com/SafetyMP/FidusGate/blob/main/CONTRIBUTING.md)
 
 ## Skills
