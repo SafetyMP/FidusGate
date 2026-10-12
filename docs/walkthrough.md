@@ -100,7 +100,7 @@ Added a dedicated, collapsible **Suggested Autofix Banner** above the Sandbox Co
 
 ### 🔒 4.7. Agent Quarantine & Interview System (Phase 6)
 * **Auto-Quarantine Gating:** Monitored agent violations inside `mcp-server.ts`. A principal is automatically quarantined in the database after three consecutive Cedar policy denials, locking out all execute and write capabilities.
-* **Tier 0 & Tier 9 Gating:** Configured new Cedar rules to govern the quarantine state. Tier 0 denies all write/execute tools while allowing read-only tools to remain active so the quarantined agent can respond to human questions. Tier 9 explicitly blocks native IDE tools (e.g. `run_command`, `write_to_file`) to ensure all operations route through the FidusGate gateway.
+* **Tier 0 & Tier 9 Gating:** Configured new Cedar rules to govern the quarantine state. Tier 0 denies all write/execute tools while allowing read-only tools to remain active so the quarantined agent can respond to human questions. Tier 9 forbids tool names such as `run_command` and `write_to_file` when a client sends them to the gateway. It does not intercept another program's tools.
 * **Forensic Dossier & Sanitization:** Integrated `interview-engine.ts` to automatically compile a forensic dossier of recent command histories and security violations. The engine sanitizes raw logs to strip prompt injection phrases, preventing indirect prompt hijack attempts during the interview process.
 
 ---
