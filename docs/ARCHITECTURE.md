@@ -1,8 +1,8 @@
 # ⚖️ FidusGate Architecture & Component Manual
 
-FidusGate is a zero-trust repository governance and runtime verification reference implementation specifically engineered for **Autonomous AI-Agent Operations**. It shifts security left, enforcing real-time programmatic access controls, signature verification (Ed25519), and automated static security analysis on agentic workflows.
+FidusGate is a reference MCP gateway and an admin console. A client that calls the gateway's MCP tools can receive an allow or deny and an Ed25519 receipt. `npm run dev` starts the gateway and the dashboard. It does not start the Cedar daemon. This repository is not a production security product.
 
-This document serves as the comprehensive engineering guide detailing what each component is, how it runs, its security value, and its architectural function in the FidusGate monorepo.
+The sections below describe packages in the tree. A package is on the `npm run dev` path only when its runbook says so.
 
 ---
 
@@ -64,14 +64,14 @@ graph TD
 ### 🛡️ 1. Secure Gateway Backend (`apps/secure-gateway`)
 
 #### 🔹 Value & Function
-The **Secure Gateway Backend** is the high-security core of FidusGate. It acts as the intermediary proxy through which all autonomous agent operations (such as command execution, file writes, and ledger transactions) must flow.
-* **Access Control Gatekeeping:** Evaluates incoming actions against the active Cedar policy file using both a local TypeScript fallback verifier and a high-speed Rust-native gRPC daemon.
+The **Secure Gateway Backend** evaluates MCP tool calls that a client sends to this process. It does not intercept another program's tools.
+* **Access control:** `packages/cedar-daemon` evaluates `policy.cedar` when that process is running. `npm run dev` does not start it. If the daemon is down, the call is denied unless `FIDUSGATE_ALLOW_TS_EVALUATOR_FALLBACK=true` on a non-production process. `apps/secure-gateway/src/cedar-evaluator.ts` is a permit/forbid subset, not the Cedar engine.
 * **Agent Quarantine & Interview System:** Automatically tracks principal violations, auto-quarantines agents after 3 consecutive Cedar denials, and invokes the **Interview Engine** (`interview-engine.ts`) to build forensic dossiers and sanitize logs.
 * **PII Redaction Engine:** Intercepts outgoing data packages and utilizes regex-based masking to redact sensitive data (e.g., credit card numbers, JWT tokens, private keys) before storage.
 * **Operational Webhooks:** Dispatches incident alerts to Slack and Microsoft Teams whenever high-risk actions are blocked or CI/CD static security issues are found.
 
 #### 🔹 Operational Runbook
-* **Development Mode:** Runs concurrently within the monorepo root using `npm run dev`. It defaults to port `3001` and hot-reloads on source modifications via `tsx`.
+* **Development Mode:** Root `npm run dev` runs Turbo, which runs this package's `dev` script: `tsc && node dist/index.js`. The listen port is `PORT` or `3001`. That script does not hot-reload, and it does not start the Cedar daemon.
 * **Production Mode:** Deployed as a Dockerized container (`apps/secure-gateway/Dockerfile`). In production, it relies on environment variables to mount:
   - `JWT_SECRET` for secure federated admin sessions.
   - `DATABASE_URL` for PostgreSQL storage integration.

@@ -46,9 +46,9 @@ curl -s http://localhost:3001/health | jq .
 
 ## 🛡️ Tool Routing Policy (MANDATORY)
 
-To comply with the zero-trust security architecture governed by Cedar, agents **MUST** route all operations through the FidusGate MCP server. Bypassing the MCP gateway by using native tools is a strict policy violation. Any bypassed tool calls will be intercepted and flagged as policy violations during verification pipelines.
+The gateway only sees tool calls that a client sends to its MCP server. A native tool in another program is not intercepted. Use the MCP tools below when you intend the call to be evaluated.
 
-| Operation | Native Tool (DO NOT USE) | MCP Gated Tool (MUST USE) |
+| Operation | Not seen by the gateway | Evaluated when a client calls it |
 |---|---|---|
 | Command Execution | `run_command` | `call_mcp_tool fidusgate-secure-gateway/execute_command` |
 | File Write / Create | `write_to_file` | `call_mcp_tool fidusgate-secure-gateway/write_file` |
