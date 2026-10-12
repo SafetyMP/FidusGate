@@ -43,7 +43,7 @@
     "@semantic-release/git": "^10.0.1",
     "browserslist": "4.28.9",
     "gifenc": "^1.0.3",
-    "playwright": "^1.62.1",
+    "playwright": "^1.64.0",
     "pngjs": "^7.0.0",
     "semantic-release": "^25.0.8",
     "turbo": "^2.10.5",
