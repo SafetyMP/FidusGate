@@ -64,7 +64,7 @@ FidusGate is designed as a capability showcase and educational reference. It com
     *   **MCP tool checks:** `apps/secure-gateway/src/mcp-server.ts` evaluates `execute_command`, `write_file`, `read_file`, `patch_file`, `search_code`, and `list_directory` when a client calls those tools. The gateway does not block another program's own tools.
     *   **Cryptographic receipts:** A non-production `tools/call` that Cedar, the command audit, or the sensitive-file check decides appends an Ed25519 receipt to the existing audit receipt list, as a second text block. `submit_ibp_synthesis` does not mint one. Local demo keys are not non-repudiation. `npm run dev` still does not start the Cedar daemon. The wasm files are still not a Cedar runtime. The dashboard can paste-verify a receipt.
     *   **WASI runner:** `apps/secure-gateway/src/wasi-runner.ts` can compile a wasm buffer with `node:wasi`. The files `scripts/cedar-eval.wasm`, `scripts/cedar.wasm`, and `scripts/compiler.wasm` are not that runtime.
-    *   **KMS Transit Signing Providers:** Enterprise-grade cryptographic key routing integrations supporting GCP KMS, AWS KMS, and HashiCorp Vault asymmetric signature providers, dynamically fallback-routing to local Ed25519 keys during offline development.
+    *   **KMS signers:** `getKMSProvider()` in `packages/crypto-utils/src/index.ts` returns AWS, GCP, or Vault only when that provider's env vars are set. With none of them set, `npm run dev` uses `LocalKMSProvider`.
     *   **Filesystem Drift Detection:** Live tracking of untracked/modified files using Git plumbing commands, with rollback options.
 *   **Simulated Components & Mocks:**
     *   **Database Persistence:** Defaults to a local flat-file JSON datastore for ease of local setup. Pluggable PostgreSQL integration via Prisma is provided but must be configured for real use.
@@ -293,8 +293,8 @@ FidusGate includes a suite of security policy simulation and observability tools
 * **Offline fallback compiling:** Dynamically compiles a minimal fallback WASM compiler binary if not present, ensuring developer workflows run completely offline.
 
 ### 🔑 11. Cloud-Backed KMS Transit Providers
-* **HSM Integrations:** Connects directly with enterprise HSM and cloud key management providers including AWS KMS, GCP KMS, and HashiCorp Vault.
-* **Dynamic key routing:** Automatically routes cryptographic signing requests to active KMS providers when credentials are configured, falling back to local Ed25519 keys for offline local development.
+* **Optional remote signers:** AWS, GCP, and Vault classes exist. They are selected only when `AWS_KMS_KEY_ID` or `AWS_ACCESS_KEY_ID`, `GCP_KMS_KEY_RING` or `GCP_KMS_KEY_NAME`, or `VAULT_ADDR`, `VAULT_TOKEN`, or `KMS_KEY_ID` is set.
+* **Default:** with none of those set, signing uses `LocalKMSProvider`. Production refuses that local signer.
 
 ### 🚨 12. Agent Quarantine System & Interview Engine
 * **Auto-Quarantine Trigger:** Automatically quarantines agent principals that register three consecutive Cedar policy violations, blocking them from executing any write or run commands.
