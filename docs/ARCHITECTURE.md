@@ -45,11 +45,11 @@ graph TD
 
 | Component Name | Workspace Path | Package Identifier | Purpose & Value |
 | :--- | :--- | :--- | :--- |
-| **Secure Gateway Backend** | `apps/secure-gateway` | `@fidusgate/secure-gateway` | The security gatekeeper that intercepts tool calls, evaluates Cedar policies, and signs transaction receipts. |
+| **Secure Gateway Backend** | `apps/secure-gateway` | `@fidusgate/secure-gateway` | Evaluates MCP tool calls a client sends to this process, then signs a receipt. It does not intercept another program's tools. |
 | **Interview Engine** | `apps/secure-gateway/src/interview-engine.ts` | *N/A* | Forensic dossier builder and log sanitizer that manages quarantined agent diagnostic interviews. |
 | **Operations Dashboard** | `apps/admin-dashboard` | `@fidusgate/admin-dashboard` | The interactive administrative console for monitoring evaluations, auditing logs, and simulating policies. |
 | **Rust Cedar Policy Daemon** | `packages/cedar-daemon` | `@fidusgate/cedar-daemon` | High-speed, Rust-native daemon executing schema-guided Cedar authorization decisions in a secure container. |
-| **Cryptographic Utilities** | `packages/crypto-utils` | `@fidusgate/crypto-utils` | Encapsulates Ed25519 signature flows, offline CLI verifiers, and interfaces to remote HSM providers (Vault/GCP). |
+| **Cryptographic Utilities** | `packages/crypto-utils` | `@fidusgate/crypto-utils` | Ed25519 receipts. `getKMSProvider()` uses AWS, GCP, or Vault only when that provider's env vars are set. Otherwise it uses `LocalKMSProvider`. Production refuses the local signer. |
 | **Core Database Client** | `packages/database` | `@fidusgate/database` | Thread-safe transaction persistence layer supporting JSON local files and PostgreSQL database configurations. |
 | **Unified Core Types** | `packages/core-types` | `@fidusgate/core-types` | Strictly typed interfaces for logs, receipts, compliance findings, and transaction payloads. |
 | **Custom GitHub Action Guard** | `packages/github-action` | `@fidusgate/github-action` | Custom Github Action verifying workflows for prompt injections and verifying cryptographic audit receipts. |
