@@ -215,7 +215,7 @@ FidusGate establishes a ten-tier risk and compliance classification framework. T
 | **Tier 6 (IBP)** | Running high-cost sandbox executions or remote scripts | `forbid` if token budget exhausted | **Financial Control:** Monitors token consumption, triggering a circuit breaker block if estimated token burn exceeds 95% of the sprint allocation. |
 | **Tier 7 (PLM)** | Any write/modify action in source directories | `forbid` unless active PLM requirement registered | **Traceability Gates:** Restricts codebase changes to authorized Jira/linear-style Requirement IDs and requires associated unit tests to be written. |
 | **Tier 8 (SME Roles)** | Specialized source paths (DB migrations, UI layouts, etc.) | `forbid` unless signed by matching SME | **Role Gating:** Restricts folder segments to specific cryptographic role signatures (e.g. `backend-sme` for schemas, `devops-sme` for Docker). |
-| **Tier 9 (Native Tool Block)** | Native client/IDE actions (`run_command`, `write_to_file`, etc.) | `forbid` native tools globally | **MCP Enforcement:** Explicitly intercepts and blocks direct native environment actions, forcing all agent tool usage through FidusGate proxy APIs. |
+| **Tier 9 (Named tool forbid)** | A client call whose `tool_name` is `run_command`, `write_to_file`, or the other names in `policy.cedar` | `forbid` those names | **Gateway check:** Cedar forbids those names when a client sends them. The gateway does not intercept another program's tools. The tools it evaluates are `execute_command`, `write_file`, `read_file`, `patch_file`, `search_code`, `list_directory`, and `submit_ibp_synthesis`. |
 
 ---
 

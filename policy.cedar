@@ -536,9 +536,9 @@ permit(
 };
 
 // ==========================================
-// TIER 9: Strict Native Tool Interception & Block
+// TIER 9: Forbid these tool names when a client calls the gateway
 // ==========================================
-// Explicitly forbid native client tools to ensure agents only use FidusGate MCP tools
+// This does not intercept another program's tools. It forbids the names below on call_tool.
 forbid(
   principal,
   action == Action::"call_tool",
