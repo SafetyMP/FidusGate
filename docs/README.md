@@ -1,6 +1,6 @@
 # ⚖️ FidusGate Documentation & Playbooks Portal
 
-Welcome to the FidusGate documentation and playbooks portal. This open-source repository serves as an **evergreen reference implementation** for AI DevSecOps governance. The portal provides detailed architectural specifications, continuous delivery manuals, walkthrough verification guides, and domain-scoped **SME Playbooks** defining explicitly policy-enforced and auditable authorization boundaries for autonomous agents.
+Map of the reference MCP gateway docs. Start at the root README for what `npm run dev` actually runs: the admin console and the gateway. The Cedar daemon is not started. This repository is not a production security product.
 
 ---
 
@@ -78,3 +78,8 @@ FidusGate models security boundaries by mapping available operations to dedicate
 *Manual maintained and verified by the Antigravity Security Engineering Team.*
 
 Community: [CONTRIBUTING.md](../CONTRIBUTING.md) · [SECURITY.md](../SECURITY.md) · [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) · [SUPPORT.md](../SUPPORT.md)
+
+
+## Canonical community files
+
+`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` are at the repository root. This repository does not keep a second copy under `.github/`, because GitHub would show that copy instead of the root file.

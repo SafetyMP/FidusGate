@@ -1,6 +1,6 @@
 # Contributing to FidusGate
 
-Thank you for your interest in contributing to FidusGate! As a zero-trust governance platform for AI-agent workflows, we maintain high standards for system integrity, code validation, and security auditing.
+Thank you for your interest in contributing to FidusGate. This repository is a reference MCP gateway and an admin console for a tool-call decision and an Ed25519 receipt. It is not a production security product. `npm run dev` does not start the Cedar daemon.
 
 Read [`SECURITY.md`](SECURITY.md) before reporting vulnerabilities. Maintainer storefront docs: [`docs/community/github-presentation.md`](docs/community/github-presentation.md).
 
