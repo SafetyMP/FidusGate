@@ -1,4 +1,6 @@
-# FidusGate
+# FidusGate: MCP Policy Gateway and Signed Tool-Call Receipts
+
+Reference Model Context Protocol (MCP) gateway for AI agent tool-call authorization with Cedar policies, Ed25519-signed receipts and an admin console. This is a reference implementation with local demo keys; its scope and limitations are detailed below.
 
 Reference MCP gateway plus an admin console where you can inspect an allow or deny and paste an Ed25519 receipt to check it. **Not** a production security product. See [docs/DESIGN-PIVOT.md](docs/DESIGN-PIVOT.md).
 
