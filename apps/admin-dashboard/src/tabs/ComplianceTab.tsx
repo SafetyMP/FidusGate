@@ -89,6 +89,12 @@ export function ComplianceTab({
   handleLogFeedback,
   handleAlignFeedback,
 }: ComplianceTabProps) {
+  const canOperate = authRole === 'admin' || authRole === 'developer';
+  const tokenBudget = typeof ibpState?.tokenBudget === 'number' ? ibpState.tokenBudget : null;
+  const metricsAvailable = prometheusMetrics.available === true;
+  const latencySamples: number[] = metricsAvailable ? prometheusMetrics.latencyHistory : [];
+  const rateSamples: number[] = metricsAvailable ? prometheusMetrics.requestRateHistory : [];
+
   return (
     <div className="tab-compliance-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Enterprise SecOps Attestation & Token Budget Dashboard */}
@@ -102,25 +108,25 @@ export function ComplianceTab({
               </svg>
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
-                Enterprise SecOps Attestation & Token Budget Console
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: 'hsl(var(--text-primary))' }}>
+                Governance & operational controls
               </h3>
               <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                Verified cryptographic signatures, real-time autonomous token utilization, and active policy gates.
+                Review gateway state, manage budgets, and approve changes with your current role.
               </p>
             </div>
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
             {(authRole === 'admin' || authRole === 'auditor') && (
-              <button 
-                className="btn btn-secondary animate-glow-green-border" 
+              <button
+                className="btn btn-secondary animate-glow-green-border"
                 onClick={handleExportAuditReport}
-                style={{ 
-                  padding: '0.45rem 1rem', 
-                  fontSize: '0.8rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                style={{
+                  padding: '0.45rem 1rem',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: '0.5rem',
                   borderColor: 'hsla(var(--success), 0.4)',
                   background: 'hsla(var(--success), 0.08)',
@@ -133,104 +139,36 @@ export function ComplianceTab({
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Export Compliance Manifest
+                Export local governance report
               </button>
             )}
 
             <div className="status-badge status-completed animate-glow-green" style={{ margin: 0 }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00ff66', display: 'inline-block' }}></span>
-              Dual-Mode Governance Engine Active
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'hsl(var(--success))', display: 'inline-block' }}></span>
+              Gateway-reported state
             </div>
           </div>
         </div>
 
         <div className="secops-panel-content">
-          {/* Card 1: Cryptographic SME Role Keys & Attestation Graph */}
+          {/* Card 1: Development session claims & Attestation Graph */}
           <div className="secops-card">
             <div>
               <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                Cryptographic SME Role Keys
+                Development session claims
               </h4>
-              <div className="sme-keys-grid">
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">Backend SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x7f3a9e2db0a1b2c3</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">DevOps SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x9e5b8d2cf1b3c4d5</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">QA SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0x8c4b9e2da0c4d5e6</span>
-                </div>
-
-                <div className="sme-key-card">
-                  <div className="sme-key-header">
-                    <span className="sme-key-role">Security SME</span>
-                    <span className="sme-key-status" style={{ backgroundColor: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                  </div>
-                  <span className="sme-key-hash">0xd15c8f2ba1d5e6f7</span>
-                </div>
-              </div>
-
-              {/* Live Workload Attestation Graph */}
-              {attestedClaims && attestedClaims.attested ? (
-                <div style={{ marginTop: '1rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem' }}>
-                  <h5 style={{ margin: '0 0 0.6rem 0', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                    Live Attestation Graph
-                  </h5>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
-                    {/* Agent Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workload</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--primary), 0.3)', background: 'hsla(var(--primary), 0.1)', color: 'hsl(var(--primary))' }}>
-                        {attestedClaims?.role?.toUpperCase() || 'AGENT'}
-                      </span>
-                    </div>
-                    
-                    {/* Animated Glowing Connection Line */}
-                    <div style={{ flexGrow: 1, height: '2px', background: 'linear-gradient(90deg, hsl(var(--primary)) 0%, #00ff66 100%)', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
-                      <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66', animation: 'pulseGlow 2s infinite alternate ease-in-out' }}></span>
-                    </div>
-
-                    {/* Platform Gate Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>OIDC Gating</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}>
-                        VERIFIED
-                      </span>
-                    </div>
-
-                    {/* Animated Glowing Connection Line */}
-                    <div style={{ flexGrow: 1, height: '2px', background: '#00ff66', position: 'relative', margin: '0 0.5rem', opacity: 0.85 }}>
-                      <span style={{ position: 'absolute', top: '-3px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff66', boxShadow: '0 0 10px #00ff66' }}></span>
-                    </div>
-
-                    {/* Host Workspace Node */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase' }}>Workspace</span>
-                      <span className="status-badge status-completed" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderColor: 'hsla(var(--info), 0.3)', background: 'hsla(var(--info), 0.1)', color: 'hsl(var(--info))' }}>
-                        SECURE
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', fontFamily: 'monospace', wordBreak: 'break-all', textAlign: 'center' }}>
-                    ID: {attestedClaims?.workloadId || 'spiffe://fidusgate.internal/ns/sandbox/sa'}
-                  </div>
-                </div>
-              ) : null}
+              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
+                Development identity claims reported by the gateway. These are not independent OIDC or hardware attestation evidence.
+              </p>
+              {attestedClaims ? (
+                <dl style={{ fontSize: '0.78rem', overflowWrap: 'anywhere' }}>
+                  <dt>Role</dt><dd>{attestedClaims.role || 'Not reported'}</dd>
+                  <dt>Workload</dt><dd>{attestedClaims.workloadId || 'Not reported'}</dd>
+                  <dt>Reported signing key</dt><dd>{attestedClaims.signingKey || 'Not reported'}</dd>
+                </dl>
+              ) : (
+                <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>No identity claims loaded.</p>
+              )}
 
               {/* Emergency Kill-Switch UI */}
               <div id="circuit-breaker-switch" style={{ marginTop: '1.2rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -240,7 +178,8 @@ export function ComplianceTab({
                 <button
                   className={`btn ${systemConfig?.circuitBreakerActive ? 'animate-pulse-red' : ''}`}
                   onClick={handleToggleCircuitBreaker}
-                  disabled={systemConfigLoading}
+                  disabled={systemConfigLoading || authRole !== 'admin'}
+                  title={authRole !== 'admin' ? 'Administrator role required' : undefined}
                   style={{
                     width: '100%',
                     padding: '0.65rem 0.85rem',
@@ -255,18 +194,18 @@ export function ComplianceTab({
                     cursor: 'pointer',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     border: systemConfig?.circuitBreakerActive ? '2px solid #ff3366' : '1px solid hsla(var(--danger), 0.3)',
-                    background: systemConfig?.circuitBreakerActive 
-                      ? 'radial-gradient(circle, rgba(255, 51, 102, 0.22) 0%, rgba(255, 51, 102, 0.04) 100%)' 
+                    background: systemConfig?.circuitBreakerActive
+                      ? 'radial-gradient(circle, rgba(255, 51, 102, 0.22) 0%, rgba(255, 51, 102, 0.04) 100%)'
                       : 'rgba(255, 107, 107, 0.03)',
                     color: systemConfig?.circuitBreakerActive ? '#ff3366' : 'hsl(var(--danger))',
                     boxShadow: systemConfig?.circuitBreakerActive ? '0 0 20px rgba(255, 51, 102, 0.3)' : 'none',
                     textTransform: 'uppercase'
                   }}
                 >
-                  <span style={{ 
-                    width: '8px', 
-                    height: '8px', 
-                    borderRadius: '50%', 
+                  <span style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
                     backgroundColor: systemConfig?.circuitBreakerActive ? '#ff3366' : 'hsl(var(--danger))',
                     boxShadow: systemConfig?.circuitBreakerActive ? '0 0 8px #ff3366' : 'none',
                     display: 'inline-block',
@@ -276,9 +215,9 @@ export function ComplianceTab({
                 </button>
               </div>
             </div>
-            
+
             <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', textAlign: 'center', marginTop: '0.5rem', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem' }}>
-              🔑 Hardware security modules (HSM) verified.
+              Gateway authorization remains required for every action.
             </div>
           </div>
 
@@ -288,44 +227,44 @@ export function ComplianceTab({
               <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
                 IBP Autonomous Token Budget
               </h4>
-              
+
               {ibpState ? (
                 <div className="budget-gauge-wrapper">
                   <div className="budget-stats">
                     <span style={{ color: 'hsl(var(--text-secondary))' }}>Sprint Limit:</span>
-                    <strong style={{ color: '#fff' }}>{(ibpState.tokenBudget || 80000).toLocaleString()}</strong>
+                    <strong style={{ color: 'hsl(var(--text-primary))' }}>{tokenBudget === null ? 'Not reported' : tokenBudget.toLocaleString()}</strong>
                   </div>
-                  
+
                   <div className="budget-stats" style={{ marginTop: '-0.3rem' }}>
                     <span style={{ color: 'hsl(var(--text-secondary))' }}>Consumed:</span>
-                    <strong style={{ 
-                      color: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
-                             (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66'
+                    <strong style={{
+                      color: (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.9 ? 'hsl(var(--danger))' :
+                             (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.7 ? 'hsl(var(--warning))' : 'hsl(var(--success))'
                     }}>
-                      {(ibpState.tokensConsumed || 0).toLocaleString()} ({(Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))).toFixed(1)}%)
+                      {(ibpState.tokensConsumed || 0).toLocaleString()} ({(Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (Math.max(1, tokenBudget ?? 0))) * 100))).toFixed(1)}%)
                     </strong>
                   </div>
 
                   <div className="budget-progress-track" style={{ marginTop: '0.5rem' }}>
-                    <div 
+                    <div
                       className="budget-progress-bar"
-                      style={{ 
-                        width: `${Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (ibpState.tokenBudget || 80000)) * 100))}%`,
-                        backgroundColor: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? 'hsl(var(--danger))' :
-                                         (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? 'hsl(var(--warning))' : '#00ff66',
-                        boxShadow: (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.9 ? '0 0 10px hsla(var(--danger), 0.5)' :
-                                   (ibpState.tokensConsumed || 0) >= (ibpState.tokenBudget || 80000) * 0.7 ? '0 0 10px hsla(var(--warning), 0.5)' : '0 0 10px rgba(0, 255, 102, 0.5)'
+                      style={{
+                        width: `${Math.min(100, Math.max(0, ((ibpState.tokensConsumed || 0) / (Math.max(1, tokenBudget ?? 0))) * 100))}%`,
+                        backgroundColor: (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.9 ? 'hsl(var(--danger))' :
+                                         (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.7 ? 'hsl(var(--warning))' : 'hsl(var(--success))',
+                        boxShadow: (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.9 ? '0 0 10px hsla(var(--danger), 0.5)' :
+                                   (ibpState.tokensConsumed || 0) >= (Math.max(1, tokenBudget ?? 0)) * 0.7 ? '0 0 10px hsla(var(--warning), 0.5)' : '0 0 10px rgba(0, 255, 102, 0.5)'
                       }}
                     ></div>
                   </div>
-                  
+
                   <div style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))', marginTop: '0.5rem', fontStyle: 'italic', lineHeight: 1.4 }}>
-                    "{ibpState.currentSprintGoal || 'Standardize Antigravity Project Compliance'}"
+                    "{ibpState.currentSprintGoal || 'No sprint goal reported'}"
                   </div>
                 </div>
               ) : (
                 <div style={{ color: 'hsl(var(--text-muted))', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
-                  Loading budget specifications...
+                  No budget state loaded.
                 </div>
               )}
 
@@ -335,40 +274,41 @@ export function ComplianceTab({
                   <h5 style={{ margin: 0, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
                     Memory Drift Heatmap (CLAUDE.md)
                   </h5>
-                  <button 
-                    className="playbook-run-button" 
+                  <button
+                    className="playbook-run-button"
                     onClick={handleDriftSync}
-                    disabled={driftSyncLoading}
+                    disabled={driftSyncLoading || !canOperate}
+                    title={!canOperate ? 'Developer or administrator role required' : undefined}
                     style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
                   >
                     {driftSyncLoading ? 'Syncing...' : 'Sync Memory'}
                   </button>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                   {driftState && driftState.length > 0 ? (
                     driftState.map((d: any, idx: number) => {
                       const isStale = d.status === 'stale';
                       const bg = isStale ? 'rgba(255, 107, 107, 0.08)' : 'rgba(0, 255, 102, 0.08)';
                       const border = isStale ? '1px solid rgba(255, 107, 107, 0.2)' : '1px solid rgba(0, 255, 102, 0.2)';
-                      const color = isStale ? 'hsl(var(--danger))' : '#00ff66';
+                      const color = isStale ? 'hsl(var(--danger))' : 'hsl(var(--success))';
                       return (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: bg, border, borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color, boxShadow: `0 0 6px ${color}` }}></span>
-                          <span style={{ color: '#fff', fontWeight: 600 }}>{d.name.split('/').pop()}</span>
+                          <span style={{ color: 'hsl(var(--text-primary))', fontWeight: 600 }}>{d.name.split('/').pop()}</span>
                           {isStale ? <span style={{ color, fontSize: '0.66rem' }}>({d.driftSeconds}s)</span> : null}
                         </div>
                       );
                     })
                   ) : (
-                    <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>Scanning codebase drift...</span>
+                    <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>No drift records loaded.</span>
                   )}
                 </div>
               </div>
             </div>
 
             <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
-              📊 Sync rate: Real-time via agent memory
+              State refreshes from the gateway.
             </div>
           </div>
 
@@ -388,13 +328,13 @@ export function ComplianceTab({
                   </div>
                   {findings.length === 0 ? (
                     <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
-                      Secure
+                      <span className="gate-light-dot" style={{ background: 'hsl(var(--success))', boxShadow: '0 0 8px #00ff66' }}></span>
+                      No loaded findings
                     </div>
                   ) : (
                     <div className="gate-node-light gate-light-locked animate-pulse-red">
                       <span className="gate-light-dot" style={{ background: 'hsl(var(--danger))', boxShadow: '0 0 8px hsl(var(--danger))' }}></span>
-                      Violated
+                      Findings present
                     </div>
                   )}
                 </div>
@@ -407,7 +347,7 @@ export function ComplianceTab({
                   </div>
                   {ibpState?.crossFunctionalSynthesized ? (
                     <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                      <span className="gate-light-dot" style={{ background: 'hsl(var(--success))', boxShadow: '0 0 8px #00ff66' }}></span>
                       Aligned
                     </div>
                   ) : (
@@ -426,7 +366,7 @@ export function ComplianceTab({
                   </div>
                   {plmState?.feedbackAligned ? (
                     <div className="gate-node-light gate-light-active">
-                      <span className="gate-light-dot" style={{ background: '#00ff66', boxShadow: '0 0 8px #00ff66' }}></span>
+                      <span className="gate-light-dot" style={{ background: 'hsl(var(--success))', boxShadow: '0 0 8px #00ff66' }}></span>
                       Released
                     </div>
                   ) : (
@@ -440,7 +380,7 @@ export function ComplianceTab({
             </div>
 
             <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center' }}>
-              🔒 Cryptographically enforced by Cedar Daemon
+              Authorization decisions are enforced by the gateway.
             </div>
           </div>
 
@@ -449,15 +389,15 @@ export function ComplianceTab({
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
                 <h4 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))' }}>
-                  OpenTelemetry Latency & Rate Tracing
+                  Gateway metrics
                 </h4>
-                {prometheusMetrics.autoThrottleActive === 1 && (
-                  <span 
-                    className="status-badge status-failed animate-pulse" 
-                    style={{ 
-                      fontSize: '0.68rem', 
-                      borderColor: 'rgba(255, 107, 107, 0.4)', 
-                      background: 'rgba(255, 107, 107, 0.15)', 
+                {metricsAvailable && prometheusMetrics.autoThrottleActive === 1 && (
+                  <span
+                    className="status-badge status-failed animate-pulse"
+                    style={{
+                      fontSize: '0.68rem',
+                      borderColor: 'rgba(255, 107, 107, 0.4)',
+                      background: 'rgba(255, 107, 107, 0.15)',
                       color: 'hsl(var(--danger))',
                       fontWeight: 'bold',
                       boxShadow: '0 0 10px rgba(255, 107, 107, 0.25)'
@@ -467,29 +407,29 @@ export function ComplianceTab({
                   </span>
                 )}
               </div>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {/* Metric 1: Authorization Latency */}
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
+                <div style={{ background: 'hsl(var(--bg-secondary))', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <span style={{ fontSize: '0.74rem', color: 'hsl(var(--text-secondary))' }}>Auth Decision Latency:</span>
-                    <strong style={{ fontSize: '0.85rem', color: '#00ff66', fontFamily: 'monospace' }}>
-                      {systemConfig?.circuitBreakerActive ? 'N/A (Suspended)' : `${(prometheusMetrics.latencyHistory.reduce((a: number, b: number) => a + b, 0) / prometheusMetrics.latencyHistory.length).toFixed(1)} ms (Avg)`}
+                    <span style={{ fontSize: '0.74rem', color: 'hsl(var(--text-secondary))' }}>Database latency:</span>
+                    <strong style={{ fontSize: '0.85rem', color: 'hsl(var(--success))', fontFamily: 'monospace' }}>
+                      {latencySamples.length === 0 ? 'Unavailable' : `${(latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length).toFixed(1)} ms (avg)`}
                     </strong>
                   </div>
                   {/* Real-time Sparkline / Latency Bar */}
                   <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '24px', padding: '2px 0' }}>
-                    {prometheusMetrics.latencyHistory.map((val: number, i: number) => {
+                    {latencySamples.map((val: number, i: number) => {
                       // If system is suspended, display flat dead line
-                      const heightPercent = systemConfig?.circuitBreakerActive ? 10 : (val / 30) * 100;
+                      const heightPercent = Math.min(100, (val / 30) * 100);
                       const barColor = systemConfig?.circuitBreakerActive ? 'hsl(var(--danger))' : val > 20 ? 'hsl(var(--warning))' : 'hsl(var(--primary))';
                       return (
-                        <div 
-                          key={i} 
-                          style={{ 
-                            flexGrow: 1, 
-                            height: `${heightPercent}%`, 
-                            backgroundColor: barColor, 
+                        <div
+                          key={i}
+                          style={{
+                            flexGrow: 1,
+                            height: `${heightPercent}%`,
+                            backgroundColor: barColor,
                             borderRadius: '1px',
                             opacity: 0.85,
                             transition: 'all 0.3s ease'
@@ -501,24 +441,24 @@ export function ComplianceTab({
                 </div>
 
                 {/* Metric 2: Transaction Rates */}
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
+                <div style={{ background: 'hsl(var(--bg-secondary))', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <span style={{ fontSize: '0.74rem', color: 'hsl(var(--text-secondary))' }}>Tool-Call Request Rate:</span>
-                    <strong style={{ fontSize: '0.85rem', color: '#fff', fontFamily: 'monospace' }}>
-                      {systemConfig?.circuitBreakerActive ? '0.0 req/sec' : `${prometheusMetrics.requestRateHistory[prometheusMetrics.requestRateHistory.length - 1].toFixed(1)} req/sec`}
+                    <span style={{ fontSize: '0.74rem', color: 'hsl(var(--text-secondary))' }}>Evaluations per refresh:</span>
+                    <strong style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))', fontFamily: 'monospace' }}>
+                      {rateSamples.length === 0 ? 'Unavailable' : `${rateSamples[rateSamples.length - 1].toFixed(0)} evaluations`}
                     </strong>
                   </div>
                   {/* Real-time Sparkline / Request rate Bar */}
                   <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '24px', padding: '2px 0' }}>
-                    {prometheusMetrics.requestRateHistory.map((val: number, i: number) => {
-                      const heightPercent = systemConfig?.circuitBreakerActive ? 0 : (val / 8) * 100;
+                    {rateSamples.map((val: number, i: number) => {
+                      const heightPercent = Math.min(100, (val / 8) * 100);
                       return (
-                        <div 
-                          key={i} 
-                          style={{ 
-                            flexGrow: 1, 
-                            height: `${heightPercent}%`, 
-                            backgroundColor: '#00ff66', 
+                        <div
+                          key={i}
+                          style={{
+                            flexGrow: 1,
+                            height: `${heightPercent}%`,
+                            backgroundColor: 'hsl(var(--success))',
                             borderRadius: '1px',
                             opacity: 0.8,
                             transition: 'all 0.3s ease'
@@ -532,22 +472,22 @@ export function ComplianceTab({
             </div>
 
             <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '0.5rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-              <span className={systemConfig?.circuitBreakerActive ? '' : 'animate-pulse-green'} style={{ width: '6px', height: '6px', borderRadius: '50%', background: systemConfig?.circuitBreakerActive ? 'hsl(var(--danger))' : '#00ff66', display: 'inline-block' }}></span>
-              <span>{systemConfig?.circuitBreakerActive ? 'OTel Tracer: INACTIVE' : 'OTel Tracer: ACTIVE (Prometheus Exporter)'}</span>
+              <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', background: metricsAvailable ? 'hsl(var(--success))' : 'hsl(var(--text-muted))', display: 'inline-block' }}></span>
+              <span>{metricsAvailable ? 'Latest Prometheus sample loaded' : 'Metrics unavailable — an authenticated exporter is required'}</span>
             </div>
           </div>
 
           {/* Card 5: Multi-Agent Consensus Approvals (Consensus Gating) */}
-          <div className="secops-card animate-fade-in" style={{ gridColumn: 'span 3', borderStyle: 'solid', borderColor: 'rgba(26, 188, 156, 0.3)', background: 'rgba(26, 188, 156, 0.02)', marginTop: '1rem' }}>
+          <div className="secops-card animate-fade-in" style={{ gridColumn: '1 / -1', borderStyle: 'solid', borderColor: 'rgba(26, 188, 156, 0.3)', background: 'rgba(26, 188, 156, 0.02)', marginTop: '1rem' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.65rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-primary))', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--success))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px rgba(0,255,102,0.35))' }}>
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                   </svg>
                   Multi-Agent Consensus Attestation Center
                 </h4>
-                <span className="status-badge status-completed" style={{ fontSize: '0.72rem', borderColor: 'rgba(0,255,102,0.3)', background: 'rgba(0,255,102,0.06)', color: '#00ff66' }}>
+                <span className="status-badge status-completed" style={{ fontSize: '0.72rem', borderColor: 'rgba(0,255,102,0.3)', background: 'rgba(0,255,102,0.06)', color: 'hsl(var(--success))' }}>
                   Consensus Gating Active
                 </span>
               </div>
@@ -559,18 +499,18 @@ export function ComplianceTab({
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {consensusRequests.map((req, idx) => (
-                    <div 
-                      key={idx} 
-                      style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
-                        flexWrap: 'wrap', 
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
                         gap: '1rem',
-                        background: 'rgba(0,0,0,0.25)', 
-                        padding: '0.85rem 1.1rem', 
-                        borderRadius: '8px', 
-                        border: '1px solid hsl(var(--border-color))' 
+                        background: 'hsl(var(--bg-secondary))',
+                        padding: '0.85rem 1.1rem',
+                        borderRadius: '8px',
+                        border: '1px solid hsl(var(--border-color))'
                       }}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1, minWidth: '280px' }}>
@@ -582,27 +522,27 @@ export function ComplianceTab({
                             Initiator: <strong>{req.initiator}</strong> ({req.role.toUpperCase()})
                           </span>
                           {req.adminOverridden && (
-                            <span className="status-badge status-completed animate-pulse-green" style={{ fontSize: '0.66rem', padding: '0.1rem 0.4rem', background: 'rgba(0, 255, 102, 0.08)', borderColor: 'rgba(0, 255, 102, 0.25)', color: '#00ff66' }}>
+                            <span className="status-badge status-completed animate-pulse-green" style={{ fontSize: '0.66rem', padding: '0.1rem 0.4rem', background: 'rgba(0, 255, 102, 0.08)', borderColor: 'rgba(0, 255, 102, 0.25)', color: 'hsl(var(--success))' }}>
                               🔓 Admin Overridden
                             </span>
                           )}
                         </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#00ff66', background: 'rgba(0,0,0,0.3)', padding: '0.35rem 0.65rem', borderRadius: '4px', marginTop: '0.2rem' }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: 'hsl(var(--success))', background: 'hsl(var(--bg-secondary))', padding: '0.35rem 0.65rem', borderRadius: '4px', marginTop: '0.2rem' }}>
                           $ {req.command}
                         </div>
-                        
+
                         {/* Approved Tooltip/Execution helper */}
                         {req.status === 'approved' && (
-                          <div style={{ 
-                            fontSize: '0.74rem', 
-                            color: '#00ff66', 
-                            background: 'rgba(0, 255, 102, 0.05)', 
-                            border: '1px solid rgba(0, 255, 102, 0.15)', 
-                            padding: '0.4rem 0.75rem', 
-                            borderRadius: '4px', 
-                            marginTop: '0.35rem', 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                          <div style={{
+                            fontSize: '0.74rem',
+                            color: 'hsl(var(--success))',
+                            background: 'rgba(0, 255, 102, 0.05)',
+                            border: '1px solid rgba(0, 255, 102, 0.15)',
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '4px',
+                            marginTop: '0.35rem',
+                            display: 'flex',
+                            alignItems: 'center',
                             gap: '0.4rem',
                             lineHeight: '1.3'
                           }}>
@@ -612,15 +552,15 @@ export function ComplianceTab({
                             </span>
                           </div>
                         )}
-                        
+
                         {/* AI Safety Rating display */}
                         {req.aiRating && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginTop: '0.3rem' }}>
-                            <span 
-                              className="status-badge" 
-                              style={{ 
-                                fontSize: '0.65rem', 
-                                padding: '0.08rem 0.4rem', 
+                            <span
+                              className="status-badge"
+                              style={{
+                                fontSize: '0.65rem',
+                                padding: '0.08rem 0.4rem',
                                 fontWeight: '600',
                                 borderColor: req.aiRating === 'dangerous' ? 'rgba(255, 107, 107, 0.3)' : req.aiRating === 'suspicious' ? 'rgba(241, 196, 15, 0.3)' : 'rgba(46, 204, 113, 0.3)',
                                 background: req.aiRating === 'dangerous' ? 'rgba(255, 107, 107, 0.08)' : req.aiRating === 'suspicious' ? 'rgba(241, 196, 15, 0.08)' : 'rgba(46, 204, 113, 0.08)',
@@ -643,10 +583,10 @@ export function ComplianceTab({
                         {/* Approval Progress indicator */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
                           <span style={{ fontSize: '0.74rem', color: 'hsl(var(--text-secondary))' }}>
-                            Approvals: <strong style={{ color: req.approvals.length >= req.requiredVotes ? '#00ff66' : 'hsl(var(--warning))' }}>{req.approvals.length} / {req.requiredVotes}</strong>
+                            Approvals: <strong style={{ color: req.approvals.length >= req.requiredVotes ? 'hsl(var(--success))' : 'hsl(var(--warning))' }}>{req.approvals.length} / {req.requiredVotes}</strong>
                           </span>
                           <span style={{ fontSize: '0.68rem', color: 'hsl(var(--text-muted))' }}>
-                            Status: <strong style={{ textTransform: 'uppercase', color: req.status === 'approved' ? '#00ff66' : 'hsl(var(--warning))' }}>{req.status}</strong>
+                            Status: <strong style={{ textTransform: 'uppercase', color: req.status === 'approved' ? 'hsl(var(--success))' : 'hsl(var(--warning))' }}>{req.status}</strong>
                           </span>
                         </div>
 
@@ -672,10 +612,10 @@ export function ComplianceTab({
                                     Admin Override
                                   </button>
                                 ) : (
-                                  <span 
-                                    className="status-badge status-failed animate-pulse-red" 
-                                    style={{ 
-                                      fontSize: '0.72rem', 
+                                  <span
+                                    className="status-badge status-failed animate-pulse-red"
+                                    style={{
+                                      fontSize: '0.72rem',
                                       padding: '0.4rem 0.8rem',
                                       background: 'rgba(255, 107, 107, 0.08)',
                                       borderColor: 'rgba(255, 107, 107, 0.3)',
@@ -691,12 +631,12 @@ export function ComplianceTab({
                               <button
                                 className="btn btn-secondary animate-glow-green-border"
                                 onClick={() => handleApproveConsensus(req.id)}
-                                disabled={consensusLoading || req.approvals.some((app: any) => app.approver === authEmail) || authEmail === req.initiator}
-                                style={{ 
-                                  padding: '0.45rem 1rem', 
+                                disabled={consensusLoading || authRole === 'unauthenticated' || req.approvals.some((app: any) => app.approver === authEmail) || authEmail === req.initiator}
+                                style={{
+                                  padding: '0.45rem 1rem',
                                   fontSize: '0.78rem',
                                   background: req.approvals.some((app: any) => app.approver === authEmail) ? 'rgba(255,255,255,0.03)' : authEmail === req.initiator ? 'rgba(255,107,107,0.03)' : 'rgba(0,255,102,0.08)',
-                                  color: req.approvals.some((app: any) => app.approver === authEmail) ? 'hsl(var(--text-muted))' : authEmail === req.initiator ? 'hsl(var(--danger))' : '#00ff66',
+                                  color: req.approvals.some((app: any) => app.approver === authEmail) ? 'hsl(var(--text-muted))' : authEmail === req.initiator ? 'hsl(var(--danger))' : 'hsl(var(--success))',
                                   borderColor: req.approvals.some((app: any) => app.approver === authEmail) ? 'transparent' : authEmail === req.initiator ? 'rgba(255,107,107,0.2)' : 'rgba(0,255,102,0.3)',
                                   cursor: (req.approvals.some((app: any) => app.approver === authEmail) || authEmail === req.initiator) ? 'not-allowed' : 'pointer'
                                 }}
@@ -719,25 +659,25 @@ export function ComplianceTab({
                 const devSigned = activeReq ? activeReq.approvals.some((a: any) => a.role === 'developer') : false;
                 const auditorSigned = activeReq ? activeReq.approvals.some((a: any) => a.role === 'auditor') : false;
                 return (
-                  <div style={{ marginTop: '1.2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px', border: '1px solid rgba(0, 255, 102, 0.1)' }}>
+                  <div style={{ marginTop: '1.2rem', padding: '1rem', background: 'hsl(var(--bg-secondary))', borderRadius: '10px', border: '1px solid rgba(0, 255, 102, 0.1)' }}>
                     <h5 style={{ margin: '0 0 0.8rem 0', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-secondary))', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      🔐 Consensus Threshold Key Aggregation Graph
+                      Latest request: reported role approvals
                     </h5>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', position: 'relative', minHeight: '120px' }}>
                       {/* Key Nodes */}
                       {[
-                        { label: 'K₁ Admin', color: adminSigned ? '#00ff66' : 'rgba(255,255,255,0.2)', icon: '🛡️' },
-                        { label: 'K₂ Developer', color: devSigned ? '#00ff66' : 'rgba(255,255,255,0.2)', icon: '⚙️' },
-                        { label: 'K₃ Auditor', color: auditorSigned ? '#00ff66' : 'rgba(255,255,255,0.2)', icon: '🔍' }
+                        { label: 'Admin', color: adminSigned ? 'hsl(var(--success))' : 'hsl(var(--text-muted))', icon: '🛡️' },
+                        { label: 'Developer', color: devSigned ? 'hsl(var(--success))' : 'hsl(var(--text-muted))', icon: '⚙️' },
+                        { label: 'Auditor', color: auditorSigned ? 'hsl(var(--success))' : 'hsl(var(--text-muted))', icon: '🔍' }
                       ].map((key, idx) => (
                         <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem', flex: 1 }}>
                           <div style={{
                             width: '52px', height: '52px', borderRadius: '50%',
-                            background: `radial-gradient(circle at 30% 30%, ${key.color}22, ${key.color}08)`,
-                            border: `2px solid ${key.color}55`,
+                            background: 'hsl(var(--bg-primary))',
+                            border: `2px solid ${key.color}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '1.3rem',
-                            boxShadow: `0 0 12px ${key.color}20`,
+                            boxShadow: 'none',
                             animation: 'pulse 2s ease-in-out infinite',
                             animationDelay: `${idx * 0.3}s`
                           }}>
@@ -745,7 +685,7 @@ export function ComplianceTab({
                           </div>
                           <span style={{ fontSize: '0.68rem', color: key.color, fontFamily: 'monospace', fontWeight: 600 }}>{key.label}</span>
                           {/* Connection line to aggregate node */}
-                          <div style={{ width: '2px', height: '20px', background: `linear-gradient(to bottom, ${key.color}55, ${key.color}15)` }} />
+                          <div style={{ width: '2px', height: '20px', background: key.color }} />
                         </div>
                       ))}
                     </div>
@@ -759,11 +699,11 @@ export function ComplianceTab({
                       }}>
                         <span style={{ fontSize: '1.1rem' }}>🔗</span>
                         <div>
-                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#00ff66', fontFamily: 'monospace' }}>
-                            σ_agg = Σ(K₁ · K₂ · K₃)
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--success))', fontFamily: 'monospace' }}>
+                            {activeReq ? `${activeReq.approvals.length} of ${activeReq.requiredVotes} required approvals` : 'No request loaded'}
                           </div>
                           <div style={{ fontSize: '0.64rem', color: 'hsl(var(--text-muted))' }}>
-                            Consensus Schnorr Aggregated Threshold Signature
+                            Role-bound signatures are validated by the gateway.
                           </div>
                         </div>
                       </div>
@@ -775,10 +715,10 @@ export function ComplianceTab({
           </div>
 
           {/* Card 6: Interactive Admin Override & Budget Negotiation Console */}
-          <div className="secops-card animate-fade-in" style={{ gridColumn: 'span 3', borderStyle: 'solid', borderColor: 'rgba(243, 156, 18, 0.3)', background: 'rgba(243, 156, 18, 0.02)', marginTop: '1rem' }}>
+          <div className="secops-card animate-fade-in" style={{ gridColumn: '1 / -1', borderStyle: 'solid', borderColor: 'rgba(243, 156, 18, 0.3)', background: 'rgba(243, 156, 18, 0.02)', marginTop: '1rem' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.65rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-primary))', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--warning))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px rgba(243,156,18,0.35))' }}>
                     <circle cx="12" cy="12" r="10"/>
                     <line x1="12" y1="8" x2="12" y2="12"/>
@@ -794,16 +734,16 @@ export function ComplianceTab({
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
                 {/* Left Side: Submit Request */}
                 <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#fff', fontWeight: 600 }}>Request Budget Extension</h5>
+                  <h5 style={{ margin: 0, fontSize: '0.8rem', color: 'hsl(var(--text-primary))', fontWeight: 600 }}>Request Budget Extension</h5>
                   <p style={{ margin: 0, fontSize: '0.74rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.4' }}>
                     If your autonomous agent runs out of tokens under zero-trust enforce mode, submit a request below.
                   </p>
                   <form onSubmit={handleCreateBudgetExtensionRequest} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                     <div className="form-group">
                       <label htmlFor="budgetAmt">Requested Token Increase Amount</label>
-                      <input 
-                        type="number" 
-                        id="budgetAmt" 
+                      <input
+                        type="number"
+                        id="budgetAmt"
                         className="form-control"
                         value={budgetExtensionAmount}
                         onChange={e => setBudgetExtensionAmount(Number(e.target.value))}
@@ -813,8 +753,8 @@ export function ComplianceTab({
                     </div>
                     <div className="form-group">
                       <label htmlFor="budgetReason">Business & Technical Rationale</label>
-                      <textarea 
-                        id="budgetReason" 
+                      <textarea
+                        id="budgetReason"
                         className="form-control"
                         placeholder="e.g. Need additional budget to run compliance validation cycle for requirement REQ-300"
                         value={budgetExtensionReason}
@@ -823,10 +763,10 @@ export function ComplianceTab({
                         style={{ height: '3.5rem', resize: 'none' }}
                       />
                     </div>
-                    <button 
-                      type="submit" 
-                      className="btn btn-secondary" 
-                      disabled={budgetExtensionLoading || authRole === 'unauthenticated'}
+                    <button
+                      type="submit"
+                      className="btn btn-secondary"
+                      disabled={budgetExtensionLoading || !canOperate}
                       style={{ width: '100%', borderColor: 'rgba(243, 156, 18, 0.4)', color: 'hsl(var(--warning))', background: 'rgba(243, 156, 18, 0.05)', cursor: 'pointer' }}
                     >
                       {budgetExtensionLoading ? 'Submitting request...' : 'Submit Extension Request'}
@@ -836,7 +776,7 @@ export function ComplianceTab({
 
                 {/* Right Side: Active requests queue */}
                 <div style={{ flex: '2 2 400px', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#fff', fontWeight: 600 }}>Active Extension Requests Queue</h5>
+                  <h5 style={{ margin: 0, fontSize: '0.8rem', color: 'hsl(var(--text-primary))', fontWeight: 600 }}>Active Extension Requests Queue</h5>
                   <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                     {budgetExtensions.length === 0 ? (
                       <div style={{ padding: '2rem', textAlign: 'center', color: 'hsl(var(--text-muted))', fontSize: '0.78rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
@@ -844,22 +784,22 @@ export function ComplianceTab({
                       </div>
                     ) : (
                       budgetExtensions.map((req) => (
-                        <div 
-                          key={req.id} 
-                          style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
+                        <div
+                          key={req.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
                             gap: '1rem',
-                            background: 'rgba(0,0,0,0.2)', 
-                            padding: '0.65rem 0.85rem', 
-                            borderRadius: '6px', 
-                            border: '1px solid hsl(var(--border-color))' 
+                            background: 'hsl(var(--bg-secondary))',
+                            padding: '0.65rem 0.85rem',
+                            borderRadius: '6px',
+                            border: '1px solid hsl(var(--border-color))'
                           }}
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#fff' }}>+{req.requestedAmount.toLocaleString()} Tokens</span>
+                              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'hsl(var(--text-primary))' }}>+{req.requestedAmount.toLocaleString()} Tokens</span>
                               <span style={{ fontSize: '0.62rem', color: 'hsl(var(--text-muted))' }}>by {req.applicant}</span>
                               <span className={`status-badge status-${req.status}`} style={{ fontSize: '0.6rem', padding: '0.05rem 0.35rem' }}>{req.status}</span>
                             </div>
@@ -872,15 +812,15 @@ export function ComplianceTab({
                           </div>
                           {req.status === 'pending' && (
                             <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              <button 
+                              <button
                                 className="btn btn-secondary"
                                 onClick={() => handleApproveBudgetExtension(req.id)}
                                 disabled={authRole !== 'admin'}
-                                style={{ 
-                                  padding: '0.3rem 0.6rem', 
-                                  fontSize: '0.7rem', 
-                                  background: authRole === 'admin' ? 'rgba(0,255,102,0.08)' : 'transparent', 
-                                  color: authRole === 'admin' ? '#00ff66' : 'hsl(var(--text-muted))',
+                                style={{
+                                  padding: '0.3rem 0.6rem',
+                                  fontSize: '0.7rem',
+                                  background: authRole === 'admin' ? 'rgba(0,255,102,0.08)' : 'transparent',
+                                  color: authRole === 'admin' ? 'hsl(var(--success))' : 'hsl(var(--text-muted))',
                                   borderColor: authRole === 'admin' ? 'rgba(0,255,102,0.3)' : 'transparent',
                                   cursor: authRole === 'admin' ? 'pointer' : 'not-allowed'
                                 }}
@@ -888,14 +828,14 @@ export function ComplianceTab({
                               >
                                 Approve
                               </button>
-                              <button 
+                              <button
                                 className="btn btn-secondary"
                                 onClick={() => handleRejectBudgetExtension(req.id)}
                                 disabled={authRole !== 'admin'}
-                                style={{ 
-                                  padding: '0.3rem 0.6rem', 
-                                  fontSize: '0.7rem', 
-                                  background: authRole === 'admin' ? 'rgba(255,107,107,0.08)' : 'transparent', 
+                                style={{
+                                  padding: '0.3rem 0.6rem',
+                                  fontSize: '0.7rem',
+                                  background: authRole === 'admin' ? 'rgba(255,107,107,0.08)' : 'transparent',
                                   color: authRole === 'admin' ? 'hsl(var(--danger))' : 'hsl(var(--text-muted))',
                                   borderColor: authRole === 'admin' ? 'rgba(255,107,107,0.3)' : 'transparent',
                                   cursor: authRole === 'admin' ? 'pointer' : 'not-allowed'
@@ -917,7 +857,7 @@ export function ComplianceTab({
 
           {/* Full-width Card 4: Interactive Diff-Apply Patch review terminal */}
           {pendingPatch && pendingPatch.exists ? (
-            <div className="secops-card animate-fade-in" style={{ gridColumn: 'span 3', borderStyle: 'dashed', borderColor: 'hsla(var(--primary), 0.5)', background: 'rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div className="secops-card animate-fade-in" style={{ gridColumn: '1 / -1', borderStyle: 'dashed', borderColor: 'hsla(var(--primary), 0.5)', background: 'hsl(var(--bg-secondary))', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                   <span style={{ color: 'hsl(var(--warning))', display: 'flex', alignItems: 'center' }}>
@@ -927,15 +867,16 @@ export function ComplianceTab({
                       <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
                   </span>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#fff' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--text-primary))' }}>
                     Attestation Required: Ephemeral Sandbox Pending Diff Patch
                   </h4>
                 </div>
-                
-                <button 
-                  className="btn btn-primary" 
-                  onClick={handleApplyPatch} 
-                  disabled={patchApplyLoading}
+
+                <button
+                  className="btn btn-primary"
+                  onClick={handleApplyPatch}
+                  disabled={patchApplyLoading || authRole !== 'admin'}
+                  title={authRole !== 'admin' ? 'Administrator role required' : undefined}
                   style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsla(var(--primary), 0.7) 100%)', padding: '0.45rem 1rem', fontSize: '0.8rem', marginLeft: 'auto' }}
                 >
                   {patchApplyLoading ? (
@@ -957,7 +898,7 @@ export function ComplianceTab({
                 {pendingPatch.patch.split('\n').map((line: string, idx: number) => {
                   const isAddition = line.startsWith('+') && !line.startsWith('+++');
                   const isDeletion = line.startsWith('-') && !line.startsWith('---');
-                  const color = isAddition ? '#00ff66' : isDeletion ? 'hsl(var(--danger))' : '#c9d1d9';
+                  const color = isAddition ? 'hsl(var(--success))' : isDeletion ? 'hsl(var(--danger))' : '#c9d1d9';
                   const bg = isAddition ? 'rgba(0, 255, 102, 0.08)' : isDeletion ? 'rgba(255, 107, 107, 0.08)' : 'transparent';
                   return (
                     <div key={idx} style={{ color, backgroundColor: bg, fontFamily: 'monospace', fontSize: '0.76rem', padding: '0.1rem 0.4rem', whiteSpace: 'pre-wrap' }}>
@@ -983,7 +924,7 @@ export function ComplianceTab({
                 </svg>
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: 'hsl(var(--text-primary))' }}>
                   PLM Adaptive Governance Panel
                 </h3>
                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
@@ -1014,7 +955,7 @@ export function ComplianceTab({
                 )
               ) : (
                 <div className="plm-shield shield-inactive">
-                  <span>CONNECTING GATEWAY</span>
+                  <span>NO STATE LOADED</span>
                 </div>
               )}
             </div>
@@ -1060,8 +1001,8 @@ export function ComplianceTab({
                 <div className="form-row" style={{ gap: '0.8rem', marginBottom: '0.8rem' }}>
                   <div className="form-group" style={{ flex: 1 }}>
                     <label htmlFor="fbRole">Role Source</label>
-                    <select 
-                      id="fbRole" 
+                    <select
+                      id="fbRole"
                       className="form-control"
                       value={feedbackRole}
                       onChange={e => setFeedbackRole(e.target.value)}
@@ -1074,8 +1015,8 @@ export function ComplianceTab({
                   </div>
                   <div className="form-group" style={{ flex: 1 }}>
                     <label htmlFor="fbSeverity">Severity Level</label>
-                    <select 
-                      id="fbSeverity" 
+                    <select
+                      id="fbSeverity"
                       className="form-control"
                       value={feedbackSeverity}
                       onChange={e => setFeedbackSeverity(e.target.value as any)}
@@ -1089,10 +1030,10 @@ export function ComplianceTab({
 
                 <div className="form-group" style={{ marginBottom: '0.8rem' }}>
                   <label htmlFor="fbComment">Directives & Performance Comments</label>
-                  <input 
-                    type="text" 
-                    id="fbComment" 
-                    className="form-control" 
+                  <input
+                    type="text"
+                    id="fbComment"
+                    className="form-control"
                     placeholder="e.g. Optimize prisma queries due to memory overhead"
                     value={feedbackComment}
                     onChange={e => setFeedbackComment(e.target.value)}
@@ -1100,7 +1041,7 @@ export function ComplianceTab({
                   />
                 </div>
 
-                <button type="submit" className="btn btn-secondary" style={{ width: '100%' }} disabled={feedbackLoading || authRole === 'unauthenticated'}>
+                <button type="submit" className="btn btn-secondary" style={{ width: '100%' }} disabled={feedbackLoading || !canOperate}>
                   {feedbackLoading ? 'Logging Directives...' : 'Submit Feedback to Secure Gateway'}
                 </button>
               </form>
@@ -1114,20 +1055,20 @@ export function ComplianceTab({
               <form onSubmit={handleAlignFeedback}>
                 <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                   <label>Requirement ID Target</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    value={plmState?.activeRequirementId || 'REQ-101'} 
-                    disabled 
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={plmState?.activeRequirementId || 'REQ-101'}
+                    disabled
                     style={{ opacity: 0.6 }}
                   />
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '0.8rem' }}>
                   <label htmlFor="alignJust">Alignment Justification & Options Selection</label>
-                  <textarea 
-                    id="alignJust" 
-                    className="form-control" 
+                  <textarea
+                    id="alignJust"
+                    className="form-control"
                     placeholder="e.g. Aligned Option A (relational normalization) to minimize query latency..."
                     value={alignJustification}
                     onChange={e => setAlignJustification(e.target.value)}
@@ -1136,7 +1077,7 @@ export function ComplianceTab({
                   />
                 </div>
 
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={alignLoading || authRole === 'unauthenticated'}>
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={alignLoading || !canOperate}>
                   {alignLoading ? 'Aligning Gate...' : 'Release Gate / Confirm Alignment'}
                 </button>
               </form>
@@ -1174,9 +1115,9 @@ export function ComplianceTab({
                       <span>Step: <strong>{f.step}</strong></span>
                     </div>
                     <p style={{ color: 'hsl(var(--text-secondary))', lineHeight: '1.4' }}>
-                      <strong style={{ color: '#fff' }}>Impact:</strong> {f.impact}
+                      <strong style={{ color: 'hsl(var(--text-primary))' }}>Impact:</strong> {f.impact}
                     </p>
-                    
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <span style={{ fontWeight: '700', color: 'hsl(var(--text-secondary))', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Vulnerable Pattern:</span>
                       <pre className="finding-evidence">{f.evidence}</pre>
@@ -1194,9 +1135,9 @@ export function ComplianceTab({
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                     <path d="m9 11 2 2 4-4"/>
                   </svg>
-                  <p style={{ color: 'hsl(var(--success))', fontWeight: '700' }}>✓ Pipeline Fully Secure</p>
+                  <p style={{ color: 'hsl(var(--success))', fontWeight: '700' }}>No findings in the current view</p>
                   <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', marginTop: '0.4rem' }}>
-                    No workflow vulnerabilities detected or access unauthorized.
+                    This view does not establish that a scan completed or that the pipeline is secure.
                   </p>
                 </div>
               )}
