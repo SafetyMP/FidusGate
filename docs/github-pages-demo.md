@@ -20,9 +20,9 @@ The demo uses synthetic decisions and deterministic scenario rules. A scenario r
 
 ## Publication
 
-The [Pages workflow](../.github/workflows/pages.yml) builds and deploys from `codex/fidusgate-redesign`. It leaves `main` and the gateway deployment untouched. Relevant source pushes trigger publication; `workflow_dispatch` can be used when GitHub exposes the workflow for manual runs. GitHub normally lists manual dispatch only after the workflow is present on the default branch, so the initial publication uses the push trigger.
+The [Pages workflow](../.github/workflows/pages.yml) builds and deploys from `main`. Relevant source pushes to `main` trigger publication. To redeploy manually, run `workflow_dispatch` with `main` selected. The build job rejects other refs, including manual runs from feature branches. Only the static demo artifact is published by this workflow.
 
-The repository's **Settings → Pages → Build and deployment → Source** must be **GitHub Actions**. The `github-pages` environment must allow deployments from `codex/fidusgate-redesign`; preserve any required reviewer policy. The workflow does not automatically enable Pages or alter environment protection rules.
+The repository's **Settings → Pages → Build and deployment → Source** must be **GitHub Actions**. The `github-pages` environment must allow deployments from `main`; preserve any required reviewer policy. Remove the former `codex/fidusgate-redesign` deployment-branch allowance after the first successful main deployment so the historical branch workflow cannot replace the main build. The workflow does not automatically enable Pages or alter environment protection rules.
 
 Expected project URL: [FidusGate demo](https://safetymp.github.io/FidusGate/). This is the intended URL, not evidence of a successful deployment. Confirm the run's deployment URL and check the live site before reporting publication complete.
 

@@ -2,7 +2,7 @@ name: GitHub Pages demo
 
 on:
   push:
-    branches: [codex/fidusgate-redesign]
+    branches: [main]
     paths:
       - apps/admin-dashboard/**
       - packages/core-types/**
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/codex/fidusgate-redesign'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
