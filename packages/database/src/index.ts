@@ -102,6 +102,9 @@ export interface FilesystemDriftEntry {
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const RECEIPTS_FILE = path.join(DATA_DIR, 'receipts.json');
+// MCP and HTTP construct separate database instances in the same process.
+// Retain provenance for the file this process created, consumed once by the gateway.
+let pendingReceiptSeed: { dev: number; ino: number } | null = null;
 const FINDINGS_FILE = path.join(DATA_DIR, 'findings.json');
 const COMMAND_LOGS_FILE = path.join(DATA_DIR, 'command-logs.json');
 const DRIFTS_FILE = path.join(DATA_DIR, 'drifts.json');
@@ -302,60 +305,6 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
   }
 ];
 
-const INITIAL_RECEIPTS: AuditReceipt[] = [
-  {
-    payload: {
-      type: 'protectmcp:decision',
-      tool_name: 'read_file',
-      decision: 'allow',
-      policy_digest: 'sha256:8f413a9de010',
-      issued_at: new Date(Date.now() - 3600000).toISOString(),
-      issuer_id: 'sb:issuer:de073ae64e43',
-      reason: 'Tier 1 low-risk file read auto-approved',
-      claimed_issuer_tier: 1
-    },
-    signature: {
-      alg: 'EdDSA',
-      kid: 'sb:issuer:de073ae64e43',
-      sig: 'df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83'
-    }
-  },
-  {
-    payload: {
-      type: 'protectmcp:decision',
-      tool_name: 'write_file',
-      decision: 'allow',
-      policy_digest: 'sha256:8f413a9de010',
-      issued_at: new Date(Date.now() - 1800000).toISOString(),
-      issuer_id: 'sb:issuer:de073ae64e43',
-      reason: 'Tier 2 file modification in approved src/ directory allowed',
-      claimed_issuer_tier: 2
-    },
-    signature: {
-      alg: 'EdDSA',
-      kid: 'sb:issuer:de073ae64e43',
-      sig: 'ab0721da8eefc89de2212bb456c071d0eef823ac89fd4321cde08fa110fc3a7d'
-    }
-  },
-  {
-    payload: {
-      type: 'protectmcp:decision',
-      tool_name: 'execute_command',
-      decision: 'deny',
-      policy_digest: 'sha256:8f413a9de010',
-      issued_at: new Date(Date.now() - 900000).toISOString(),
-      issuer_id: 'sb:issuer:de073ae64e43',
-      reason: 'Tier 3 command execution blocked: skill-creator requires explicit manual verification',
-      claimed_issuer_tier: 3
-    },
-    signature: {
-      alg: 'EdDSA',
-      kid: 'sb:issuer:de073ae64e43',
-      sig: '8839deff02c1abef23c10fc39de42b89f81d11ce0d2b93cfde09ab82eefcaefd'
-    }
-  }
-];
-
 export class FidusGateDatabase {
   private prisma: PrismaClient | null = null;
   private usePostgres = false;
@@ -408,26 +357,33 @@ export class FidusGateDatabase {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    const copyTemplateOrWriteDefault = (filePath: string, defaultContent: any) => {
+    const copyTemplateOrWriteDefault = (filePath: string, defaultContent: any, useTemplate = true): fs.Stats | false => {
       // Use O_CREAT|O_EXCL ('wx') so the seed write is atomic and races with
       // another process/thread trying to seed the same file cannot clobber it
       // (CodeQL js/file-system-race).
       const filename = path.basename(filePath);
       const templatePath = path.join(DATA_DIR, 'templates', filename);
-      const payload = fs.existsSync(templatePath)
+      const payload = useTemplate && fs.existsSync(templatePath)
         ? (() => { try { return fs.readFileSync(templatePath); } catch { return null; } })()
         : null;
       const contents = payload ?? Buffer.from(JSON.stringify(defaultContent, null, 2), 'utf-8');
       try {
-        fs.writeFileSync(filePath, contents, { flag: 'wx' });
+        const descriptor = fs.openSync(filePath, 'wx');
+        try {
+          fs.writeFileSync(descriptor, contents);
+          return fs.fstatSync(descriptor);
+        } finally {
+          fs.closeSync(descriptor);
+        }
       } catch (err: any) {
-        if (err && err.code === 'EEXIST') return;
+        if (err && err.code === 'EEXIST') return false;
         throw err;
       }
     };
     
     copyTemplateOrWriteDefault(TX_FILE, INITIAL_TRANSACTIONS);
-    copyTemplateOrWriteDefault(RECEIPTS_FILE, INITIAL_RECEIPTS);
+    const createdReceiptFile = copyTemplateOrWriteDefault(RECEIPTS_FILE, [], false);
+    if (createdReceiptFile) pendingReceiptSeed = { dev: createdReceiptFile.dev, ino: createdReceiptFile.ino };
     copyTemplateOrWriteDefault(FINDINGS_FILE, []);
     copyTemplateOrWriteDefault(COMMAND_LOGS_FILE, []);
     copyTemplateOrWriteDefault(DRIFTS_FILE, []);
@@ -511,14 +467,68 @@ export class FidusGateDatabase {
   // ==========================================
   // Signed Receipts Management
   // ==========================================
+  private assertDevelopmentReceiptStore(): void {
+    assertJsonFallbackAllowed();
+    if (this.usePostgres || process.env.DATABASE_URL) {
+      throw new Error('Development receipt seeding is disabled for PostgreSQL.');
+    }
+  }
+
+  public initializeDevelopmentReceipts(createReceipts: () => AuditReceipt[]): void {
+    this.assertDevelopmentReceiptStore();
+    if (!pendingReceiptSeed) return;
+    const lockPath = `${RECEIPTS_FILE}.lock`;
+    acquireLock(lockPath);
+    try {
+      const descriptor = fs.openSync(RECEIPTS_FILE, 'r');
+      let current: unknown;
+      try {
+        const identity = fs.fstatSync(descriptor);
+        if (identity.dev !== pendingReceiptSeed.dev || identity.ino !== pendingReceiptSeed.ino) {
+          pendingReceiptSeed = null;
+          return;
+        }
+        current = JSON.parse(fs.readFileSync(descriptor, 'utf8'));
+      } finally {
+        fs.closeSync(descriptor);
+      }
+      // Never populate a pre-existing empty ledger or overwrite a concurrent append.
+      if (Array.isArray(current) && current.length === 0) writeJsonAtomic(RECEIPTS_FILE, createReceipts());
+      pendingReceiptSeed = null;
+    } finally {
+      releaseLock(lockPath);
+    }
+  }
+
+  public repairLegacyDevelopmentReceipts(
+    matchesLegacySeed: (value: unknown) => boolean,
+    createReceipts: () => AuditReceipt[],
+  ): string {
+    this.assertDevelopmentReceiptStore();
+    const lockPath = `${RECEIPTS_FILE}.lock`;
+    acquireLock(lockPath);
+    try {
+      const original = fs.readFileSync(RECEIPTS_FILE);
+      if (!matchesLegacySeed(JSON.parse(original.toString('utf8')))) {
+        throw new Error('Receipt log is not the exact legacy seed; no records were changed.');
+      }
+      const receipts = createReceipts();
+      const backup = `${RECEIPTS_FILE}.legacy-seed-${crypto.randomUUID()}.bak`;
+      fs.writeFileSync(backup, original, { flag: 'wx', mode: 0o600 });
+      writeJsonAtomic(RECEIPTS_FILE, receipts);
+      return backup;
+    } finally {
+      releaseLock(lockPath);
+    }
+  }
+
   private async getAuditReceiptsJson(): Promise<AuditReceipt[]> {
     assertJsonFallbackAllowed();
-    try {
-      const data = await fs.promises.readFile(RECEIPTS_FILE, 'utf-8');
-      return JSON.parse(data);
-    } catch (e) {
-      return INITIAL_RECEIPTS;
-    }
+    // Corrupt or missing evidence must surface as an error, never an empty/seeded log.
+    const data = await fs.promises.readFile(RECEIPTS_FILE, 'utf8');
+    const receipts: unknown = JSON.parse(data);
+    if (!Array.isArray(receipts)) throw new Error('Receipt log must be an array.');
+    return receipts;
   }
 
   public async getAuditReceipts(): Promise<AuditReceipt[]> {
@@ -1493,7 +1503,8 @@ export class FidusGateDatabase {
     }
   }
 
-  public async clearDatabase(): Promise<void> {
+  public async clearDatabase(developmentReceipts: AuditReceipt[] = []): Promise<void> {
+    if (developmentReceipts.length) this.assertDevelopmentReceiptStore();
     if (this.usePostgres && this.prisma) {
       try {
         await this.prisma.$transaction([
@@ -1515,7 +1526,7 @@ export class FidusGateDatabase {
     
     this.ensureInitialized();
     writeJsonAtomic(TX_FILE, INITIAL_TRANSACTIONS);
-    writeJsonAtomic(RECEIPTS_FILE, INITIAL_RECEIPTS);
+    writeJsonAtomic(RECEIPTS_FILE, developmentReceipts);
     writeJsonAtomic(FINDINGS_FILE, []);
     writeJsonAtomic(COMMAND_LOGS_FILE, []);
     writeJsonAtomic(DRIFTS_FILE, []);

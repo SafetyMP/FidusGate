@@ -30,6 +30,6 @@ The Vite development proxy also reads the gateway's local health and metrics lis
 - Existing static demo tests remain part of the dashboard suite; both connected and Pages builds are checked.
 - Gateway regression tests cover receipt signatures, consensus, production authentication/profile, principal signatures, and circuit-breaker behavior.
 - A localhost-only isolated gateway smoke verifies bootstrap requirements, protected reads, developer/auditor restrictions, and genuine signed versus tampered test receipts. Temporary data and keys stay outside the repository; no sandbox commands or external-provider integrations are invoked.
-- Browser checks cover connected sign-in, receipt verification, policy presets/evaluation, responsive navigation, and honest seeded-record failures. The gateway's seeded receipts may fail verification; the console reports that failure rather than labeling them trusted.
+- Browser checks cover connected sign-in, receipt verification, policy presets/evaluation, responsive navigation, and honest seeded-record failures. Fresh development seeds are signed and chained. Older placeholder seeds require the explicit, backed-up [development seed repair](development-receipt-seeds.md); the console continues to report any genuine verification failure.
 
 The required `scripts/harness/verify.sh` must still run. On the development machine it completes installation/lint but the full test graph stops at the Cedar daemon Docker build because Docker is absent. CI supplies Docker; its results are separate from local verification.

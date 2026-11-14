@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npx prisma generate && tsc",
     "dev": "tsc -w",
-    "test": "npm run build && node --test dist/production-persistence.test.js"
+    "test": "npm run build && node --test dist/production-persistence.test.js dist/development-receipts.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
