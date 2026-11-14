@@ -1,0 +1,67 @@
+name: GitHub Pages demo
+
+on:
+  push:
+    branches: [codex/fidusgate-redesign]
+    paths:
+      - apps/admin-dashboard/**
+      - packages/core-types/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages-demo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/codex/fidusgate-redesign'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out demo source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npx --yes npm@10.9.2 ci
+      - name: Build shared type declarations
+        run: npm run build --workspace packages/core-types
+      - name: Test dashboard behavior
+        run: npm test --workspace apps/admin-dashboard
+      - name: Build browser-only demo
+        env:
+          VITE_FIDUSGATE_DEMO: "true"
+        run: npm run build --workspace apps/admin-dashboard -- --base=/FidusGate/
+      - name: Upload static demo
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: apps/admin-dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Deploy static demo
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

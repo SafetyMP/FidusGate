@@ -4,6 +4,14 @@ Reference Model Context Protocol (MCP) gateway for AI agent tool-call authorizat
 
 Reference MCP gateway plus an admin console where you can inspect an allow or deny and paste an Ed25519 receipt to check it. **Not** a production security product. See [docs/DESIGN-PIVOT.md](docs/DESIGN-PIVOT.md).
 
+## Explore the redesigned console
+
+**[Open the interactive demo](https://safetymp.github.io/FidusGate/)** — no account or local setup required.
+
+Inspect a tool-call decision and its reason, replay an allowed or denied scenario, and check a real Ed25519 signature. The demo uses synthetic records and a public demo key. It runs entirely in the browser; no agent is connected and no tools execute. Signature validity establishes payload integrity, not issuer trust or execution.
+
+The redesigned experience is a separate static build of the existing React/Vite dashboard. The gateway-connected console remains available through the existing `npm run dev` command. See [demo setup and hosting](docs/github-pages-demo.md) and [redesign decisions and validation](docs/REDESIGN.md).
+
 What `npm run dev` runs:
 
 - Admin dashboard on port 3000 and the gateway on port 3001. The Rust Cedar daemon is not started.
