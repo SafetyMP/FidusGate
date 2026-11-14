@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ Implementation Plan: FidusGate Enterprise Upgrades & Security Hardening
 
 This plan outlines the technical design, architectural additions, and implementation details for integrating our four high-value security, operations, and AI developer experience recommendations into FidusGate.

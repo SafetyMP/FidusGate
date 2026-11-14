@@ -1,16 +1,24 @@
 name: Bug report
-description: Report unexpected behavior in the gateway, dashboard, or policy engine.
+description: Report unexpected behavior in the public demo, connected console, gateway, or policy engine.
 title: "[Bug]: "
-labels:
-  - bug
-  - triage
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for improving FidusGate. Use synthetic repro steps only — no production credentials, customer data, or live signing keys.
-
-        For security vulnerabilities, use [SECURITY.md](../../SECURITY.md) instead of this template.
+        Use synthetic reproduction steps and redact credentials, private receipt payloads, and personal data.
+        Report undisclosed vulnerabilities privately through [the security policy](https://github.com/SafetyMP/FidusGate/blob/main/SECURITY.md).
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Where did this happen?
+      options:
+        - Public GitHub Pages demo
+        - Gateway-connected console
+        - Gateway / MCP client
+        - Cedar daemon / policy
+        - Build / CI / documentation
+    validations:
+      required: true
   - type: textarea
     id: summary
     attributes:
@@ -27,10 +35,7 @@ body:
     id: reproduction
     attributes:
       label: How can we reproduce it?
-      placeholder: |
-        1. npm run bootstrap && npm run dev
-        2. …
-        3. …
+      description: Give the smallest synthetic example, including commands or console actions.
     validations:
       required: true
   - type: textarea
@@ -38,11 +43,15 @@ body:
     attributes:
       label: Environment
       placeholder: |
+        Commit / release:
+        Browser and version:
         OS:
-        Node:
-        Branch / SHA:
+        Node / npm (if local):
+        Console workspace (if applicable):
+    validations:
+      required: true
   - type: textarea
     id: extras
     attributes:
-      label: Logs / screenshots
-      render: markdown
+      label: Redacted logs or screenshots
+      description: Preserve the original evidence locally. Never paste bootstrap keys, bearer tokens, or signing secrets.

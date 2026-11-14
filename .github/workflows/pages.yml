@@ -6,6 +6,8 @@ on:
     paths:
       - apps/admin-dashboard/**
       - packages/core-types/**
+      - llms.txt
+      - docs/assets/social-preview.png
       - package.json
       - package-lock.json
       - tsconfig.json

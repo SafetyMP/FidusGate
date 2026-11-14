@@ -22,6 +22,7 @@ COPY packages/crypto-utils/src ./packages/crypto-utils/src
 COPY packages/crypto-utils/tsconfig.json ./packages/crypto-utils/
 
 COPY apps/admin-dashboard/src ./apps/admin-dashboard/src
+COPY apps/admin-dashboard/build ./apps/admin-dashboard/build
 COPY apps/admin-dashboard/tsconfig.json ./apps/admin-dashboard/
 COPY apps/admin-dashboard/vite.config.ts ./apps/admin-dashboard/
 COPY apps/admin-dashboard/index.html ./apps/admin-dashboard/

@@ -1,13 +1,15 @@
 name: Documentation
-description: Questions about setup, architecture, Cedar policy, or contributor workflow.
+description: Ask about setup, receipts, policy behavior, architecture, or contributor workflow.
 title: "[Docs]: "
-labels:
-  - documentation
 body:
+  - type: markdown
+    attributes:
+      value: Use synthetic examples and redact credentials or private data. Undisclosed vulnerabilities belong in private security reporting.
   - type: textarea
     id: question
     attributes:
-      label: What do you need help understanding?
+      label: What is unclear or incorrect?
+      description: Link the document or section and describe the expected clarification.
     validations:
       required: true
   - type: textarea
@@ -15,6 +17,8 @@ body:
     attributes:
       label: What have you already tried?
       placeholder: |
+        Public demo or local console:
+        Commit / release:
         Docs read:
         Commands run:
   - type: dropdown
@@ -22,9 +26,11 @@ body:
     attributes:
       label: Area
       options:
-        - Quick start / local dev
+        - Public demo
+        - Connected console / local setup
+        - Receipt signatures / chain verification
         - Cedar policy / policy.cedar
-        - Admin dashboard
-        - Secure gateway / MCP
+        - Gateway / MCP
         - Docker / CI
+        - Contributor / agent guidance
         - Other

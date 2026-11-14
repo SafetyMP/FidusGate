@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ Walkthrough: FidusGate Upgrades & Security Hardening
 
 This walkthrough details the successful implementation and auditing of FidusGate's four security, operations, and AI developer experience enhancements.

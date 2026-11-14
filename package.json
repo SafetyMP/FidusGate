@@ -27,7 +27,7 @@
     "build": "turbo run build",
     "build:wasm": "node scripts/build-wasm.js",
     "test": "turbo run test",
-    "lint": "biome check apps/admin-dashboard/src/lib apps/admin-dashboard/src/hooks apps/admin-dashboard/src/components apps/admin-dashboard/src/connected apps/admin-dashboard/src/tabs/LedgerTab.tsx apps/secure-gateway/src/routes apps/secure-gateway/src/development-receipts.ts apps/secure-gateway/src/development-receipts.test.ts apps/secure-gateway/src/repair-development-receipts.ts packages/database/src/development-receipts.test.ts apps/secure-gateway/src/middleware packages/core-types/src/index.ts && turbo run lint",
+    "lint": "biome check apps/admin-dashboard/build apps/admin-dashboard/src/discovery.test.ts apps/admin-dashboard/src/lib apps/admin-dashboard/src/hooks apps/admin-dashboard/src/components apps/admin-dashboard/src/connected apps/admin-dashboard/src/tabs/LedgerTab.tsx apps/secure-gateway/src/routes apps/secure-gateway/src/development-receipts.ts apps/secure-gateway/src/development-receipts.test.ts apps/secure-gateway/src/repair-development-receipts.ts packages/database/src/development-receipts.test.ts apps/secure-gateway/src/middleware packages/core-types/src/index.ts && turbo run lint",
     "ci": "bash scripts/ci-verify.sh",
     "bootstrap": "node scripts/build-wasm.js && bash scripts/bootstrap.sh",
     "sandbox": "bash scripts/sandbox-execute.sh",
@@ -49,5 +49,20 @@
     "semantic-release": "^25.0.8",
     "turbo": "^2.10.5",
     "typescript": "^5.9.3"
-  }
+  },
+  "description": "Reference MCP policy gateway and receipt-first console with Cedar authorization and Ed25519-signed receipts.",
+  "homepage": "https://safetymp.github.io/FidusGate/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SafetyMP/FidusGate.git"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "cedar",
+    "ed25519",
+    "authorization",
+    "audit-trail",
+    "ai-agents"
+  ]
 }

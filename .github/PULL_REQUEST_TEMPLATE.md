@@ -1,29 +1,17 @@
-## 📝 Description
+## Problem and change
 
-Please provide a summary of the changes, the objective of the pull request, and any background context:
+Explain the user-visible problem and resulting behavior. Link a related issue when applicable.
 
-*   Fixes #[Issue Number]
+## Verification
 
----
+List commands/checks and outcomes on this commit. State blocked prerequisites or checks not run. For visual changes, include screenshots with synthetic data and identify public demo versus connected console.
 
-## 🔒 SecOps & Compliance Checklist
+## Review checklist
 
-FidusGate requires strict alignment with our repository risk boundaries. Please verify each of the following:
-
-- [ ] **No Secrets Committed:** I have audited this diff line-by-line to ensure no API keys, private tokens, system credentials, or passwords are committed.
-- [ ] **Cedar Policy Compliance:** Any changes to `policy.cedar` have been formally verified against `policy.cedarschema`.
-- [ ] **Containment Safe:** All test scripts and dynamic command executions have been safely wrapped inside ephemeral Docker sandboxes.
-- [ ] **Least Privilege Enforced:** AI tool permissions do not grant raw host-level bash access or unauthenticated packages installation commands.
-
----
-
-## 🧪 Verification & Testing Details
-
-Describe the tests run to verify your changes. Provide commands and sample output where applicable:
-
-### Automated Unit Tests
-*   Commands run: `npm run test`
-*   Test output: [Paste test suite results or attach screenshots]
-
-### Manual Compliance Playbook Verification
-*   How did you verify this change manually? (e.g. "Logged in as developer via the simulator and verified tool write blocks...")
+- [ ] The change fits the receipt-first reference implementation and updates relevant docs.
+- [ ] No credentials, signing secrets, personal/customer data, or live receipt payloads are committed.
+- [ ] Existing fail-closed, role, confirmation, signature, and sandbox controls are preserved.
+- [ ] Relevant tests were run with disposable data; a running console's store was not reset.
+- [ ] Full harness outcome is recorded, including any blocked stage; focused checks are not presented as full verification.
+- [ ] If policy behavior changed, schema validation and relevant allow/deny tests are included (otherwise not applicable).
+- [ ] Demo/simulation results, chain validity, signature validity, issuer trust, and execution claims remain distinct.

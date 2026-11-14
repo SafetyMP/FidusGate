@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "biome check src/lib src/hooks src/components src/connected src/tabs/LedgerTab.tsx"
+    "lint": "biome check build src/discovery.test.ts src/lib src/hooks src/components src/connected src/tabs/LedgerTab.tsx"
   },
   "dependencies": {
     "@fidusgate/core-types": "1.0.0",

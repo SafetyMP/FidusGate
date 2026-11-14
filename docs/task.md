@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ FidusGate Implementation Tasks Tracker (task.md)
 
 This checklists tracks our progress during the execution of FidusGate's Enterprise Hardening & Observability upgrade plan.

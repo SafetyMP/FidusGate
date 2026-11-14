@@ -1,85 +1,50 @@
-# ⚖️ FidusGate Documentation & Playbooks Portal
+# FidusGate documentation
 
-Map of the reference MCP gateway docs. Start at the root README for what `npm run dev` actually runs: the admin console and the gateway. The Cedar daemon is not started. This repository is not a production security product.
+FidusGate is a reference MCP policy gateway and console for understanding tool-call decisions and verifying signed receipts. Start with the [interactive demo](https://safetymp.github.io/FidusGate/) or [local setup](getting-started.md).
 
----
+## Start here
 
-## 🏛️ Main Documentation Map
+| Guide | What it answers |
+| --- | --- |
+| [Getting started](getting-started.md) | How do I install, launch, sign in, and verify a local receipt? |
+| [Product vision](DESIGN-PIVOT.md) | Who is this for, and what does the redesigned experience prioritize? |
+| [Architecture](ARCHITECTURE.md) | Where are the runtime paths, source files, and trust boundaries? |
+| [Roadmap](ROADMAP.md) | What is available, what comes next, and what remains a separate decision? |
+| [Connected console](CONNECTED-CONSOLE-REDESIGN.md) | What can each workspace do, and which controls are preserved? |
+| [Public demo and Pages](github-pages-demo.md) | How does the browser-only demo work and deploy? |
+| [Redesign rationale](REDESIGN.md) | Which interaction and visual decisions shaped the new experience? |
+| [Development receipt seeds](development-receipt-seeds.md) | Why are local examples signed, and how is the exact old seed repaired safely? |
 
-Use the links below to navigate our primary documentation suite:
+## Contribute and operate
 
-| Document Guide | Path | Focus & Target Audience |
-| :--- | :--- | :--- |
-| **Design pivot (September 2026)** | [DESIGN-PIVOT.md](./DESIGN-PIVOT.md) | Receipts + admin console positioning vs Cedar sidecars (OpenFirma and others) |
-| **Factory / site overlay** | [factory-overlay.md](./factory-overlay.md) | Internal harness contract; community agents start at [`AGENTS.md`](../AGENTS.md) |
-| **GitHub storefront (maintainers)** | [community/github-presentation.md](./community/github-presentation.md) | About panel, demo GIF regen, badges, social preview, community-health target |
-| **Branch protection (maintainers)** | [community/github-branch-protection.md](./community/github-branch-protection.md) | Optional required checks on `main` |
-| **Marketing assets index** | [assets/README.md](./assets/README.md) | `demo.gif`, screenshots, social preview source |
-| **FidusGate Monorepo Architecture** | [ARCHITECTURE.md](./ARCHITECTURE.md) | High-level topologies, component details, Dockerized profiles, database setups, and core feature architectures. |
-| **Local CI/CD Pipeline Emulation** | [local-ci-emulation.md](./local-ci-emulation.md) | Offline testing using `act`, secret provisioning, and pipeline prompt injection auditing with `agentic-actions-auditor`. |
-| **Phase 3 Feature Walkthrough** | [walkthrough.md](./walkthrough.md) | Active filesystem drift auto-reconciliation models, Gemini policy co-pilots, and trunk-based semantic versioning releases. |
-| **Phase 4 & 5 Walkthrough** | [walkthrough_v2.md](./walkthrough_v2.md) | Extended verification flows and enterprise simulator features. |
-| **Enterprise Hardening Plan** | [implementation_plan.md](./implementation_plan.md) | Technical blueprint and database schema migrations for structured agent auto-fixes, KMS HSM signing, and WASI sandboxes. |
-| **MCP 2026-07-28 migration** | [mcp-2026-07-28-migration.md](./mcp-2026-07-28-migration.md) | Dual-era stdio/HTTP, Streamable headers, RFC 9728 PRM for operators. |
-| **OWASP MCP Top 10 ADR** | [adr/0001-owasp-mcp-top-10.md](./adr/0001-owasp-mcp-top-10.md) | Control mapping MCP01–MCP10 to Cedar, quarantine, and gateway surfaces. |
+- [Contributing](../CONTRIBUTING.md): setup, scoped checks, and pull requests.
+- [AGENTS.md](../AGENTS.md): agent commands, source navigation, and fail-closed invariants.
+- [llms.txt](../llms.txt): compact linked index for machine-assisted discovery.
+- [Security policy](../SECURITY.md): private vulnerability reporting.
+- [Support](../SUPPORT.md) and [code of conduct](../CODE_OF_CONDUCT.md).
+- [GitHub presentation](community/github-presentation.md): repository metadata, preview assets, and discovery maintenance.
+- [Branch protection](community/github-branch-protection.md): maintainer guidance for required checks.
+- [Visual assets](assets/README.md): current and historical screenshots.
+- [Local CI emulation](local-ci-emulation.md): Docker/`act` tooling and its requirements.
+- [False-green checklist](harness/false-green-checklist.md): distinguish executed checks from unsupported success claims.
 
----
+## Security and design records
 
-## 🛡️ The SME Playbook & Skill Directory
+These records explain boundaries and decisions. Read them alongside current code; a planned integration is not evidence that production behavior is implemented.
 
-FidusGate models security boundaries by mapping available operations to dedicated, domain-scoped playbooks under the `skills/` tree. These files establish context variables parsed by Cedar policies:
+| Record | Subject |
+| --- | --- |
+| [Threat model](adr/0000-threat-model.md) | Objectives and exclusions |
+| [OWASP MCP mapping](adr/0001-owasp-mcp-top-10.md) | Reference control mapping |
+| [Production authentication](adr/0002-production-auth-mcp.md) | Missing OIDC/BFF/JWKS implementation and fail-closed startup |
+| [KMS and PostgreSQL](adr/0003-production-kms-postgres.md) | Provider and persistence boundaries |
+| [Sandbox and supply chain](adr/0004-production-sandbox-supply-chain.md) | Runtime requirements and isolation boundaries |
+| [Console information architecture](adr/0005-admin-console-ia.md) | Earlier console structure; see the connected redesign for current workspaces |
+| [Data and AI honesty](adr/0006-data-ai-honesty.md) | Distinguishing real operations and simulated surfaces |
+| [MCP transport migration](mcp-2026-07-28-migration.md) | Implemented protocol-version handling and transport notes |
 
-### Governance & Security Skills
-* **`cedar-mcp-receipts`** | [SKILL.md](../.github/skills/cedar-mcp-receipts/SKILL.md)  
-  *Authorize MCP tool calls with Cedar and verify Ed25519 receipts (adapted from scopeblind; not a prompt-injection classifier).*
-* **`protect-mcp-governance`** | [SKILL.md](../skills/protect-mcp-governance/SKILL.md)  
-  *Historical copy of the same skill under the older name.*
-* **`agentic-actions-auditor`** | [SKILL.md](../skills/agentic-actions-auditor/SKILL.md)  
-  *Static analysis definitions mapping prompt injection vulnerabilities and hardening workflows.*
-* **`security-sme`** | [SKILL.md](../skills/security-sme/SKILL.md)  
-  *Core security operations covering JWT authentication, SAST pipeline runs, and threat analysis models.*
-* **`devops-compliance`** | [SKILL.md](../skills/devops-compliance/SKILL.md)  
-  *CI/CD security policies, checkout integrity, and runner permission scopes.*
-* **`ibp-governance`** | [SKILL.md](../skills/ibp-governance/SKILL.md)  
-  *Integrated Business Planning rules managing budget parameters and approval votes.*
-* **`plm-governance`** | [SKILL.md](../skills/plm-governance/SKILL.md)  
-  *Product Lifecycle Management regulations protecting API definitions and branch check-ins.*
+## Repository skills and historical material
 
-### Architecture & System Engineering Playbooks
-* **`architecture-sme`** | [SKILL.md](../skills/architecture-sme/SKILL.md)  
-  *System-wide structures, monorepo workspaces, and module boundary checks.*
-* **`backend-sme`** | [SKILL.md](../skills/backend-sme/SKILL.md)  
-  *Express secure gateway configs, microservice handlers, and Prisma persistence operations.*
-* **`frontend-sme`** | [SKILL.md](../skills/frontend-sme/SKILL.md)  
-  *Admin dashboard interfaces, UI rendering, and client receipt validators.*
-* **`devops-sme`** | [SKILL.md](../skills/devops-sme/SKILL.md)  
-  *Local execution sandboxes, Docker volumes, and gVisor isolation controls.*
+The focused [cedar-mcp-receipts skill](../.github/skills/cedar-mcp-receipts/SKILL.md) describes Cedar tool gates and receipt verification. Its adapted source is attributed in the skill. The [code-review skill](../.github/skills/code-review/SKILL.md) and [path-specific instructions](../.github/instructions/) support repository work. Additional [skills](../skills/) are reference playbooks, not evidence of enabled integrations or authority to execute actions.
 
-### Developer Automation & Utilities
-* **`skill-creator`** | [SKILL.md](../skills/skill-creator/SKILL.md)  
-  *Generates new unprivileged playbooks validating schema shapes and structural rules.*
-* **`greenfield-flex-architect`** | [SKILL.md](../skills/greenfield-flex-architect/SKILL.md)  
-  *Scaffolding rules for transitioning projects between blended monoliths andTurborepos.*
-* **`antigravity-skill-orchestrator`** | [SKILL.md](../skills/antigravity-skill-orchestrator/SKILL.md)  
-  *Meta-orchestrator parsing user objectives and routing to specific scoped SME playbooks.*
-* **`orchestrate-batch-refactor`** | [SKILL.md](../skills/orchestrate-batch-refactor/SKILL.md)  
-  *Coordinates complex refactor pipelines across standard monorepo boundaries.*
-* **`devcontainer-setup`** | [SKILL.md](../skills/devcontainer-setup/SKILL.md)  
-  *Spawns standardized Devcontainers with Claude CLI or language environment variables.*
-* **`mise-configurator`** | [SKILL.md](../skills/mise-configurator/SKILL.md)  
-  *Generates and verifies standardized mise setups for team development packages.*
-* **`pm-sme`** | [SKILL.md](../skills/pm-sme/SKILL.md)  
-  *Updates release plans, tasks lists, and schedules within non-code files.*
-* **`qa-sme`** | [SKILL.md](../skills/qa-sme/SKILL.md)  
-  *Validates testing standards and runs integration and unit tests across workspaces.*
-
----
-
-*Manual maintained and verified by the Antigravity Security Engineering Team.*
-
-Community: [CONTRIBUTING.md](../CONTRIBUTING.md) · [SECURITY.md](../SECURITY.md) · [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) · [SUPPORT.md](../SUPPORT.md)
-
-
-## Canonical community files
-
-`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` are at the repository root. This repository does not keep a second copy under `.github/`, because GitHub would show that copy instead of the root file.
+Earlier [Phase 3 walkthrough](walkthrough.md), [Phase 4/5 walkthrough](walkthrough_v2.md), implementation plans ([original](implementation_plan.md), [v2](implementation_plan_v2.md), [v3](implementation_plan_v3.md)), and task lists ([original](task.md), [v2](task_v2.md)) are retained as historical project records. They may describe superseded interfaces, aspirations, or simulations. Use the current guides above for setup and capability claims. The [factory overlay](factory-overlay.md) is historical/internal workflow context, not a prerequisite for community contributions.

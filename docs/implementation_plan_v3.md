@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ Technical Implementation Plan: FidusGate Enterprise Phase 3 Hardening
 
 This plan outlines the technical specifications, component-level changes, and verification plans to execute the final five enterprise-grade enhancements to FidusGate.
