@@ -10,6 +10,7 @@
       "apps/admin-dashboard/src/lib/**",
       "apps/admin-dashboard/src/hooks/**",
       "apps/admin-dashboard/src/components/**",
+      "apps/admin-dashboard/src/connected/**",
       "apps/admin-dashboard/src/tabs/LedgerTab.tsx",
       "apps/secure-gateway/src/routes/**",
       "apps/secure-gateway/src/middleware/**",

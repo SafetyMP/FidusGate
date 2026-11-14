@@ -10,7 +10,7 @@ Reference MCP gateway plus an admin console where you can inspect an allow or de
 
 Inspect a tool-call decision and its reason, replay an allowed or denied scenario, and check a real Ed25519 signature. The demo uses synthetic records and a public demo key. It runs entirely in the browser; no agent is connected and no tools execute. Signature validity establishes payload integrity, not issuer trust or execution.
 
-The redesigned experience is a separate static build of the existing React/Vite dashboard. The gateway-connected console remains available through the existing `npm run dev` command. See [demo setup and hosting](docs/github-pages-demo.md) and [redesign decisions and validation](docs/REDESIGN.md).
+The same receipt-first design is available in the gateway-connected console through `npm run dev`, retaining transactions, governance, forensics, and sandbox workflows. Sign in with the development gateway’s bootstrap key; see [connected console setup and controls](docs/CONNECTED-CONSOLE-REDESIGN.md). The public demo remains a separate static build of the React/Vite dashboard. See [demo setup and hosting](docs/github-pages-demo.md) and [redesign decisions and validation](docs/REDESIGN.md).
 
 What `npm run dev` runs:
 

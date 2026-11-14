@@ -22,8 +22,10 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      '/health': { target: process.env.FIDUSGATE_API_TARGET || 'http://localhost:3001', changeOrigin: true },
+      '/metrics': { target: process.env.FIDUSGATE_METRICS_TARGET || 'http://localhost:3002', changeOrigin: true },
       '/api': {
-        target: 'http://localhost:3001',
+        target: process.env.FIDUSGATE_API_TARGET || 'http://localhost:3001',
         changeOrigin: true,
       },
     },
