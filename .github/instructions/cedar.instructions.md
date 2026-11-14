@@ -2,7 +2,7 @@
 applyTo: "**/*.cedar,**/*.cedarschema"
 ---
 
-# Cedar coding standards (September 2026)
+# Cedar coding standards
 
 - Keep authorization fail-closed. A missing policy, schema mismatch, or unavailable PDP is a deny.
 - Do not introduce a silent fallback from enforce to shadow.

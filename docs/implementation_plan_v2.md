@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ Technical Implementation Plan: FidusGate Enterprise Phase 2 Hardening
 
 This plan outlines the architectural specifications, component additions, and integration strategies to evolve FidusGate into a fully cloud-resilient, hardware-secured, and sub-millisecond sandboxed **AI DevSecOps Governance Platform**.

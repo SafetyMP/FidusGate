@@ -32,12 +32,12 @@ fi
 # 3. Check Docker status for the isolated sandbox
 if command -v docker >/dev/null 2>&1; then
     if docker info >/dev/null 2>&1; then
-        echo "✅ Docker daemon is active. Isolated sandboxed execution is enabled."
+        echo "✅ Docker daemon is reachable. Sandbox images and runtime settings still need validation."
     else
-        echo "⚠️  Docker daemon is not running. Sandbox execution will fall back to safe host shell."
+        echo "⚠️  Docker daemon is not running. The default sandbox requires Docker; bootstrap does not enable a host fallback."
     fi
 else
-    echo "⚠️  Docker is not installed. Sandbox execution will fall back to safe host shell."
+    echo "⚠️  Docker is not installed. The default sandbox requires Docker; bootstrap does not enable a host fallback."
 fi
 
 # 4. Install dependencies via locked npm ci only (Scorecard npmCommand pin)
@@ -60,5 +60,5 @@ if [ -f "$SCRIPTS_DIR/ham-drift-watcher.sh" ]; then
     bash "$SCRIPTS_DIR/ham-drift-watcher.sh"
 fi
 
-echo "🎉 Bootstrapping complete! Your environment is fully configured, secure, and optimized."
+echo "🎉 Bootstrap steps complete. Review prerequisite messages above; this does not establish security or production readiness."
 exit 0

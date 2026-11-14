@@ -1,15 +1,14 @@
 /**
- * Capture README screenshots and demo GIF from the FidusGate admin dashboard.
+ * Capture README screenshots and demo GIF from the browser-only FidusGate demo.
  *
  * Usage:
- *   npm ci && npm run bootstrap
- *   npm run dev
- *   npm run screenshots
+ *   Build and preview the static demo: docs/github-pages-demo.md
+ *   SCREENSHOT_BASE_URL=http://127.0.0.1:4173/FidusGate/ npm run screenshots
  *
  * Rebuild GIF only from existing PNGs (no browser):
  *   npm run screenshots:rebuild-gif
  *
- * Optional: SCREENSHOT_BASE_URL=http://localhost:3000 npm run screenshots
+ * Optional: SCREENSHOT_BASE_URL=http://127.0.0.1:4173/FidusGate/ npm run screenshots
  *
  * CI: set CI=1 to use bundled Chromium instead of system Chrome.
  */
@@ -25,39 +24,15 @@ const { GIFEncoder, quantize, applyPalette } = gifenc;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "..");
 const outDir = path.join(repoRoot, "docs", "assets");
-const baseUrl = process.env.SCREENSHOT_BASE_URL ?? "http://localhost:3000";
+const baseUrl = process.env.SCREENSHOT_BASE_URL ?? "http://127.0.0.1:4173/FidusGate/";
 
 const tabs = [
-  { label: "Transaction Ledger", file: "ledger.png", name: "Transaction Ledger" },
-  {
-    label: "Compliance & Governance",
-    file: "compliance.png",
-    name: "Compliance & Governance",
-  },
-  {
-    label: "Cedar Policy & Simulator",
-    file: "policy-simulator.png",
-    name: "Cedar policy simulator",
-  },
-  {
-    label: "Forensics & Verifier",
-    file: "forensics.png",
-    name: "Forensics & verifier",
-  },
-  {
-    label: "Interactive Sandbox",
-    file: "sandbox.png",
-    name: "Interactive sandbox",
-  },
+  { label: "Decisions", file: "decisions.png", name: "Decisions" },
+  { label: "Policy playground", file: "policy-playground.png", name: "Policy playground" },
+  { label: "Receipt verifier", file: "receipt-verifier.png", name: "Receipt verifier" },
 ];
 
-/** README hero GIF frames (subset of dashboard tabs). */
-const gifFrameFiles = [
-  "ledger.png",
-  "compliance.png",
-  "policy-simulator.png",
-  "sandbox.png",
-];
+const gifFrameFiles = tabs.map(({ file }) => file);
 
 /** Frame duration in milliseconds (gifenc stores delay/10 as GIF centiseconds). */
 const GIF_FRAME_DELAY_MS = 2_000;
@@ -71,18 +46,12 @@ function launchOptions() {
 
 async function waitForDashboard(page) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Transaction Ledger" }).waitFor({
+  await page.getByText("Interactive demo", { exact: true }).waitFor({
     state: "visible",
     timeout: 30_000,
   });
-}
-
-async function signInDemoAdmin(page) {
-  const loginButton = page.getByRole("button", { name: "Login as Administrator" });
-  if (await loginButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await loginButton.click();
-    await page.waitForTimeout(750);
-  }
+  // Refuse connected consoles; no credentials or gateway records belong in public assets.
+  await page.getByRole("button", { name: /^Decisions\b/ }).waitFor();
 }
 
 async function writeDemoGif(frames) {
@@ -120,28 +89,21 @@ async function captureLive() {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
   });
-  await context.addInitScript(() => {
-    localStorage.setItem("fidusgate_seen_tour", "true");
-  });
   const page = await context.newPage();
 
   await waitForDashboard(page);
-  await signInDemoAdmin(page);
-
-  const skipTour = page.getByRole("button", { name: "Skip Tour" });
-  if (await skipTour.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await skipTour.click();
-    await page.waitForTimeout(300);
-  }
-
   const gifFrames = [];
 
   for (const { label, file, name } of tabs) {
-    const tabButton = page.getByRole("tab", { name: label });
-    if (!(await tabButton.evaluate((el) => el.classList.contains("active")))) {
-      await tabButton.click({ force: true });
+    const tabButton = page.getByRole("button", { name: label === "Decisions" ? /^Decisions\b/ : label, exact: label !== "Decisions" });
+    await tabButton.click();
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    if (label === "Receipt verifier") {
+      await page.getByRole("button", { name: "Load selected sample", exact: true }).click();
+      await page.getByRole("button", { name: "Verify signature", exact: true }).click();
+      await page.getByRole("heading", { name: "Signature matches", exact: true }).waitFor();
     }
-    await page.waitForTimeout(900);
+    await page.evaluate(() => document.fonts.ready);
     const buffer = await page.screenshot({ fullPage: false });
     const dest = path.join(outDir, file);
     await writeFile(dest, buffer);

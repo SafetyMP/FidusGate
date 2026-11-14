@@ -1,72 +1,43 @@
-# GitHub presentation playbook
+# Presentation and discovery
 
-Audience: **maintainers**. This page captures the repository's GitHub "storefront" — the About panel, README trust signals, the demo image, and the community-health surface — plus how to keep them fresh. None of this changes the merge bar; it is presentation only.
+FidusGate helps developers and reviewers inspect MCP tool-call decisions, understand policy outcomes, and verify Ed25519 receipts. Keep the GitHub repository, hosted demo, and agent guidance consistent with that scope.
 
-## Repository About panel (GitHub UI)
+## GitHub About panel
 
-Set in **Settings** or the gear icon next to About on the repo home. Keep it to a single sentence so it reads well in search results and the sidebar:
+**Description:** Inspect MCP tool-call decisions, explore Cedar policies, and verify Ed25519 receipts. Open-source reference gateway and console with an interactive demo.
 
-> Signed Ed25519 receipts for MCP tool calls — Cedar authorization plus a runnable admin console (ledger, simulator, verifier). Not a production-hardened security product.
+**Website:** https://safetymp.github.io/FidusGate/
 
-- **Website:** `https://github.com/SafetyMP/FidusGate#demo` (or a future hosted demo URL).
-- **Topics:** `ai-agents`, `agent-security`, `cedar`, `ed25519`, `devsecops`, `reference-architecture`, `open-source`, `typescript`, `react`, `nodejs`, `docker`, `supply-chain-security`. Keep `mcp` only if the gateway is a listed MCP server; otherwise drop it (see [DESIGN-PIVOT.md](../DESIGN-PIVOT.md)).
+**Topics:** `mcp`, `model-context-protocol`, `ai-agents`, `agent-security`, `cedar`, `policy-as-code`, `authorization`, `ed25519`, `digital-signatures`, `audit-trail`, `developer-tools`, `typescript`, `react`, `reference-implementation`.
 
-## README badges
+Use terms that describe implemented functionality. Avoid claims of universal prompt-injection prevention, production certification, or complete agent interception. GitHub [topics](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/classifying-your-repository-with-topics) help people find related repositories; they do not guarantee ranking.
 
-The badge row lives near the top of [`README.md`](../../README.md):
+## Public demo discovery
 
-- **CI** — [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (GitHub Actions badge; hermetic verify + related jobs).
-- **Docker Publish** — [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml) (GHCR images for gateway + dashboard).
-- **Release** — latest GitHub Release via [badgen.net](https://badgen.net) (avoids shields.io CDN outages).
-- **OpenSSF Scorecard** — [`.github/workflows/scorecard.yml`](../../.github/workflows/scorecard.yml) workflow status badge; numeric score and check details live on the [Scorecard viewer](https://scorecard.dev/viewer/?uri=github.com/SafetyMP/FidusGate). Prefer the Actions badge over `api.scorecard.dev/.../badge`, which redirects through shields.io.
-- **License** — Apache 2.0 via badgen.net.
+The [Pages workflow](../../.github/workflows/pages.yml) publishes the browser-only demo from `main`. Its build provides a descriptive title, description, canonical URL, social metadata, structured project information, and a static overview with ordinary links before JavaScript runs. The connected console receives `noindex` metadata and no public-demo canonical. `noindex` is a crawler hint, never an access control.
 
-If a workflow file is renamed, update the matching badge URL and its link target. Prefer GitHub Actions badges for workflow status and badgen (or another non-shields host) for release/license so a single CDN outage cannot blank the row.
+The demo artifact includes a sitemap and an `llms.txt` navigation index sourced from the repository root. Keep the [root index](../../llms.txt) concise and link to canonical documentation. `llms.txt` is supplemental navigation for tools that choose to use it, not a recognized guarantee of agent ingestion or search indexing. `AGENTS.md` describes contribution rules, not instructions to bypass a reader's own authority boundaries.
 
-## Demo image
+GitHub project Pages lives under `/FidusGate/`. A `robots.txt` placed there would not govern the origin; only `https://safetymp.github.io/robots.txt` can do that. This repository does not control that origin-level file. Do not publish a misleading project-level robots file or add synthetic per-tab sitemap URLs for views without routes. Search Console submission requires a verified site owner; no indexing, ranking, or rich-result claim follows from a build.
 
-The README hero references [`docs/assets/demo.gif`](../assets/demo.gif) — a cycling GIF (2s per frame) across the admin dashboard tabs: ledger, compliance, Cedar simulator, and sandbox. All frames use synthetic demo data (no production credentials).
+Reference: Google's [JavaScript SEO guidance](https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics) and [robots.txt scope](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt).
 
-### Regenerating the demo GIF
+## Screenshots and social card
 
-1. `npm ci && npm run bootstrap`
-2. Start the stack: `npm run dev` (gateway on `:3001`, dashboard on `:3000`)
-3. In another terminal: `npm run screenshots` (writes PNGs + `docs/assets/demo.gif`)
+The README shows the redesigned Decisions workspace using synthetic demo records. [Asset provenance](../assets/README.md) distinguishes current captures from retained older screenshots.
 
-Optional: `SCREENSHOT_BASE_URL=http://localhost:3000 npm run screenshots` for a non-default host.
+To capture the static demo locally, first build and preview it using the [Pages guide](../github-pages-demo.md), then run:
 
-Rebuild the GIF from committed PNGs without a browser:
-
-```bash
-npm run screenshots:rebuild-gif
+```sh
+SCREENSHOT_BASE_URL=http://127.0.0.1:4173/FidusGate/ npm run screenshots
 ```
 
-Re-capture when the admin console layout changes materially so the storefront does not drift from the product. The capture script clicks dashboard tabs by accessible name (`Transaction Ledger`, `Compliance & Governance`, etc.).
+The capture script refuses a gateway-connected console. It captures Decisions, Policy playground, and Receipt verifier without signing in or changing gateway data. Browser screenshots require an installed Chrome or, with `CI=1`, Playwright Chromium. `npm run screenshots:rebuild-gif` rebuilds the animation from existing captures.
 
-## Social preview (Open Graph card)
+The 1280×640 [social card source](../assets/social-preview.svg) and [PNG](../assets/social-preview.png) reflect the same product description. The Pages build copies the PNG into its artifact. GitHub's repository social preview is a separate upload under **Settings → General → Social preview**; committing the PNG does not update that setting. A maintainer can upload it following [GitHub's guide](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). No third-party social posting is needed to validate the file.
 
-1. Source asset: [`docs/assets/social-preview.svg`](../assets/social-preview.svg) (1280×640). Keep UTF-8 only (no control characters).
-2. Committed render: [`docs/assets/social-preview.png`](../assets/social-preview.png) (1280×640). Regenerate after SVG edits (e.g. open the SVG in a browser at 1280×640 and export, or use your usual SVG→PNG pipeline).
-3. Upload: **Settings → General → Social preview** on the GitHub repo (GitHub has no API for this field — UI upload required; the committed PNG is not auto-applied).
-4. Verify: paste the repo URL into Slack/LinkedIn and confirm the custom card renders.
+## Keep the repository usable
 
-## Community profile
+Maintain one canonical README, contribution guide, security policy, code of conduct, support guide, and issue/PR templates. Keep badges tied to real workflows and the Apache-2.0 license. Preserve CHANGELOG entries and historical plans as history, not current feature guarantees. GitHub's [repository best practices](https://docs.github.com/en/repositories/creating-and-managing-repositories/best-practices-for-repositories) inform these choices.
 
-Target **100%** on **Insights → Community Standards**: README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue templates, and a PR template. Issue templates live under [`.github/ISSUE_TEMPLATE/`](../../.github/ISSUE_TEMPLATE/). GitHub Discussions is intentionally not enabled; open-ended questions route through the documentation issue template (see [`.github/ISSUE_TEMPLATE/config.yml`](../../.github/ISSUE_TEMPLATE/config.yml)).
-
-### Private vulnerability reporting (required for SECURITY.md)
-
-[`SECURITY.md`](../../SECURITY.md) directs researchers to GitHub Security Advisories. A repo admin must keep this enabled:
-
-1. **Settings → Code security** (or **Security → Code security and analysis**)
-2. Enable **Privately report a security vulnerability**
-3. Confirm `https://github.com/SafetyMP/FidusGate/security/advisories/new` does not 404
-
-Do not list `*@fidusgate.io` addresses until the domain has working public DNS/MX — bounced security mailboxes block responsible disclosure ([#54](https://github.com/SafetyMP/FidusGate/issues/54)).
-
-## Optional, later
-
-- **OpenSSF Best Practices badge** — enroll at [bestpractices.dev](https://www.bestpractices.dev/en) after community files and CI are stable on `main` (complements Scorecard).
-- **CodeQL workflow** — add dedicated SAST workflow if org Advanced Security is enabled.
-
-Related: [github-branch-protection.md](github-branch-protection.md) for optional required checks after Scorecard's first run.
+Before merging, check relative documentation links, both dashboard build modes, discovery artifacts, and applicable CI. After merging, verify the exact deployment commit and public URL before claiming the new metadata is live.

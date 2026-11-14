@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ Walkthrough: FidusGate Phase 2 Hardening & WASI Optimization
 
 This walkthrough details the successful implementation and verification of FidusGate's Phase 2 Enterprise Hardening, WASI sandboxing runtime, and Multi-Agent Consensus Gating capabilities.

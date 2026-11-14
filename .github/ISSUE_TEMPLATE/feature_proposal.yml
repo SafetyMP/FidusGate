@@ -1,30 +1,45 @@
 name: Feature proposal
-description: Suggest a capability for the reference implementation.
+description: Improve the decision, policy, or receipt workflow of the reference implementation.
 title: "[Feature]: "
-labels:
-  - enhancement
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem or use case
-      description: What agent-governance gap does this address?
+      label: User problem or use case
+      description: Who encounters this problem, and at what step in their workflow?
+    validations:
+      required: true
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Intended experience
+      options:
+        - Public demo
+        - Gateway-connected console
+        - Gateway / policy / receipt implementation
+        - Documentation / contributor workflow
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed approach
+      label: Proposed behavior
+      description: Describe the expected outcome and how someone could verify it.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Security and data boundaries
+      description: Note any new permissions, persistence, external connections, or changes to receipt claims.
   - type: checkboxes
     id: scope
     attributes:
       label: Scope check
       options:
-        - label: This fits FidusGate as a reference/demo (not production product scope)
+        - label: This fits FidusGate as a receipt-first reference implementation and preserves existing security controls.
           required: true

@@ -1,7 +1,7 @@
 # ADR 0005: Admin Console Information Architecture and Honest Production UX
 
-**Status:** Proposed for fidusgate-production site delivery  
-**Date:** 2026-07-19  
+**Status:** Historical proposal; console information architecture superseded by the [redesign](../REDESIGN.md) and [connected console](../CONNECTED-CONSOLE-REDESIGN.md). Addressable routes described below are not implemented by the current tab-based console.
+**Date:** 2026-07-19
 **Product:** FidusGate
 
 ## Context

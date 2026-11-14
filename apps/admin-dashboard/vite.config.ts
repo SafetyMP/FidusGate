@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import { discoveryPlugin } from './build/discovery';
 
 export default defineConfig({
   resolve: {
@@ -13,6 +14,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    discoveryPlugin(),
     react({
       babel: {
         plugins: [['babel-plugin-react-compiler', {}]],

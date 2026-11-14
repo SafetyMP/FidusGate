@@ -22,7 +22,7 @@ if ! command -v act >/dev/null 2>&1; then
     echo "❌ Error: 'act' (Local CI Engine) is not installed!"
     echo "   👉 Installation Recommendations:"
     echo "      * macOS (Homebrew):  brew install act"
-    echo "      * Linux:             curl -sSf https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo sh"
+    echo "      * Installation docs: https://nektosact.com/installation/index.html"
     echo "      * Windows (Scoop):   scoop install act"
     exit 1
 fi

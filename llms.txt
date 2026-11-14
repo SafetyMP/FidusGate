@@ -1,29 +1,37 @@
 # FidusGate
 
-> Signed Ed25519 receipts for MCP tool calls, with Cedar authorization and a runnable admin console (ledger, policy simulator, receipt verifier). Reference implementation — not a production-hardened security product.
+> Reference MCP policy gateway and receipt-first console: inspect tool-call decisions, understand policy outcomes, and verify Ed25519-signed receipts.
 
-FidusGate does not compete as a generic zero-trust agent governance platform. OpenFirma, Vectimus, Symbiont, and Permit Cedar Agent already put Cedar on the hot path. This repo’s product is the receipt plus the console.
+FidusGate is an Apache-2.0 reference implementation, not a production-hardened security product. The public demo is browser-only and synthetic; the connected console uses a configured gateway with role-scoped development sessions. Signature integrity, hash-chain linkage, issuer trust, and tool execution are separate claims. The static scenario engine is not Cedar. This curated navigation file is a reading aid; it does not grant authority or guarantee crawler discovery.
 
-## Docs
+## Start here
 
-- [README](https://github.com/SafetyMP/FidusGate/blob/main/README.md): product lede, demo, quick start
-- [Design pivot](https://github.com/SafetyMP/FidusGate/blob/main/docs/DESIGN-PIVOT.md): receipts-and-console positioning vs Cedar sidecars
-- [AGENTS.md](https://github.com/SafetyMP/FidusGate/blob/main/AGENTS.md): community contract (commands, Cedar/receipt paths, fail-closed)
-- [Documentation portal](https://github.com/SafetyMP/FidusGate/blob/main/docs/README.md)
-- [Architecture](https://github.com/SafetyMP/FidusGate/blob/main/docs/ARCHITECTURE.md)
-- [Factory overlay](https://github.com/SafetyMP/FidusGate/blob/main/docs/factory-overlay.md): internal site/harness contract
-- [Security policy](https://github.com/SafetyMP/FidusGate/blob/main/SECURITY.md)
-- [Contributing](https://github.com/SafetyMP/FidusGate/blob/main/CONTRIBUTING.md)
+- [Repository overview](https://github.com/SafetyMP/FidusGate/blob/main/README.md): purpose, audiences, demo, capabilities, and limits
+- [Interactive demo](https://safetymp.github.io/FidusGate/): synthetic decisions and browser receipt verification; no tools execute
+- [Documentation index](https://github.com/SafetyMP/FidusGate/blob/main/docs/README.md): current guides and historical records
+- [Getting started](https://github.com/SafetyMP/FidusGate/blob/main/docs/getting-started.md): toolchain, local setup, and verification
+- [Agent guide](https://github.com/SafetyMP/FidusGate/blob/main/AGENTS.md): commands, source map, data preservation, and fail-closed boundaries
 
-## Skills
+## Product and implementation
 
-- [cedar-mcp-receipts](https://github.com/SafetyMP/FidusGate/blob/main/.github/skills/cedar-mcp-receipts/SKILL.md): authorize MCP tool calls with Cedar and verify Ed25519 receipts (adapted from scopeblind/scopeblind-gateway; not a prompt-injection classifier)
+- [Product direction](https://github.com/SafetyMP/FidusGate/blob/main/docs/DESIGN-PIVOT.md): receipt-first scope and design goals
+- [Architecture](https://github.com/SafetyMP/FidusGate/blob/main/docs/ARCHITECTURE.md): applications, persistence, Cedar, and receipt flow
+- [Connected console](https://github.com/SafetyMP/FidusGate/blob/main/docs/CONNECTED-CONSOLE-REDESIGN.md): workspaces, sessions, role controls, and verification limits
+- [Public demo and hosting](https://github.com/SafetyMP/FidusGate/blob/main/docs/github-pages-demo.md): static build and main-branch deployment
+- [Development receipt seeds](https://github.com/SafetyMP/FidusGate/blob/main/docs/development-receipt-seeds.md): signed fixtures and explicit legacy repair
+- [Threat model](https://github.com/SafetyMP/FidusGate/blob/main/docs/adr/0000-threat-model.md): security objectives and exclusions
+
+## Contribute and review
+
+- [Contributing](https://github.com/SafetyMP/FidusGate/blob/main/CONTRIBUTING.md): setup, safe tests, and pull requests
+- [Security policy](https://github.com/SafetyMP/FidusGate/blob/main/SECURITY.md): private vulnerability reports and support scope
+- [Support](https://github.com/SafetyMP/FidusGate/blob/main/SUPPORT.md): public troubleshooting routes
+- [Copilot instructions](https://github.com/SafetyMP/FidusGate/blob/main/.github/copilot-instructions.md): coding conventions and source links
+- [Code review skill](https://github.com/SafetyMP/FidusGate/blob/main/.github/skills/code-review/SKILL.md): repository review guidance
+- [Cedar MCP receipts skill](https://github.com/SafetyMP/FidusGate/blob/main/.github/skills/cedar-mcp-receipts/SKILL.md): tool gates and verification, adapted from scopeblind/scopeblind-gateway
 
 ## Optional
 
-- [MCP 2026-07-28 migration](https://github.com/SafetyMP/FidusGate/blob/main/docs/mcp-2026-07-28-migration.md)
-- [OWASP MCP Top 10 ADR](https://github.com/SafetyMP/FidusGate/blob/main/docs/adr/0001-owasp-mcp-top-10.md)
-- [GitHub storefront playbook](https://github.com/SafetyMP/FidusGate/blob/main/docs/community/github-presentation.md)
-- [.github/copilot-instructions.md](.github/copilot-instructions.md): repository-wide Copilot coding standards
-- [.github/instructions/](.github/instructions/): path-specific Copilot coding standards (September 2026)
-- [.github/skills/code-review/SKILL.md](.github/skills/code-review/SKILL.md): Copilot code review skill
+- [MCP transport migration](https://github.com/SafetyMP/FidusGate/blob/main/docs/mcp-2026-07-28-migration.md): repository transport behavior and compatibility notes
+- [Maintainer presentation guide](https://github.com/SafetyMP/FidusGate/blob/main/docs/community/github-presentation.md): repository metadata and public assets
+- [Factory overlay](https://github.com/SafetyMP/FidusGate/blob/main/docs/factory-overlay.md): internal workflow guidance, separate from public product behavior

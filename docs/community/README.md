@@ -1,10 +1,10 @@
-# Community & GitHub storefront
+# Maintaining the repository
 
-Maintainer-facing docs for how FidusGate presents on GitHub. These pages do **not** change merge requirements.
+Keep public descriptions, documentation, screenshots, and agent navigation aligned with the current receipt-focused experience.
 
-| Doc | Purpose |
-|-----|---------|
-| [github-presentation.md](github-presentation.md) | About panel, badges, demo GIF, social preview, community-health target |
-| [github-branch-protection.md](github-branch-protection.md) | Optional branch rules and status checks |
+- [Presentation and discovery](github-presentation.md): About panel, demo, search metadata, agent index, social card, and screenshots.
+- [Branch protection and security](github-branch-protection.md): observed settings and how to verify them.
+- [Contributing](../../CONTRIBUTING.md): setup, review, and checks.
+- [Security reporting](../../SECURITY.md): private vulnerability reports.
 
-Human contributors start at root [`CONTRIBUTING.md`](../../CONTRIBUTING.md) and [`SECURITY.md`](../../SECURITY.md).
+These documents describe maintenance practices; they do not grant permission to change access, weaken checks, or publish a release.

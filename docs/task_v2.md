@@ -1,3 +1,5 @@
+> **Historical document.** Retained for implementation provenance. Plans, completion marks, performance figures, and security claims below are not current capability or verification guarantees. Start with the [current product direction](DESIGN-PIVOT.md), [architecture](ARCHITECTURE.md), and [getting started](getting-started.md).
+
 # ⚖️ FidusGate Phase 2 Hardening Tasks Tracker (task_v2.md)
 
 This checklist tracks our progress during the execution of FidusGate's Phase 2 Enterprise Hardening & WASI Optimization plan.

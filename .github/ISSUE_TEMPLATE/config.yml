@@ -5,4 +5,4 @@ contact_links:
     about: Use GitHub private advisory reporting — never post undisclosed vulnerabilities as public issues.
   - name: Documentation / Q&A
     url: https://github.com/SafetyMP/FidusGate/issues/new?template=documentation.yml
-    about: Setup, architecture, Cedar policy, or contributor questions.
+    about: Public demo, connected setup, receipts, Cedar policy, or contributor questions.

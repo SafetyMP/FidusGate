@@ -17,7 +17,9 @@
       "apps/secure-gateway/src/repair-development-receipts.ts",
       "packages/database/src/development-receipts.test.ts",
       "apps/secure-gateway/src/middleware/**",
-      "packages/core-types/src/**/*.ts"
+      "packages/core-types/src/**/*.ts",
+      "apps/admin-dashboard/build/**",
+      "apps/admin-dashboard/src/discovery.test.ts"
     ]
   },
   "formatter": {

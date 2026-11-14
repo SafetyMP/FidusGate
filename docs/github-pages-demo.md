@@ -42,3 +42,7 @@ The repository-wide Definition of Done remains `./scripts/harness/verify.sh`. Th
 ## Hosting references
 
 The workflow follows GitHub's [custom Pages workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages): upload the built artifact, make deployment depend on that build, grant `pages: write` and `id-token: write`, and use a protected deployment environment. See also [configuring a publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).
+
+## Search and agent discovery
+
+Only the public demo build includes its canonical URL, social preview, structured project metadata, static explanatory HTML, `sitemap.xml`, and a copy of the root `llms.txt`. The connected build is marked `noindex, nofollow` and does not include these public-demo assets. These are discoverability hints, not access controls or evidence of indexing. See [presentation and discovery](community/github-presentation.md) for origin-level robots.txt limits and upkeep.

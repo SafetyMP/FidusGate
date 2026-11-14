@@ -2,7 +2,7 @@
 applyTo: "**/*.ts,**/*.tsx"
 ---
 
-# TypeScript coding standards (September 2026)
+# TypeScript coding standards
 
 - Write TypeScript, not new application JavaScript. Leave existing tooling `.js` / `.mjs` / `.cjs` files alone.
 - Place imports at the top of the module. Do not use inline `import()` in function bodies except for a documented circular-dependency or optional-runtime case.
