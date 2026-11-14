@@ -1,4 +1,5 @@
 import express from 'express';
+import { createDevelopmentReceiptSeeds } from './development-receipts';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { routeModel } from './model-router';
@@ -994,6 +995,10 @@ if (process.env.MASTER_PRIVATE_KEY_HEX && process.env.MASTER_PUBLIC_KEY_HEX) {
   }
 }
 PUBLIC_KEY_MAP['sb:issuer:de073ae64e43'] = MASTER_ROOT_KEYS.publicKeyHex;
+
+if (!isProductionRuntime() && !process.env.DATABASE_URL) {
+  db.initializeDevelopmentReceipts(() => createDevelopmentReceiptSeeds(MASTER_ROOT_KEYS));
+}
 
 // ==========================================
 // Consensus Gating: Role-specific Ed25519 attestation keys
@@ -2034,7 +2039,9 @@ function resetChatHistory() {
 // 7. POST /api/reset - Clear database to initial state (Role: admin)
 app.post('/api/reset', requireAuth(['admin']), async (req, res) => {
   try {
-    await db.clearDatabase();
+    const seeds = !isProductionRuntime() && !process.env.DATABASE_URL
+      ? createDevelopmentReceiptSeeds(MASTER_ROOT_KEYS) : [];
+    await db.clearDatabase(seeds);
     ibpTracker.clearTasks(); // Clear IBP compliance states on database reset
     plmTracker.clearTasks(); // Clear PLM compliance states on database reset
     clearExecutionLatencies(); // Clear latency moving average history on database reset
