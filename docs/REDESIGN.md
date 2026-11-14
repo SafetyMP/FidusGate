@@ -12,7 +12,7 @@ Source evidence: `docs/DESIGN-PIVOT.md` defines the receipt-focused product, whi
 - Four named scenarios with recorded outcomes and preserved signed timestamps. Replays are labeled in the log and detail view.
 - Browser-local Ed25519 verification of pre-signed synthetic receipts, including malformed/unsupported input, tampering, and stale asynchronous results.
 - A demo scope explanation accessible on desktop and mobile; no forced tour or login.
-- A GitHub Pages workflow on `codex/fidusgate-redesign`, with a static build flag and repository-relative assets.
+- A GitHub Pages workflow on `main`, with a static build flag and repository-relative assets. Initial preview publication used `codex/fidusgate-redesign` before the redesign was merged.
 
 The static demo and gateway-connected console use separate lazy entry points. The static bundle excludes the old console's API polling and operational controls. No gateway authorization, policy, key-management, or fail-closed behavior changed. This work does not migrate the connected console to the new interaction model.
 
