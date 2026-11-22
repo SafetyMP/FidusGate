@@ -1,6 +1,8 @@
 # GitHub Pages demo
 
-The case opens at a release handoff. Engineering, platform security and the release lead each hold a different record about a disputed change to the permissions file. Open FG-1048 to inspect the ticket copy, original gateway decision, adjacent documentation read and file history. Verify and attach records to change the release lead’s findings and open requests. A separate worksheet compares today’s log search, a standard export and a signed-receipt shadow pilot under illustrative cost assumptions.
+Harbor Dispatch is a fictional scheduling software company. Dispatchers are checking duplicate appointments by hand while the release lead investigates a request to edit the assistant’s permissions. The opening shows how FidusGate checks permission, signs a decision and lets a second reviewer verify a copy.
+
+In FG-1048, try forwarding the claim or comparing it with the archived decision. The comparison performs both signature checks in the browser. Send the decision record or check the file history to see how the next owner and open question change. The handoff includes the records used on that path. “Inspect the source records” offers all four documents and an optional adjacent request. The pilot worksheet compares ordinary logs, a standard export and signed receipts using illustrative costs.
 
 The compact technical guide follows the selected evidence through the request, decision, signature and file history. Check both envelopes in Signature, then attach snapshots and download the comparison in File history. Stage and fixture links are shareable. The case handoff and economics choices persist while navigating the demo. A reload restores the addressed document and clears local checks and attachments back to the starting state.
 
@@ -40,7 +42,7 @@ Only `apps/admin-dashboard/dist` is uploaded. There are no gateway credentials, 
 
 - Open `/FidusGate/` directly and refresh it; JavaScript and stylesheet assets must load under that path.
 - Inspect a denied call and follow the reason and receipt without logging in.
-- Select the received packet in the case. Open its trace, compare it with each fixture and run the checks. Export the selected evidence with snapshots, refresh its direct link and return to the original case.
+- Expand “Inspect the source records” and select the ticket copy. Open its trace, compare it with each fixture and run the checks. Export the selected evidence with snapshots, refresh its direct link and return to the original case.
 - Check narrow and wide layouts and keyboard navigation.
 - Confirm the static demo makes no `/api` requests and sends no receipt input to a server.
 - Check the exact published commit's Actions run and the live URL. A local build does not establish deployment success or user adoption.

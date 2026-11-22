@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReceiptConsole from './ReceiptConsole';
 import { verifyDemoReceipt } from './demo';
@@ -23,85 +23,80 @@ afterEach(() => {
 describe('ReceiptConsole operator journeys', () => {
   it('opens on the release problem and gates the evidence and funding decision', async () => {
     render(<ReceiptConsole />);
-    expect(
-      screen.getByRole('heading', { name: 'Who changed the rules before release?' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Can the customer fix ship today?' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Check signature' })).toBeNull();
     expect(screen.queryByRole('radio')).toBeNull();
     fireEvent.click(screen.getByRole('link', { name: 'Open the change ticket' }));
     expect(
-      await screen.findByRole('heading', { name: 'What can you tell the release lead?' }),
+      await screen.findByRole('heading', { name: 'Can Maya rely on the ticket?' }),
     ).toBeVisible();
     expect(document.activeElement?.id).toBe('case-investigation');
   });
 
-  it('reconciles four sources, revises the recommendation, and exports only attached evidence', async () => {
+  it('lets Maya try the unchecked copy, then resolves the permission question with two real inputs', async () => {
     window.location.hash = '#/case?section=investigation';
     vi.mocked(verifyDemoReceipt)
       .mockResolvedValueOnce({ status: 'invalid', message: 'Ticket mismatch' })
-      .mockResolvedValue({ status: 'valid', message: 'Archive matches' });
+      .mockResolvedValueOnce({ status: 'valid', message: 'Archive matches' })
+      .mockResolvedValueOnce({ status: 'valid', message: 'Documentation receipt matches' });
     render(<ReceiptConsole />);
-    const select = (name: RegExp) => fireEvent.click(screen.getByRole('button', { name }));
-    const attach = () =>
-      fireEvent.click(screen.getByRole('checkbox', { name: 'Attach to the release handoff' }));
-    const handoff = () => within(screen.getByRole('complementary', { name: 'Release handoff' }));
-    select(/Check signature/);
-    expect(await handoff().findByText(/ticket copy fails/)).toBeVisible();
-    fireEvent.click(screen.getByRole('radio', { name: /Close the ticket/ }));
-    expect(screen.getByText(/Reopen the attribution question/)).not.toHaveTextContent('808');
-    select(/Adjacent request/);
-    select(/Check signature/);
-    attach();
-    expect(await handoff().findByText(/separate documentation read/)).toBeVisible();
-    fireEvent.click(screen.getByRole('radio', { name: 'Record the supported findings' }));
-    expect(screen.getByText(/Send this limited finding/)).toBeVisible();
-    select(/Gateway original/);
-    attach();
-    select(/Check signature/);
-    expect(await handoff().findByText(/same signature/)).toBeVisible();
-    fireEvent.click(screen.getByRole('radio', { name: 'Record the supported findings' }));
-    expect(screen.getByText(/Send the verified decision/)).toBeVisible();
-    select(/Release engineer File history/);
-    attach();
-    expect(handoff().getByText(/revisions 807 and 808/)).toBeVisible();
-    fireEvent.click(screen.getByRole('radio', { name: /Close the ticket/ }));
-    expect(screen.getByText(/Reopen the attribution question/)).toBeVisible();
-    const download = () =>
+    const act = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    act('Use the forwarded copy');
+    expect(screen.getByText('Maya still needs confirmation')).toBeVisible();
+    expect(verifyDemoReceipt).not.toHaveBeenCalled();
+    act('Compare with the original');
+    await screen.findByRole('button', { name: 'Send the decision record' });
+    expect(
+      vi.mocked(verifyDemoReceipt).mock.calls.map(([raw]) => JSON.parse(raw).payload.decision),
+    ).toEqual(['allow', 'deny']);
+    act('Send the decision record');
+    const handoff = () =>
       JSON.parse(
         decodeURIComponent(
-          handoff()
-            .getByRole('link', { name: 'Download this handoff' })
+          screen
+            .getByRole('link', { name: 'Download the release handoff' })
             .getAttribute('href')!
             .split(',')[1],
         ),
       );
-    expect(download().evidence).toHaveLength(4);
-    expect(download().openRequests.join(' ')).toContain('writer');
-    attach();
-    expect(download().evidence).toHaveLength(3);
-    expect(handoff().queryByText(/revisions 807 and 808/)).toBeNull();
-    select(/Restart investigation/);
-    expect(download().evidence).toHaveLength(1);
-    expect(download().findings).toEqual([]);
+    expect(handoff().evidence).toHaveLength(2);
+    expect(handoff().openRequests.join(' ')).toContain('file history');
+    act('Also check the file history');
+    expect(screen.getByText('The repository owner’s reply')).toBeVisible();
+    expect(handoff().evidence).toHaveLength(3);
+    expect(handoff().openRequests.join(' ')).toContain('writer');
+    fireEvent.click(screen.getByText('Inspect the source records'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'neighbor' } });
+    act('Check and include adjacent request');
+    await screen.findByRole('button', { name: 'Remove adjacent request from handoff' });
+    expect(handoff().evidence).toHaveLength(4);
+    expect(handoff().findings.join(' ')).toContain('separate documentation read');
+    act('Remove adjacent request from handoff');
+    expect(handoff().evidence).toHaveLength(3);
+    act('Try another path');
+    expect(screen.queryByRole('link', { name: 'Download the release handoff' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Use the forwarded copy' })).toBeEnabled();
   });
 
-  it('keeps the selected ticket and case handoff across the compact technical guide', async () => {
+  it('retains the business handoff across the compact technical guide', async () => {
     window.location.hash = '#/case?section=investigation&packet=received';
     vi.mocked(verifyDemoReceipt)
       .mockResolvedValueOnce({ status: 'invalid', message: 'Ticket mismatch' })
+      .mockResolvedValueOnce({ status: 'valid', message: 'Archive matches' })
       .mockResolvedValueOnce({ status: 'invalid', message: 'Case mismatch' })
       .mockResolvedValueOnce({ status: 'valid', message: 'Fixture matches' });
     render(<ReceiptConsole />);
-    fireEvent.click(screen.getByRole('button', { name: 'Check signature' }));
-    await screen.findByText('Ticket mismatch');
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with the original' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send the decision record' }));
+    fireEvent.click(screen.getByText('Inspect the source records'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'received' } });
     fireEvent.click(screen.getByRole('link', { name: /Trace this evidence/ }));
     await screen.findByRole('table');
     fireEvent.click(screen.getByRole('button', { name: 'Check both signatures' }));
     expect(await screen.findByRole('cell', { name: 'invalid' })).toBeVisible();
-    expect(screen.getByRole('cell', { name: 'valid' })).toBeVisible();
     fireEvent.click(screen.getByRole('link', { name: 'File history' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: /Attach repository snapshots/ }));
-    expect(screen.queryByRole('table')).toBeNull();
     const url = screen
       .getByRole('link', { name: /Download selected evidence/ })
       .getAttribute('href')!;
@@ -110,10 +105,60 @@ describe('ReceiptConsole operator journeys', () => {
     expect(bundle.comparison.check.status).toBe('valid');
     expect(bundle.repositoryEvidence.snapshots).toHaveLength(2);
     fireEvent.click(screen.getByRole('link', { name: /Return to this ticket/ }));
-    await screen.findByRole('heading', { name: 'What can you tell the release lead?' });
-    expect(screen.getByText('Ticket mismatch')).toBeVisible();
+    expect(await screen.findByRole('link', { name: 'Download the release handoff' })).toBeVisible();
   });
 
+  it('keeps the decision open when signature checking is unavailable', async () => {
+    window.location.hash = '#/case?section=investigation';
+    vi.mocked(verifyDemoReceipt).mockResolvedValue({
+      status: 'unsupported',
+      message: 'Unavailable',
+    });
+    render(<ReceiptConsole />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with the original' }));
+    expect(await screen.findByRole('button', { name: 'Retry signature checks' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Check the file history' }));
+    expect(screen.getByText(/Platform security still needs a verified decision/)).toBeVisible();
+  });
+
+  it('preserves file history when a signature check succeeds on retry', async () => {
+    window.location.hash = '#/case?section=investigation';
+    const verify = vi.mocked(verifyDemoReceipt);
+    verify.mockResolvedValue({ status: 'unsupported', message: 'Unavailable' });
+    render(<ReceiptConsole />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with the original' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Check the file history' }));
+    verify
+      .mockResolvedValueOnce({ status: 'invalid', message: 'Mismatch' })
+      .mockResolvedValueOnce({ status: 'valid', message: 'Matches' });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry signature checks' }));
+    await screen.findByText(/Platform security has already answered/);
+    expect(window.location.hash).toContain('doc=history');
+    const encoded = screen
+      .getByRole('link', { name: 'Download the release handoff' })
+      .getAttribute('href')!;
+    expect(JSON.parse(decodeURIComponent(encoded.split(',')[1])).evidence).toHaveLength(3);
+  });
+
+  it('leaves the reader in the guide when an earlier comparison finishes', async () => {
+    window.location.hash = '#/case?section=investigation';
+    let finish!: (result: Awaited<ReturnType<typeof verifyDemoReceipt>>) => void;
+    vi.mocked(verifyDemoReceipt)
+      .mockResolvedValueOnce({ status: 'invalid', message: 'Mismatch' })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+    render(<ReceiptConsole />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with the original' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Technical guide' }));
+    await screen.findByRole('heading', { name: 'Trace the disputed write.' });
+    await act(async () => finish({ status: 'valid', message: 'Matches' }));
+    expect(screen.getByRole('heading', { name: 'Trace the disputed write.' })).toBeVisible();
+    fireEvent.click(screen.getByRole('link', { name: /Return to this ticket/ }));
+    expect(await screen.findByRole('button', { name: 'Send the decision record' })).toBeVisible();
+  });
   it('restores a shared stage and clears unavailable checks on fixture changes', async () => {
     window.history.replaceState(
       null,
@@ -145,6 +190,7 @@ describe('ReceiptConsole operator journeys', () => {
         '#/case?section=investigation&doc=' + doc + '&packet=received',
       );
       render(<ReceiptConsole />);
+      fireEvent.click(screen.getByText('Inspect the source records'));
       fireEvent.click(screen.getByRole('link', { name: /Trace this evidence/ }));
       await screen.findByRole('heading', { name: 'Trace the disputed write.' });
       expect(window.location.hash).toContain('stage=' + stage);
@@ -158,10 +204,7 @@ describe('ReceiptConsole operator journeys', () => {
         ).toBeVisible();
       }
       fireEvent.click(screen.getByRole('link', { name: /Return to this ticket/ }));
-      expect(await screen.findByRole('button', { name: new RegExp(label) })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
+      expect(await screen.findByRole('combobox')).toHaveDisplayValue(label);
     },
   );
 

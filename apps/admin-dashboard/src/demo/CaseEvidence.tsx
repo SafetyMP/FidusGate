@@ -136,12 +136,16 @@ export function CaseEvidence({
       <p className="study-kicker">Technical guide · {record.id}</p>
       <h1>Trace the disputed write.</h1>
       <p>
+        FidusGate checks an agent’s tool request against the team’s rules and can sign a record of
+        its decision. Release engineering checks the file’s history to see what actually changed.
+      </p>
+      <p>
         Selected evidence · <strong>{selectedLabel}</strong>.{' '}
         {document === 'neighbor'
           ? 'The adjacent archive receipt covers a separate documentation read. Compare it with the FG-1048 reference packet.'
           : document === 'history'
             ? 'These repository snapshots cover the file named in FG-1048. The request and signature panels trace its reference packet.'
-            : 'Follow the same ticket from the requested change to the evidence the platform engineer can use.'}
+            : 'Use the four stages to follow this copy through the review.'}
       </p>
       <nav className="trace-nav" aria-label="Trace stage">
         {stages.map((item) => (
@@ -159,8 +163,9 @@ export function CaseEvidence({
           <>
             <h2>Read the request envelope</h2>
             <p>
-              Request {request.id} · Which details let the analyst find the same request in another
-              system?
+              Model Context Protocol (MCP) is how the agent asks to use a tool. The gateway receives
+              the request and checks permission. Inspect {request.id} to see who asked and which
+              file they named.
             </p>
             <fieldset className="fixture-options">
               <legend>Inspect a field group</legend>
@@ -187,24 +192,23 @@ export function CaseEvidence({
               {identity ? (
                 <>
                   <strong>{request.agentName}</strong> · The case lists{' '}
-                  <code>{request.principal}</code> as the requesting principal. The packet uses{' '}
-                  <code>{requestPayload.issuer_id}</code> as its issuer label. In this fixture the
-                  labels coincide. To identify the signer operationally, match the signing key to a
-                  trusted key inventory.
+                  <code>{request.principal}</code> as the caller. The receipt names{' '}
+                  <code>{requestPayload.issuer_id}</code> as its issuer. The labels happen to match
+                  here. Check the key owner separately before attributing the signature.
                 </>
               ) : (
                 <>
                   <strong>{requestPayload.tool_name}</strong> ·{' '}
                   <code>{String(requestPayload.args?.path)}</code> ·{' '}
-                  <time dateTime={requestPayload.issued_at}>{requestPayload.issued_at}</time>. These
-                  fixture fields narrow the engineer’s history search. Attribution still needs a
-                  record linking this request to a revision.
+                  <time dateTime={requestPayload.issued_at}>{requestPayload.issued_at}</time>. The
+                  file and time help the engineer find nearby revisions. Linking a revision to this
+                  request takes a separate change record.
                 </>
               )}
             </div>
             <p>
-              The connected gateway passes the caller, tool, path and context to Cedar. Its receipt
-              builder records the issuer separately.{' '}
+              In the code, the gateway passes the caller, tool and path to the policy check. It
+              records the receipt issuer separately.{' '}
               <a href={gatewaySource + '#L919-L935'}>Write request check</a> ·{' '}
               <a href={gatewaySource + '#L159-L168'}>Receipt issuance</a>
             </p>
@@ -214,8 +218,9 @@ export function CaseEvidence({
           <>
             <h2>Locate the decision</h2>
             <p>
-              The {record.id} reference packet claims <strong>{left.payload.decision}</strong>.
-              Select an archived request to read its recorded rule and reason.
+              Cedar is the language the team uses to define which tools an agent may use on which
+              files. The {record.id} packet says <strong>{left.payload.decision}</strong>. Compare
+              that claim with a decision from the archive.
             </p>
             <FixtureChoice fixtureId={fixtureId} onFixture={onFixture} />
             <div className="ticket-consequence" aria-live="polite">
@@ -230,10 +235,9 @@ export function CaseEvidence({
                 : 'This is the same request. Check the two signatures before relying on either copy in the change ticket.'}
             </p>
             <p>
-              The browser replays synthetic records. The connected reference policy defines rules
-              for document reads and protected writes.{' '}
-              <a href={source + 'policy.cedar#L33-L85'}>Cedar rules</a> ·{' '}
-              <a href={fixtureSource}>Archive fixtures</a>
+              This browser displays recorded examples. The connected gateway evaluates the rules
+              when it receives a request. <a href={source + 'policy.cedar#L33-L85'}>Cedar rules</a>{' '}
+              · <a href={fixtureSource}>Archive fixtures</a>
             </p>
           </>
         )}
@@ -241,8 +245,9 @@ export function CaseEvidence({
           <>
             <h2>Check the exact payload bytes</h2>
             <p>
-              Check the {record.id} reference packet and the selected archive comparison against the
-              public demo key.
+              A signed receipt lets the release lead check the copy someone forwarded. Ed25519 is
+              the signature method. It uses a public key to check whether the signed decision fields
+              still match. Try it on the two records below.
             </p>
             <FixtureChoice fixtureId={fixtureId} onFixture={onFixture} />
             <div className="case-comparison">
@@ -297,14 +302,18 @@ export function CaseEvidence({
             </div>
             <details>
               <summary>Inspect the two submitted envelopes</summary>
+              <p>
+                The signer and verifier read the same bytes from{' '}
+                <code>JSON.stringify(payload)</code>.
+              </p>
               <h3>{record.id} reference packet</h3>
               <pre>{leftJson}</pre>
               <h3>Comparison fixture</h3>
               <pre>{rightJson}</pre>
             </details>
             <p>
-              Signing and verification both use the bytes of <code>JSON.stringify(payload)</code>.
-              Issuer trust needs a separate key inventory.{' '}
+              Both checks use the public demo key. For a live release, the team must also confirm
+              who owns the signing key.{' '}
               <a href={source + 'packages/crypto-utils/src/index.ts#L109-L125'}>Local signing</a> ·{' '}
               <a href={verifierSource}>Browser verification</a>
             </p>
@@ -314,8 +323,9 @@ export function CaseEvidence({
           <>
             <h2>Compare downstream records</h2>
             <p>
-              The engineer needs to know what happened to <code>{record.resource}</code>. Add its
-              independent history to the decision records.
+              File history records saved versions. Each content ID, or blob ID, identifies one
+              version’s contents. Compare the IDs for <code>{record.resource}</code> to see what the
+              release lead can establish about the file.
             </p>
             <label className="export-history">
               <input
@@ -355,8 +365,8 @@ export function CaseEvidence({
               Download selected evidence and check results
             </a>
             <p>
-              This JSON carries the two packets, their check status, source references and open
-              questions to the next reviewer. <a href={snapshotSource}>Synthetic snapshot source</a>
+              The download gives the next reviewer both decision records, their check results and
+              the questions still open. <a href={snapshotSource}>Synthetic snapshot source</a>
             </p>
           </>
         )}

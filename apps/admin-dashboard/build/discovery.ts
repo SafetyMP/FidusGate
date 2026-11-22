@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 export const DEMO_URL = 'https://safetymp.github.io/FidusGate/';
 export const REPOSITORY_URL = 'https://github.com/SafetyMP/FidusGate';
 const description =
-  'Follow a release team investigating a disputed change to its agent permissions. Verify records and build the FG-1048 handoff in this demo with synthetic data.';
+  'A scheduling fix is on hold. Help a release lead check a forwarded permission claim using the gateway’s signed decision and independent file history in this demo with synthetic data.';
 
 /** Static, source-controlled metadata. No receipt, session, or request data is interpolated. */
 export function discoveryContent(isDemo: boolean): { metadata: string; overview: string } {
@@ -47,21 +47,22 @@ export function discoveryContent(isDemo: boolean): { metadata: string; overview:
     <link rel="canonical" href="${DEMO_URL}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FidusGate" />
-    <meta property="og:title" content="FidusGate — Who changed the rules before release?" />
+    <meta property="og:title" content="FidusGate — Can the customer fix ship today?" />
     <meta property="og:description" content="${description}" />
     <meta property="og:url" content="${DEMO_URL}" />
     <meta property="og:image" content="${DEMO_URL}social-preview.png" />
     <meta property="og:image:width" content="1440" />
     <meta property="og:image:height" content="900" />
-    <meta property="og:image:alt" content="FG-1048 change-review case showing how engineering, platform security and release engineering share a change." />
+    <meta property="og:image:alt" content="FG-1048 change-review case showing the scheduling problem and how FidusGate checks permission, signs a receipt and verifies the copy." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="FidusGate — The disputed policy write" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="${DEMO_URL}social-preview.png" />
-    <meta name="twitter:image:alt" content="FG-1048 change-review case showing how engineering, platform security and release engineering share a change." />
+    <meta name="twitter:image:alt" content="FG-1048 change-review case showing the scheduling problem and how FidusGate checks permission, signs a receipt and verifies the copy." />
     <script type="application/ld+json">${JSON.stringify(structuredData)}</script>`,
     overview: `<main>
-      <h1>Who changed the rules before release?</h1>
+      <h1>Can the customer fix ship today?</h1>
+      <p>Dispatchers are checking duplicate appointments by hand. A fix is ready, but the release lead needs to establish what a coding assistant was allowed to change. Try forwarding the ticket, then compare it with the gateway original and follow the file history.</p>
       <p>FidusGate is an open-source reference Model Context Protocol (MCP) gateway with Cedar authorization, Ed25519-signed receipts, and a receipt-first console.</p>
       <h2>Explore the FG-1048 case</h2>
       <p>The FG-1048 case asks an analyst to investigate a disputed policy write and a platform security lead to choose between existing logs, a standard export and a signed-receipt pilot. Follow the selected packet into the technical evidence to compare signed fixtures. The investigation requires JavaScript.</p>

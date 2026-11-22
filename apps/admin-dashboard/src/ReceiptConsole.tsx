@@ -114,7 +114,7 @@ export default function ReceiptConsole() {
             Business case
           </a>
           <a href={technicalHref} aria-current={route.page === 'technical' ? 'page' : undefined}>
-            Technical evidence
+            Technical guide
           </a>
         </nav>
       </header>
@@ -122,55 +122,81 @@ export default function ReceiptConsole() {
         <div hidden={route.page !== 'case'}>
           <div hidden={Boolean(route.section)}>
             <header className="study-intro">
-              <p className="study-kicker">Release engineering · Change review</p>
-              <h1>Who changed the rules before release?</h1>
+              <p className="study-kicker">Harbor Dispatch · A fictional software release</p>
+              <h1>Can the customer fix ship today?</h1>
               <p>
-                A software team uses a coding agent to help prepare releases. One file sets the
-                permissions for its tools. A change to that file can affect every engineer who
-                relies on those rules.
+                Harbor Dispatch builds scheduling software for field-service crews. A bug is putting
+                some appointments on the dispatch board twice. Until the fix ships, dispatchers have
+                to call crews to confirm which visits to make.
               </p>
             </header>
             <section className="study-body" aria-labelledby="handover">
-              <h2 id="handover">Three teams see different parts of the change</h2>
+              <h2 id="handover">Why the release is on hold</h2>
+              <p className="case-context">
+                Engineers often ask a coding assistant to prepare release notes. Reading project
+                files is routine. Editing the file that sets the assistant’s permissions is a
+                different matter: it could change what tools the assistant can use on the next job.
+              </p>
+              <div className="release-memo">
+                <p className="study-kicker">From Maya, release lead · 14:32 UTC</p>
+                <p>
+                  “The assistant requested an edit to our permissions file while we were preparing
+                  the fix. Engineering forwarded the decision in a ticket. Can we rely on that copy?
+                  And did the file itself change?”
+                </p>
+              </div>
+              <p className="case-context">
+                Maya has the ticket. Platform security keeps the original decision. The repository
+                owner keeps the file history. While those teams piece the story together,
+                dispatchers keep checking appointments by hand.
+              </p>
+              <h2 className="framework-heading">What FidusGate adds to a change review</h2>
               <ol className="request-flow">
                 <li>
-                  <span>Engineering</span>
-                  <strong>Requests work</strong>
+                  <span>At the request</span>
+                  <strong>Check permission</strong>
                   <p>
-                    An engineer gives the agent a task. A change ticket captures the team’s account
-                    of what happened.
+                    The assistant asks to use a tool. FidusGate’s gateway checks the request against
+                    the team’s written rules.
                   </p>
                 </li>
                 <li>
-                  <span>Platform security</span>
-                  <strong>Checks permission</strong>
+                  <span>At the decision</span>
+                  <strong>Sign a receipt</strong>
                   <p>
-                    The gateway evaluates the requested tool and file. Its decision lives in a
-                    separate archive.
+                    The gateway can sign a record of the tool, the decision and its reason. The team
+                    can attach a copy to the ticket.
                   </p>
                 </li>
                 <li>
-                  <span>Release engineering</span>
-                  <strong>Reviews the file</strong>
+                  <span>At the handoff</span>
+                  <strong>Check the copy</strong>
                   <p>
-                    The release lead sees repository revisions and needs to know who can account for
-                    the change.
+                    Maya can verify the copy against the signing key. The repository owner can then
+                    answer the separate question about the file.
                   </p>
                 </li>
               </ol>
               <div className="opening-ticket">
                 <div>
-                  <p className="study-kicker">FG-1048 · Release handoff</p>
-                  <h2>One ticket, two unanswered questions</h2>
+                  <h2>Review Maya’s ticket</h2>
                   <p>
-                    At 14:32 an agent requested a write to the permissions file. The engineer
-                    forwarded a copy of the decision. The release lead needs to know what the
-                    gateway permitted and whether anyone can link that request to a file change.
-                    Holding the release costs engineering time. Closing the ticket too soon could
-                    leave a change to everyone’s permissions unexplained.
+                    Try using the forwarded copy, or compare it with the archive. See what each
+                    choice lets Maya report.
                   </p>
                 </div>
-                <a className="primary-button" href={caseHref}>
+                <a
+                  className="primary-button"
+                  href={href({
+                    ...route,
+                    page: 'case',
+                    section: 'investigation',
+                    document: 'received',
+                    packet: 'received',
+                    fixture: 'FG-1048',
+                    stage: 'signature',
+                  })}
+                >
                   Open the change ticket
                 </a>
               </div>

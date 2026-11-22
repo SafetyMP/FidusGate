@@ -45,7 +45,7 @@ function launchOptions() {
 
 async function waitForDashboard(page) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Who changed the rules before release?" }).waitFor();
+  await page.getByRole("heading", { name: "Can the customer fix ship today?" }).waitFor();
 
 }
 

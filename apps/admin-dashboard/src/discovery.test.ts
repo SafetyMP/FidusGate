@@ -37,7 +37,7 @@ describe('mode-specific discovery HTML', () => {
     const document = documentFor(true);
     const root = document.getElementById('root');
     expect(root?.querySelector('h1')?.textContent).toContain(
-      'Who changed the rules before release',
+      'Can the customer fix ship today',
     );
     expect(root?.textContent).toContain(
       'choose between existing logs, a standard export and a signed-receipt pilot',

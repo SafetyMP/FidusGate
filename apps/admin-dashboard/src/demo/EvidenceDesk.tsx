@@ -22,7 +22,7 @@ const envelopes = {
   neighbor: receiptJson(neighbor),
 };
 type Checks = Partial<Record<CaseDocument, VerificationResult>>;
-type Recommendation = 'send' | 'close' | 'request';
+type Step = 'ticket' | 'forwarded' | 'compared' | 'decision-note' | 'file-note';
 
 function assess(attached: CaseDocument[], checks: Checks) {
   const has = (id: CaseDocument) => attached.includes(id);
@@ -78,17 +78,21 @@ export function EvidenceDesk({
   technicalHref: string;
   pilotHref: string;
 }) {
-  const [attached, setAttached] = useState<CaseDocument[]>(['received']);
+  const [step, setStep] = useState<Step>('ticket');
   const [checks, setChecks] = useState<Checks>({});
-  const [busy, setBusy] = useState<CaseDocument[]>([]);
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [includeNeighbor, setIncludeNeighbor] = useState(false);
   const epoch = useRef(0);
+  const compared = step === 'compared' || step === 'decision-note' || step === 'file-note';
+  const complete = step === 'decision-note' || step === 'file-note';
+  const matched = checks.original?.status === 'valid';
+  const attached: CaseDocument[] = ['received'];
+  if (compared) attached.push('original');
+  if (step === 'file-note') attached.push('history');
+  if (includeNeighbor) attached.push('neighbor');
   const { findings, requests } = assess(attached, checks);
   const raw = active === 'history' ? null : envelopes[active];
   const receipt = raw ? (JSON.parse(raw) as typeof archive.receipt) : null;
-  const selected = documents.find((item) => item.id === active);
-  const check = checks[active];
-  const confirmed = attached.includes('original') && checks.original?.status === 'valid';
   const handoff = {
     case: archive.id,
     scope: 'Synthetic release review with a public demo key',
@@ -106,140 +110,230 @@ export function EvidenceDesk({
     findings,
     openRequests: requests,
   };
-  async function verify() {
-    if (!raw) return;
-    const id = active;
-    const generation = epoch.current;
-    setBusy((old) => [...old, id]);
-    const result = await verifyDemoReceipt(raw);
+  async function compare() {
+    if (!compared) onSelect('original');
+    const generation = ++epoch.current;
+    setBusy(true);
+    const [received, original] = await Promise.all([
+      verifyDemoReceipt(envelopes.received),
+      verifyDemoReceipt(envelopes.original),
+    ]);
     if (generation !== epoch.current) return;
-    setChecks((old) => ({ ...old, [id]: result }));
-    setBusy((old) => old.filter((item) => item !== id));
-    setRecommendation(null);
+    setChecks((old) => ({ ...old, received, original }));
+    setBusy(false);
+    setStep((current) => (current === 'ticket' || current === 'forwarded' ? 'compared' : current));
   }
-  function toggle() {
-    setAttached((old) =>
-      old.includes(active) ? old.filter((id) => id !== active) : [...old, active],
-    );
-    setRecommendation(null);
+  async function addNeighbor() {
+    const generation = ++epoch.current;
+    setBusy(true);
+    const result = await verifyDemoReceipt(envelopes.neighbor);
+    if (generation !== epoch.current) return;
+    setChecks((old) => ({ ...old, neighbor: result }));
+    setBusy(false);
+    setIncludeNeighbor(true);
   }
   function restart() {
-    epoch.current++;
+    ++epoch.current;
+    setStep('ticket');
     setChecks({});
-    setBusy([]);
-    setAttached(['received']);
-    setRecommendation(null);
+    setBusy(false);
+    setIncludeNeighbor(false);
     onSelect('received');
+  }
+  function readHistory() {
+    setStep('file-note');
+    onSelect('history');
+  }
+  function resultText(result: VerificationResult | undefined) {
+    if (result?.status === 'valid') return 'Signature matches the demo key';
+    if (result?.status === 'invalid') return 'Signature does not match';
+    return 'Signature check unavailable';
   }
   return (
     <section
       id="case-investigation"
-      className="investigation case-desk"
+      className="investigation case-desk guided-review"
       tabIndex={-1}
       aria-labelledby="desk-title"
     >
-      <p className="study-kicker">Platform security · FG-1048</p>
-      <h1 id="desk-title">What can you tell the release lead?</h1>
-      <p>
-        Start with the engineer’s ticket copy. Check its signature, then choose which records to
-        attach to your handoff.
-      </p>
-      <div className="record-picker" role="group" aria-label="Source records">
-        {documents.map((doc) => (
-          <button key={doc.id} aria-pressed={active === doc.id} onClick={() => onSelect(doc.id)}>
-            <small>{doc.owner}</small>
-            {doc.title}
-          </button>
-        ))}
+      <p className="study-kicker">Maya’s release review · FG-1048</p>
+      <h1 id="desk-title">Can Maya rely on the ticket?</h1>
+      <div className="forwarded-note">
+        <p className="study-kicker">Forwarded by engineering · 14:32 UTC</p>
+        <p>“The ticket says the assistant had permission to edit the rules file.”</p>
       </div>
-      <div className="desk-columns">
-        <article className="exhibit-card" aria-label="Selected document">
-          <h2>{selected?.title}</h2>
-          {receipt ? (
-            <>
-              <p>
-                {active === 'received'
-                  ? 'Forwarded with the change ticket.'
-                  : active === 'original'
-                    ? 'Retrieved from the gateway archive by request ID.'
-                    : 'Retrieved from the same archive just before the disputed request.'}
-              </p>
-              <dl className="receipt-fields">
-                <dt>Request</dt>
-                <dd>
-                  {active === 'neighbor' ? neighbor.id : archive.id} ·{' '}
-                  {receipt.payload.issued_at.slice(11, 19)} UTC
-                </dd>
-                <dt>Tool / file</dt>
-                <dd>
-                  <code>
-                    {receipt.payload.tool_name} · {String(receipt.payload.args?.path)}
-                  </code>
-                </dd>
-                <dt>Claimed decision</dt>
-                <dd>{receipt.payload.decision}</dd>
-                <dt>Signature</dt>
-                <dd>
-                  <code>{receipt.signature.sig.slice(0, 16)}…</code>
-                </dd>
-              </dl>
-              <button className="primary-button" onClick={verify} disabled={busy.includes(active)}>
-                {busy.includes(active) ? 'Checking…' : 'Check signature'}
-              </button>
-              {check && (
-                <p className="packet-result" role="status">
-                  {check.message}
+      <div className="guided-question" aria-live="polite" aria-busy={busy}>
+        {!compared && (
+          <>
+            {step === 'forwarded' ? (
+              <>
+                <h2>Maya still needs confirmation</h2>
+                <p>
+                  The release note would repeat the engineer’s claim. Security would have to look up
+                  the original before Maya could rely on it.
                 </p>
-              )}
-            </>
-          ) : (
-            <>
-              <p>
-                The repository owner supplied two snapshots of <code>policy.cedar</code> around the
-                14:32 request.
-              </p>
-              <ol className="snapshot-list">
-                {snapshots.map((s) => (
-                  <li key={s.revision}>
-                    <time>{s.at}</time>
-                    <strong>Revision {s.revision}</strong>
-                    <code>Blob {s.blob}</code>
-                  </li>
-                ))}
-              </ol>
-              <p>Writer and request ID are blank in this export.</p>
-            </>
-          )}
-          <label className="attach-record">
-            <input type="checkbox" checked={attached.includes(active)} onChange={toggle} />
-            Attach to the release handoff
-          </label>
-          <a href={technicalHref}>Trace this evidence in the technical guide</a>
-        </article>
-        <aside className="handoff-card" aria-label="Release handoff">
-          <p className="study-kicker">Release lead’s copy</p>
-          <h2>Evidence handoff</h2>
-          <p>{attached.length} of 4 records attached</p>
-          <div aria-live="polite">
-            <h3>Supported findings</h3>
-            {findings.length ? (
-              <ul>
-                {findings.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              </>
             ) : (
-              <p>Check an attached receipt or attach repository history to support a finding.</p>
+              <>
+                <h2>How would you check the claim?</h2>
+                <p>
+                  You can pass along what engineering sent or check it against the original record.
+                </p>
+              </>
             )}
-          </div>
-          <details>
-            <summary>Open evidence requests ({requests.length})</summary>
-            <ul>
-              {requests.map((line) => (
-                <li key={line}>{line}</li>
+            <div className="case-actions">
+              {step === 'ticket' && (
+                <button
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => setStep('forwarded')}
+                >
+                  Use the forwarded copy
+                </button>
+              )}
+              <button className="primary-button" disabled={busy} onClick={compare}>
+                {busy ? 'Checking the copies…' : 'Compare with the original'}
+              </button>
+            </div>
+          </>
+        )}
+        {compared && (
+          <>
+            <h2>What the two copies say</h2>
+            <dl className="comparison-slip">
+              {(['received', 'original'] as const).map((id) => (
+                <div key={id}>
+                  <dt>{id === 'received' ? 'Forwarded copy' : 'Gateway original'}</dt>
+                  <dd>
+                    <strong>
+                      {JSON.parse(envelopes[id]).payload.decision === 'allow'
+                        ? 'Allowed'
+                        : 'Denied'}
+                    </strong>
+                    <span>{resultText(checks[id])}</span>
+                  </dd>
+                </div>
               ))}
-            </ul>
-          </details>
+            </dl>
+            <p>
+              {matched
+                ? 'Maya can report the decision recorded in the original. The signature lets her check exactly which wording the gateway signed.'
+                : 'Maya needs a verified original before she can report the gateway decision. The two claims alone cannot settle it.'}
+            </p>
+            {!matched && (
+              <button className="secondary-button" disabled={busy} onClick={compare}>
+                Retry signature checks
+              </button>
+            )}
+            {!complete && (
+              <>
+                <h2>What goes back to the release team?</h2>
+                <p>
+                  Send what you know now, or ask the repository owner what happened to the file.
+                </p>
+                <div className="case-actions">
+                  <button className="secondary-button" onClick={() => setStep('decision-note')}>
+                    Send the decision record
+                  </button>
+                  <button className="primary-button" onClick={readHistory}>
+                    Check the file history
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {complete && (
+          <section className="release-result" aria-label="Release handoff">
+            <h2>{step === 'file-note' ? 'The repository owner’s reply' : 'Maya’s release note'}</h2>
+            {step === 'file-note' ? (
+              <>
+                <p>
+                  The file has different contents in the two saved versions. The history supplied to
+                  Maya leaves the writer’s name and the request ID blank.
+                </p>
+                <p>
+                  <strong>Next owner:</strong> Release engineering can ask who submitted the second
+                  version.{' '}
+                  {matched
+                    ? 'Platform security has already answered the permission question.'
+                    : 'Platform security still needs a verified decision.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  {matched
+                    ? 'Maya can record that the gateway denied this request. The file question stays open until the repository owner checks its history.'
+                    : 'Maya can report conflicting copies. Security still needs to verify the original, and release engineering still needs the file history.'}
+                </p>
+                <button className="secondary-button" onClick={readHistory}>
+                  Also check the file history
+                </button>
+              </>
+            )}
+            <p>
+              {step === 'file-note'
+                ? 'Maya keeps the release on hold until the owner can match the edit to an approved change.'
+                : 'The decision record alone leaves Maya without enough evidence to ship the fix.'}
+            </p>
+            <p>
+              <a href={pilotHref}>Would signed receipts save enough review time?</a>
+            </p>
+          </section>
+        )}
+      </div>
+      <details className="case-sources">
+        <summary>Inspect the source records</summary>
+        <label>
+          Show a record{' '}
+          <select value={active} onChange={(e) => onSelect(e.currentTarget.value as CaseDocument)}>
+            {documents.map((doc) => (
+              <option key={doc.id} value={doc.id}>
+                {doc.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {receipt ? (
+          <p>
+            <strong>{active === 'neighbor' ? neighbor.id : archive.id}</strong> ·{' '}
+            {receipt.payload.tool_name} · <code>{String(receipt.payload.args?.path)}</code> ·
+            Claimed decision: {receipt.payload.decision}
+          </p>
+        ) : (
+          <ul>
+            {snapshots.map((s) => (
+              <li key={s.revision}>
+                {s.at} · Revision {s.revision} · <code>{s.blob}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+        {active === 'neighbor' && (
+          <>
+            <p>
+              This is a separate request to read the project documentation. Compare its request
+              number and target with Maya’s ticket.
+            </p>
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={includeNeighbor ? () => setIncludeNeighbor(false) : addNeighbor}
+            >
+              {includeNeighbor
+                ? 'Remove adjacent request from handoff'
+                : 'Check and include adjacent request'}
+            </button>
+            {includeNeighbor && <p role="status">{resultText(checks.neighbor)}</p>}
+          </>
+        )}
+        <p>
+          <a href={technicalHref}>Trace this evidence in the technical guide</a>
+        </p>
+      </details>
+      {complete && (
+        <p className="case-actions">
           <a
             download="FG-1048-handoff.json"
             href={
@@ -247,64 +341,15 @@ export function EvidenceDesk({
               encodeURIComponent(JSON.stringify(handoff, null, 2))
             }
           >
-            Download this handoff
+            Download the release handoff
           </a>
-        </aside>
-      </div>
-      {(Object.keys(checks).length > 0 || attached.includes('history')) && (
-        <fieldset className="ticket-choice">
-          <legend>What should the release lead do next?</legend>
-          {(
-            [
-              ['send', 'Record the supported findings'],
-              ['request', 'Request more evidence'],
-              ['close', 'Close the ticket and attribute the write to the agent'],
-            ] as const
-          ).map(([id, label]) => (
-            <label key={id}>
-              <input
-                type="radio"
-                name="recommendation"
-                checked={recommendation === id}
-                onChange={() => setRecommendation(id)}
-              />
-              {label}
-            </label>
-          ))}
-        </fieldset>
+        </p>
       )}
-      {recommendation && (
-        <div className="ticket-consequence" role="status">
-          {recommendation === 'close'
-            ? attached.includes('history')
-              ? 'Reopen the attribution question. The file changed between snapshots, but the attached export does not identify who wrote revision 808.'
-              : 'Reopen the attribution question. A decision receipt identifies a request. Ask release engineering for file history before attributing a change.'
-            : recommendation === 'request'
-              ? requests[0]
-              : confirmed
-                ? 'Send the verified decision to the release lead. They can settle the gateway question and assign the remaining file investigation to the repository owner.'
-                : findings.length
-                  ? 'Send this limited finding. To settle what the gateway decided, attach its original and verify the signature.'
-                  : 'The handoff has no supported finding yet. Check an attached record before asking the lead to rely on it.'}
-        </div>
+      {step !== 'ticket' && (
+        <button className="secondary-button replay-case" onClick={restart}>
+          Try another path
+        </button>
       )}
-      {recommendation && (
-        <section className="case-debrief">
-          <h2>Where FidusGate saves a handoff</h2>
-          <p>
-            The gateway checks a tool request against policy and can sign the decision it records. A
-            second reviewer can check the exact copy attached to a ticket. That lets platform
-            security resolve disagreements about the decision and send questions about the file
-            itself to its owner.
-          </p>
-          <a className="primary-button" href={pilotHref}>
-            Compare the cost with ordinary logs
-          </a>
-        </section>
-      )}
-      <button className="secondary-button" onClick={restart}>
-        Restart investigation
-      </button>
     </section>
   );
 }
