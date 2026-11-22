@@ -31,6 +31,46 @@ function receiptValue(element: HTMLElement): string {
 }
 
 describe('ReceiptConsole operator journeys', () => {
+  it('requires evidence for a ticket finding and clears stale packet dispositions on replay', async () => {
+    window.history.replaceState(null, '', '/');
+    vi.mocked(verifyDemoReceipt)
+      .mockResolvedValueOnce({ status: 'valid', message: 'Matches the demo key.' })
+      .mockResolvedValueOnce({ status: 'invalid', message: 'Signature mismatch.' });
+    render(<ReceiptConsole />);
+    const check = screen.getByRole('button', { name: 'Check packet signature' });
+    fireEvent.click(check);
+    const close = await screen.findByRole('radio', { name: /Close the ticket/ });
+    fireEvent.click(close);
+    expect(screen.getByText(/Reopen the ticket/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /Record the stated decision/ }));
+    expect(screen.getByText(/Record the sample denial/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: 'Edited training copy' }));
+    expect(screen.queryByText(/Record the sample denial/)).not.toBeInTheDocument();
+    fireEvent.click(check);
+    fireEvent.click(await screen.findByRole('radio', { name: /Record the stated decision/ }));
+    expect(screen.getByText(/Withdraw the proposed finding/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /Hold the finding/ }));
+    expect(screen.getByText(/Keep the decision unresolved/)).toBeVisible();
+    const inputs = vi.mocked(verifyDemoReceipt).mock.calls.map(([value]) => JSON.parse(value));
+    expect(inputs.map((receipt) => receipt.payload.decision)).toEqual(['deny', 'allow']);
+    expect(inputs[0].signature).toEqual(inputs[1].signature);
+    fireEvent.click(screen.getByRole('button', { name: 'Restart investigation' }));
+    expect(screen.getByRole('radio', { name: 'Original signed receipt' })).toBeChecked();
+    expect(screen.queryByRole('radio', { name: /Close the ticket/ })).not.toBeInTheDocument();
+    expect(check).toBeEnabled();
+  });
+
+  it.each(['playground', 'verify'])('keeps the %s route when skipping to the workspace', (route) => {
+    window.history.replaceState(null, '', '#/' + route);
+    render(<ReceiptConsole />);
+    const historyLength = window.history.length;
+    const skip = screen.getByRole('link', { name: 'Skip to workspace' });
+    expect(fireEvent.click(skip)).toBe(false);
+    expect(screen.getByRole('main')).toHaveFocus();
+    expect(window.location.hash).toBe('#/' + route);
+    expect(window.history.length).toBe(historyLength);
+  });
+
   it('opens the business case by default and carries its record into the verifier', async () => {
     window.history.replaceState(null, '', '/');
     render(<ReceiptConsole />);

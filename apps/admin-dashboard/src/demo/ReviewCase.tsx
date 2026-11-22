@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { DemoDecision } from './index';
+import { useRef, useState } from 'react';
+import { receiptJson, tamperReceipt, verifyDemoReceipt, type DemoDecision, type VerificationResult } from './index';
 
 const dollars = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -20,6 +20,77 @@ function Assumption({ label, value, max, step, onChange }: {
       <input type="range" min={0} max={max} step={step} value={value}
         onChange={(event) => onChange(event.currentTarget.valueAsNumber)} />
     </label>
+  );
+}
+
+type Packet = 'original' | 'edited';
+type Disposition = 'record' | 'hold' | 'close';
+
+function ticketOutcome(check: VerificationResult, disposition: Disposition): string {
+  if (disposition === 'close') {
+    return 'Reopen the ticket. Even a matching signature cannot establish what happened to the file. Request repository history before closing the execution question.';
+  }
+  if (disposition === 'hold') {
+    if (check.status === 'valid') {
+      return 'Keep the file-change question open. The original already matches the demo key. Record that limited finding, then request file history and independent issuer evidence.';
+    }
+    return 'Keep the decision unresolved. Preserve the submitted copy, request the original gateway record and trusted key information, and repeat verification before relying on its contents.';
+  }
+  if (check.status === 'valid') {
+    return 'Record the sample denial. Attach the signed packet and verification result. Leave file execution and operational issuer identity open pending file history and trusted key records.';
+  }
+  return 'Withdraw the proposed finding. This check did not authenticate the submitted payload against the demo key. Reconcile it with the original gateway record before recording a decision.';
+}
+
+function Investigation({ record }: { record: DemoDecision }) {
+  const [packet, setPacket] = useState<Packet>('original');
+  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [disposition, setDisposition] = useState<Disposition | null>(null);
+  const request = useRef(0);
+  function selectPacket(next: Packet) {
+    request.current += 1;
+    setPacket(next);
+    setResult(null);
+    setDisposition(null);
+    setChecking(false);
+  }
+  async function checkPacket() {
+    const current = ++request.current;
+    setChecking(true);
+    const original = receiptJson(record);
+    const checked = await verifyDemoReceipt(packet === 'original' ? original : tamperReceipt(original));
+    if (current === request.current) {
+      setResult(checked);
+      setChecking(false);
+    }
+  }
+  return (
+    <section className="investigation" aria-labelledby="investigation-title">
+      <h2 id="investigation-title">What goes in the change ticket?</h2>
+      <p>The engineer asks whether the policy file changed. As the investigating analyst, choose a sample packet, check its signature, then decide what the evidence supports.</p>
+      <fieldset className="packet-choice">
+        <legend>Evidence packet</legend>
+        <label><input type="radio" name="packet" checked={packet === 'original'} onChange={() => selectPacket('original')} />Original signed receipt</label>
+        <label><input type="radio" name="packet" checked={packet === 'edited'} onChange={() => selectPacket('edited')} />Edited training copy</label>
+      </fieldset>
+      <div className="packet-strip">
+        <div><strong>{record.id}</strong> · Payload decision <code>{packet === 'original' ? record.receipt.payload.decision : 'allow'}</code>
+          <small>{packet === 'original' ? 'Intact synthetic packet, signed with the public demo key.' : 'The decision field was changed from deny to allow. The original signature is attached.'}</small></div>
+        <button className="primary-button" onClick={checkPacket} disabled={checking || result !== null}>{checking ? 'Checking packet…' : 'Check packet signature'}</button>
+      </div>
+      {result && <>
+        <p role="status" className="packet-result"><strong>Signature check</strong> · {result.message}</p>
+        <fieldset className="ticket-choice">
+          <legend>Choose the ticket disposition</legend>
+          <label><input type="radio" name="ticket" checked={disposition === 'record'} onChange={() => setDisposition('record')} />Record the stated decision and request file history.</label>
+          <label><input type="radio" name="ticket" checked={disposition === 'hold'} onChange={() => setDisposition('hold')} />Hold the finding and request the original packet.</label>
+          <label><input type="radio" name="ticket" checked={disposition === 'close'} onChange={() => setDisposition('close')} />Close the ticket as proof that no write occurred.</label>
+        </fieldset>
+        {disposition && <p className="ticket-consequence" aria-live="polite"><strong>Ticket consequence</strong> · {ticketOutcome(result, disposition)}</p>}
+        <button className="secondary-button" onClick={() => selectPacket('original')}>Restart investigation</button>
+      </>}
+    </section>
   );
 }
 
@@ -48,6 +119,7 @@ export function ReviewCase({ record, onVerify }: {
         </ol>
         <p className="study-scope">Synthetic case · The browser replays recorded decisions. No agent connects or executes a tool.</p>
       </section>
+      <Investigation record={record} />
       <section className="study-evidence">
         <h2>What can the analyst establish?</h2>
         <dl className="evidence-boundary">

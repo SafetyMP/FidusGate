@@ -1710,3 +1710,16 @@ tbody tr:hover {
   .evidence-boundary { gap: .35rem; }
   .technical-return { margin: .4rem 0; }
 }
+
+.investigation { background: #fff; border-block: 2px solid #836398; padding: 1.5rem clamp(1rem, 3vw, 2rem); }
+.investigation > p { margin: .8rem 0; max-width: 78ch; }
+.investigation fieldset { border: 0; padding: 0; margin: 1rem 0; }
+.investigation legend { font-weight: 700; margin-bottom: .45rem; }
+.investigation label { display: inline-flex; align-items: baseline; gap: .5rem; cursor: pointer; padding: .3rem .9rem .3rem 0; }
+.investigation input { accent-color: #64398b; }
+.packet-strip { border: 1px solid #d3c4dd; background: #f5f0fa; border-radius: .35rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.packet-strip code { font-weight: 700; }
+.packet-strip small { display: block; color: #5c496c; margin-top: .25rem; font-size: 1rem; }
+.packet-strip button:disabled { opacity: 1; background: #61546b; cursor: default; }
+.ticket-choice label { display: flex; }
+.ticket-consequence { border-left: 3px solid #774a91; padding: .65rem 1rem; background: #f4eff8; }

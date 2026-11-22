@@ -206,7 +206,14 @@ export default function ReceiptConsole() {
       )}
       {view !== 'case' && view !== 'technical' && (
     <div className="fg-app">
-      <a className="skip-link" href="#workspace">
+      <a
+        className="skip-link"
+        href="#workspace"
+        onClick={(event) => {
+          event.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
         Skip to workspace
       </a>
       <aside className="sidebar">
