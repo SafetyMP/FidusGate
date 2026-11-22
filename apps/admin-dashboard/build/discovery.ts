@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 export const DEMO_URL = 'https://safetymp.github.io/FidusGate/';
 export const REPOSITORY_URL = 'https://github.com/SafetyMP/FidusGate';
 const description =
-  'Understand MCP tool-call decisions, explore policy examples, and verify Ed25519 receipts. Try the browser-only FidusGate demo with synthetic data.';
+  'Reconcile a disputed MCP tool call, check Ed25519 receipts, and assemble an evidence handoff in a browser-only demo with synthetic data.';
 
 /** Static, source-controlled metadata. No receipt, session, or request data is interpolated. */
 export function discoveryContent(isDemo: boolean): { metadata: string; overview: string } {
@@ -64,7 +64,7 @@ export function discoveryContent(isDemo: boolean): { metadata: string; overview:
       <h1>FidusGate: understand MCP decisions and verify signed receipts</h1>
       <p>FidusGate is an open-source reference Model Context Protocol (MCP) gateway with Cedar authorization, Ed25519-signed receipts, and a receipt-first console.</p>
       <h2>Explore the interactive demo</h2>
-      <p>Inspect an allowed or denied tool-call decision and its reason, try a policy example, and verify a sample receipt. The interactive console requires JavaScript.</p>
+      <p>Compare the ticket attachment with the gateway archive, verify both receipts, and assemble the evidence handoff for FG-1048. The investigation desk requires JavaScript.</p>
       <p>This browser-only demo uses synthetic records and a public demo key. It does not connect an agent, evaluate Cedar, or execute tools. Receipt input stays in your browser. A valid signature does not establish issuer trust or prove execution. FidusGate is not a production-hardened security product.</p>
       <h2>Run the gateway-connected console</h2>
       <p>The connected console uses gateway records and role-scoped development sessions. It includes Decisions, Policy playground, Receipt verifier, Transactions, Governance, Forensics, and Sandbox workspaces.</p>

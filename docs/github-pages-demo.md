@@ -1,6 +1,10 @@
 # GitHub Pages demo
 
-The redesigned console demonstrates FidusGate's core operator loop: inspect an MCP tool-call decision, understand its reason, try a sample scenario, and verify a receipt. GitHub Pages serves static files; it does not run the MCP gateway, Cedar daemon, authentication server, or a sandbox.
+Investigate FG-1048 by checking the ticket attachment and archive against the demo Ed25519 key. Attach or detach records and add an analyst note. The working paper derives findings only from attached evidence and exports the submitted receipts, check results, outstanding evidence requests and note in a JSON file. Selecting another tab preserves the draft in memory. Refresh or Reset case restores the opening state.
+
+The platform-security worksheet is at `#/pilot`. The compact `#/technical` reference maps gateway decisions, signed receipts, synthetic evidence and the connected console to their implementations. Older console bookmarks open that reference. The connected console remains available locally.
+
+**Design basis.** NIST SP 800-61r3 §2.2 distinguishes incident handlers collecting evidence from leadership allocating resources. RS.AN-06 and RS.AN-07 explain the need to preserve evidence integrity and provenance. Those concerns drive the inspectable case file, the limited attribution finding and the pilot comparison with ordinary decision logs. [NIST incident response guidance](https://csrc.nist.gov/pubs/sp/800/61/r3/final)
 
 ## Build and preview
 
@@ -16,7 +20,7 @@ npm run preview --workspace apps/admin-dashboard -- --host 127.0.0.1
 
 Open the preview server's URL with `/FidusGate/` appended. Vite's base option makes bundled asset URLs work under the repository's Pages path. `VITE_FIDUSGATE_DEMO=true` selects the browser-only demo at build time. Do not publish a normal gateway-connected build to Pages.
 
-The demo uses synthetic decisions and deterministic scenario rules. A scenario result is an illustration, not a Cedar evaluation or an executed tool call. Receipt signature verification is a cryptographic check against the public demo key; it does not establish production issuer identity or prove execution. Keep these distinctions visible when presenting the demo. Pasted receipt contents stay in the browser.
+The desk uses synthetic records, a mismatched ticket copy and two authored repository snapshots. The decision archive is drawn from the committed signed fixtures. Receipt signature verification is a cryptographic check against the public demo key; it does not establish production issuer identity or prove execution. Keep these distinctions visible when presenting the demo. The note and case file stay in the browser until exported.
 
 ## Publication
 
@@ -32,7 +36,7 @@ Only `apps/admin-dashboard/dist` is uploaded. There are no gateway credentials, 
 
 - Open `/FidusGate/` directly and refresh it; JavaScript and stylesheet assets must load under that path.
 - Inspect a denied call and follow the reason and receipt without logging in.
-- Search/filter decisions, exercise an allowed and a denied sample, and verify a sample receipt; a tampered receipt must not validate.
+- Check the ticket and archive signatures, attach both and compare the discrepancy. Attach the file history and inspect the unresolved attribution request. Detach each source and check the exported JSON.
 - Check narrow and wide layouts and keyboard navigation.
 - Confirm the static demo makes no `/api` requests and sends no receipt input to a server.
 - Check the exact published commit's Actions run and the live URL. A local build does not establish deployment success or user adoption.
