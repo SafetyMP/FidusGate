@@ -10,6 +10,7 @@ vi.mock('./demo', async (importOriginal) => {
 });
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '#/decisions');
   vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
   vi.mocked(verifyDemoReceipt).mockReset();
 });
@@ -30,6 +31,81 @@ function receiptValue(element: HTMLElement): string {
 }
 
 describe('ReceiptConsole operator journeys', () => {
+  it('requires evidence for a ticket finding and clears stale packet dispositions on replay', async () => {
+    window.history.replaceState(null, '', '/');
+    vi.mocked(verifyDemoReceipt)
+      .mockResolvedValueOnce({ status: 'valid', message: 'Matches the demo key.' })
+      .mockResolvedValueOnce({ status: 'invalid', message: 'Signature mismatch.' });
+    render(<ReceiptConsole />);
+    const check = screen.getByRole('button', { name: 'Check packet signature' });
+    fireEvent.click(check);
+    const close = await screen.findByRole('radio', { name: /Close the ticket/ });
+    fireEvent.click(close);
+    expect(screen.getByText(/Reopen the ticket/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /Record the stated decision/ }));
+    expect(screen.getByText(/Record the sample denial/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: 'Copy received with ticket' }));
+    expect(screen.queryByText(/Record the sample denial/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This training example changed/)).not.toBeInTheDocument();
+    const exercise = screen.getByRole('region', { name: 'What goes in the change ticket?' });
+    expect(within(exercise).getByText('allow')).toBeVisible();
+    expect(within(exercise).getByText('2026-11-14 14:32:00 UTC')).toBeVisible();
+    fireEvent.click(check);
+    fireEvent.click(await screen.findByRole('radio', { name: /Record the stated decision/ }));
+    expect(screen.getByText(/Withdraw the proposed finding/)).toBeVisible();
+    expect(screen.getByText(/This training example changed/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /Hold the finding/ }));
+    expect(screen.getByText(/Keep the decision unresolved/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Request repository history' }));
+    expect(screen.getByText('9fb23c1')).toBeVisible();
+    expect(screen.getByText('d9019fa')).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /coding agent made the change/ }));
+    expect(screen.getByText(/Leave attribution open/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /content stayed the same/ }));
+    expect(screen.getByText(/Revise the finding/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /content changed between snapshots/ }));
+    expect(screen.getByText(/Attach both snapshots/)).toBeVisible();
+    const inputs = vi.mocked(verifyDemoReceipt).mock.calls.map(([value]) => JSON.parse(value));
+    expect(inputs.map((receipt) => receipt.payload.decision)).toEqual(['deny', 'allow']);
+    expect(inputs[0].signature).toEqual(inputs[1].signature);
+    fireEvent.click(screen.getByRole('button', { name: 'Restart investigation' }));
+    expect(screen.getByRole('radio', { name: 'Gateway archive copy' })).toBeChecked();
+    expect(screen.queryByRole('radio', { name: /Close the ticket/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'File history evidence' })).not.toBeInTheDocument();
+    expect(check).toBeEnabled();
+  });
+
+  it.each(['playground', 'verify'])('keeps the %s route when skipping to the workspace', (route) => {
+    window.history.replaceState(null, '', '#/' + route);
+    render(<ReceiptConsole />);
+    const historyLength = window.history.length;
+    const skip = screen.getByRole('link', { name: 'Skip to workspace' });
+    expect(fireEvent.click(skip)).toBe(false);
+    expect(screen.getByRole('main')).toHaveFocus();
+    expect(window.location.hash).toBe('#/' + route);
+    expect(window.history.length).toBe(historyLength);
+  });
+
+  it('opens the business case by default and carries its record into the verifier', async () => {
+    window.history.replaceState(null, '', '/');
+    render(<ReceiptConsole />);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Inspect the fields in FG-1048'));
+    expect(screen.getByText('$1,200 first-year net time value')).toBeVisible();
+    fireEvent.change(screen.getByRole('slider', { name: /Reviews per month/ }), {target: {value: '0'}});
+    expect(screen.getByText('-$6,000 first-year net time value')).toBeVisible();
+    expect(screen.getByText(/No labor value can cover/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', {name: 'Inspect FG-1048 receipt'}));
+    expect(receiptValue(screen.getByRole('textbox', {name: 'Paste a signed FidusGate receipt'}))).toContain('policy.cedar');
+    fireEvent.click(screen.getByRole('link', {name: 'Business case'}));
+    expect(await screen.findByRole('slider', {name: /Reviews per month/})).toHaveValue('0');
+    expect(screen.getByText('-$6,000 first-year net time value')).toBeVisible();
+    fireEvent.click(screen.getByRole('link', {name: 'Technical guide'}));
+    expect(await screen.findByRole('heading', {name: 'Inspect the evidence'})).toBeVisible();
+    fireEvent.click(screen.getByRole('link', {name: 'Decision log'}));
+    expect(await screen.findByRole('table')).toBeVisible();
+  });
+
   it('combines search and decision filters and recovers from an empty result', () => {
     render(<ReceiptConsole />);
     const search = screen.getByRole('textbox', { name: 'Search decisions' });
