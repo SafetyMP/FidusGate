@@ -11,7 +11,7 @@ FidusGate is a reference **Model Context Protocol (MCP) policy gateway and opera
 [![Pages demo](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-![FidusGate investigation desk with source records, the submitted receipt, and an evidence handoff](docs/assets/investigation-desk.png)
+![FG-1048 business case showing the disputed policy write and its denied decision](docs/assets/fg1048-case.png)
 
 ## Why FidusGate
 
@@ -23,7 +23,7 @@ FidusGate organizes that work into three steps:
 2. **Explore a policy scenario:** compare outcomes without executing a tool. The connected console also retains draft simulation and confirmed administrator policy application.
 3. **Verify the receipt:** check the original signed payload and distinguish signature validity, chain continuity, and issuer trust.
 
-**Try the change-review case.** A coding agent requests a write to the file that governs tool permissions. A ticket and the gateway archive disagree about FG-1048. Check both signatures, compare the repository revisions, and export a handoff containing the original evidence, supported findings and follow-up requests. The pilot worksheet estimates the analyst time required to cover incremental cost. [Open the sample case](https://safetymp.github.io/FidusGate/) · [Technical reference](https://safetymp.github.io/FidusGate/#/technical)
+**Try the FG-1048 change-review case.** A coding agent asks to edit the file that governs its permissions. Check either the archive original or the received ticket copy, decide what goes into the ticket, and request repository revisions. Then weigh ordinary log search, a standardized export and a shadow pilot against review time and first-year cost. The technical evidence view carries the selected copy into a staged trace and comparison against signed fixtures. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Compare the received copy with the archive](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
 
 ## Choose your experience
 
@@ -35,7 +35,7 @@ FidusGate organizes that work into three steps:
 | Receipt verification | Real Ed25519 checks against a public demo key, entirely in the browser | Original receipt JSON submitted to the configured gateway verifier |
 | Operations | No login, backend, agent connection, or tool execution | Development role-scoped sessions; Decisions, Policy playground, Receipt verifier, Transactions, Governance, Forensics, and Sandbox |
 
-The public desk builds the downloadable case file in the browser. The connected console can perform real operations through its gateway; role checks, confirmations, and server-side controls remain in place.
+The technical evidence view exports the selected envelopes, check results and optional file-history snapshots in the browser. The connected console can perform real operations through its gateway; role checks, confirmations, and server-side controls remain in place.
 
 ## Scope and trust
 

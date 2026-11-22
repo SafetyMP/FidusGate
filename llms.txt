@@ -7,7 +7,8 @@ FidusGate is an Apache-2.0 reference implementation, not a production-hardened s
 ## Start here
 
 - [Repository overview](https://github.com/SafetyMP/FidusGate/blob/main/README.md): purpose, audiences, demo, capabilities, and limits
-- [Interactive demo](https://safetymp.github.io/FidusGate/): synthetic decisions and browser receipt verification; no tools execute
+- [FG-1048 business case](https://safetymp.github.io/FidusGate/#/case): investigate a disputed policy write and compare three funding choices
+- [Technical evidence](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature): compare the selected case copy with a signed archive fixture and inspect provenance
 - [Documentation index](https://github.com/SafetyMP/FidusGate/blob/main/docs/README.md): current guides and historical records
 - [Getting started](https://github.com/SafetyMP/FidusGate/blob/main/docs/getting-started.md): toolchain, local setup, and verification
 - [Agent guide](https://github.com/SafetyMP/FidusGate/blob/main/AGENTS.md): commands, source map, data preservation, and fail-closed boundaries

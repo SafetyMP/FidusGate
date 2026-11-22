@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 export const DEMO_URL = 'https://safetymp.github.io/FidusGate/';
 export const REPOSITORY_URL = 'https://github.com/SafetyMP/FidusGate';
 const description =
-  'Reconcile a disputed MCP tool call, check Ed25519 receipts, and assemble an evidence handoff in a browser-only demo with synthetic data.';
+  'Decide whether signed receipts belong in change review. Follow FG-1048 from a disputed policy write to signature checks and pilot economics in this demo with synthetic data.';
 
 /** Static, source-controlled metadata. No receipt, session, or request data is interpolated. */
 export function discoveryContent(isDemo: boolean): { metadata: string; overview: string } {
@@ -25,7 +25,7 @@ export function discoveryContent(isDemo: boolean): { metadata: string; overview:
     '@type': 'WebPage',
     '@id': DEMO_URL,
     url: DEMO_URL,
-    name: 'FidusGate — MCP decisions and signed receipts demo',
+    name: 'FidusGate — FG-1048 change-review case demo',
     description,
     inLanguage: 'en',
     about: {
@@ -41,31 +41,32 @@ export function discoveryContent(isDemo: boolean): { metadata: string; overview:
   };
 
   return {
-    metadata: `<title>FidusGate — MCP decisions and signed receipts demo</title>
+    metadata: `<title>FidusGate — FG-1048 change-review case demo</title>
     <meta name="description" content="${description}" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="${DEMO_URL}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FidusGate" />
-    <meta property="og:title" content="FidusGate — Understand the decision. Verify the receipt." />
+    <meta property="og:title" content="FidusGate — Should every tool decision carry a signed receipt?" />
     <meta property="og:description" content="${description}" />
     <meta property="og:url" content="${DEMO_URL}" />
     <meta property="og:image" content="${DEMO_URL}social-preview.png" />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="640" />
-    <meta property="og:image:alt" content="FidusGate: MCP tool-call decisions and signed receipts. Interactive reference demo." />
+    <meta property="og:image:width" content="1440" />
+    <meta property="og:image:height" content="900" />
+    <meta property="og:image:alt" content="FG-1048 change-review case showing the request, denied policy write and decision receipt." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="FidusGate — MCP decisions and signed receipts" />
+    <meta name="twitter:title" content="FidusGate — The disputed policy write" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="${DEMO_URL}social-preview.png" />
-    <meta name="twitter:image:alt" content="FidusGate: MCP tool-call decisions and signed receipts. Interactive reference demo." />
+    <meta name="twitter:image:alt" content="FG-1048 change-review case showing the request, denied policy write and decision receipt." />
     <script type="application/ld+json">${JSON.stringify(structuredData)}</script>`,
     overview: `<main>
-      <h1>FidusGate: understand MCP decisions and verify signed receipts</h1>
+      <h1>Should every tool decision carry a signed receipt?</h1>
       <p>FidusGate is an open-source reference Model Context Protocol (MCP) gateway with Cedar authorization, Ed25519-signed receipts, and a receipt-first console.</p>
-      <h2>Explore the interactive demo</h2>
-      <p>Compare the ticket attachment with the gateway archive, verify both receipts, and assemble the evidence handoff for FG-1048. The investigation desk requires JavaScript.</p>
+      <h2>Explore the FG-1048 case</h2>
+      <p>The FG-1048 case asks an analyst to investigate a disputed policy write and a platform security lead to choose between existing logs, a standard export and a signed-receipt pilot. Follow the selected packet into the technical evidence to compare signed fixtures. The investigation requires JavaScript.</p>
       <p>This browser-only demo uses synthetic records and a public demo key. It does not connect an agent, evaluate Cedar, or execute tools. Receipt input stays in your browser. A valid signature does not establish issuer trust or prove execution. FidusGate is not a production-hardened security product.</p>
+      <p><a href="${DEMO_URL}#/case">Business case</a> · <a href="${DEMO_URL}#/technical?packet=received&amp;fixture=FG-1048&amp;stage=signature">Selected packet and signature evidence</a></p>
       <h2>Run the gateway-connected console</h2>
       <p>The connected console uses gateway records and role-scoped development sessions. It includes Decisions, Policy playground, Receipt verifier, Transactions, Governance, Forensics, and Sandbox workspaces.</p>
       <ul>
@@ -114,7 +115,7 @@ export function discoveryPlugin(): Plugin {
         type: 'asset',
         fileName: 'social-preview.png',
         source: readFileSync(
-          fileURLToPath(new URL('../../../docs/assets/social-preview.png', import.meta.url)),
+          fileURLToPath(new URL('../../../docs/assets/fg1048-case.png', import.meta.url)),
         ),
       });
       this.emitFile({

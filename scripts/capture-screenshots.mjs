@@ -27,9 +27,8 @@ const outDir = path.join(repoRoot, "docs", "assets");
 const baseUrl = process.env.SCREENSHOT_BASE_URL ?? "http://127.0.0.1:4173/FidusGate/";
 
 const tabs = [
-  { label: "Decisions", file: "decisions.png", name: "Decisions" },
-  { label: "Policy playground", file: "policy-playground.png", name: "Policy playground" },
-  { label: "Receipt verifier", file: "receipt-verifier.png", name: "Receipt verifier" },
+  { route: "#/case", file: "fg1048-case.png", name: "FG-1048 business case" },
+  { route: "#/technical?packet=received&fixture=FG-1048&stage=signature", file: "fg1048-evidence.png", name: "FG-1048 evidence" },
 ];
 
 const gifFrameFiles = tabs.map(({ file }) => file);
@@ -46,12 +45,8 @@ function launchOptions() {
 
 async function waitForDashboard(page) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByText("Interactive demo", { exact: true }).waitFor({
-    state: "visible",
-    timeout: 30_000,
-  });
-  // Refuse connected consoles; no credentials or gateway records belong in public assets.
-  await page.getByRole("button", { name: /^Decisions\b/ }).waitFor();
+  await page.getByRole("heading", { name: "Should every tool decision carry a signed receipt?" }).waitFor();
+
 }
 
 async function writeDemoGif(frames) {
@@ -87,21 +82,22 @@ async function captureLive() {
 
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1440, height: 900 },
   });
   const page = await context.newPage();
 
   await waitForDashboard(page);
   const gifFrames = [];
 
-  for (const { label, file, name } of tabs) {
-    const tabButton = page.getByRole("button", { name: label === "Decisions" ? /^Decisions\b/ : label, exact: label !== "Decisions" });
-    await tabButton.click();
+  for (const { route, file, name } of tabs) {
+    await page.goto(baseUrl.split("#")[0] + route);
     await page.getByRole("heading", { level: 1 }).waitFor();
-    if (label === "Receipt verifier") {
-      await page.getByRole("button", { name: "Load selected sample", exact: true }).click();
-      await page.getByRole("button", { name: "Verify signature", exact: true }).click();
-      await page.getByRole("heading", { name: "Signature matches", exact: true }).waitFor();
+    if (route.startsWith("#/technical")) {
+      await page.getByRole("button", { name: "Check both signatures" }).click();
+      await page.getByRole("cell", { name: "invalid", exact: true }).waitFor();
+      await page.getByRole("cell", { name: "valid", exact: true }).waitFor();
+      await page.getByRole("checkbox", { name: /Attach repository snapshots/ }).check();
+      await page.getByRole("heading", { name: "Compare the recorded outcomes" }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
     }
     await page.evaluate(() => document.fonts.ready);
     const buffer = await page.screenshot({ fullPage: false });
