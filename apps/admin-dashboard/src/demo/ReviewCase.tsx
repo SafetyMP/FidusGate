@@ -42,6 +42,40 @@ function ticketOutcome(check: VerificationResult, disposition: Disposition): str
   return 'Withdraw the proposed finding. This check did not authenticate the submitted payload against the demo key. Reconcile it with the original gateway record before recording a decision.';
 }
 
+function FileHistoryFinding() {
+  const [opened, setOpened] = useState(false);
+  const [finding, setFinding] = useState('');
+  if (!opened) {
+    return <button className="secondary-button" onClick={() => setOpened(true)}>Request repository history</button>;
+  }
+  return (
+    <section aria-label="File history evidence">
+      <h3>Repository response</h3>
+      <p>The platform engineer returned two snapshots of <code>main/policy.cedar</code> from the same day as FG-1048. Compare their file blob IDs with the gateway’s 14:32 UTC decision.</p>
+      <dl className="receipt-fields" aria-label="Illustrative repository snapshots">
+        <dt>14:30 UTC</dt><dd>Blob <code>9fb23c1</code> · revision 807</dd>
+        <dt>14:38 UTC</dt><dd>Blob <code>d9019fa</code> · revision 808</dd>
+      </dl>
+      <p className="study-scope">Synthetic repository export · abbreviated file blob IDs · request correlation field empty</p>
+      <fieldset className="ticket-choice">
+        <legend>Which finding can you add?</legend>
+        <label><input type="radio" name="history-finding" checked={finding === 'unchanged'} onChange={() => setFinding('unchanged')} />The policy content stayed the same.</label>
+        <label><input type="radio" name="history-finding" checked={finding === 'changed'} onChange={() => setFinding('changed')} />The policy content changed between snapshots.</label>
+        <label><input type="radio" name="history-finding" checked={finding === 'agent'} onChange={() => setFinding('agent')} />The coding agent made the change through FG-1048.</label>
+      </fieldset>
+      {finding && (
+        <p className="ticket-consequence" aria-live="polite">
+          <strong>Updated finding</strong> · {finding === 'changed'
+            ? 'Attach both snapshots. Different blob IDs establish different file contents at the two revisions. To attribute the write, request a change record that links the writer and request to revision 808.'
+            : finding === 'unchanged'
+              ? 'Revise the finding. Revision 808 names a different file blob. The gateway decision concerns one request, while the snapshots show the policy contents before and after it.'
+              : 'Leave attribution open. The timestamps bracket the request, but the export contains no link between FG-1048 and revision 808. A receipt signature cannot supply that link.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function Investigation({ record }: { record: DemoDecision }) {
   const [packet, setPacket] = useState<Packet>('original');
   const [result, setResult] = useState<VerificationResult | null>(null);
@@ -92,6 +126,7 @@ function Investigation({ record }: { record: DemoDecision }) {
           <label><input type="radio" name="ticket" checked={disposition === 'close'} onChange={() => setDisposition('close')} />Close the ticket as proof that no write occurred.</label>
         </fieldset>
         {disposition && <p className="ticket-consequence" aria-live="polite"><strong>Ticket consequence</strong> · {ticketOutcome(result, disposition)}</p>}
+        {disposition && <FileHistoryFinding />}
         <button className="secondary-button" onClick={() => selectPacket('original')}>Restart investigation</button>
       </>}
     </section>

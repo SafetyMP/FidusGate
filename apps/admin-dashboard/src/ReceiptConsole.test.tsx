@@ -56,12 +56,22 @@ describe('ReceiptConsole operator journeys', () => {
     expect(screen.getByText(/This training example changed/)).toBeVisible();
     fireEvent.click(screen.getByRole('radio', { name: /Hold the finding/ }));
     expect(screen.getByText(/Keep the decision unresolved/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Request repository history' }));
+    expect(screen.getByText('9fb23c1')).toBeVisible();
+    expect(screen.getByText('d9019fa')).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /coding agent made the change/ }));
+    expect(screen.getByText(/Leave attribution open/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /content stayed the same/ }));
+    expect(screen.getByText(/Revise the finding/)).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /content changed between snapshots/ }));
+    expect(screen.getByText(/Attach both snapshots/)).toBeVisible();
     const inputs = vi.mocked(verifyDemoReceipt).mock.calls.map(([value]) => JSON.parse(value));
     expect(inputs.map((receipt) => receipt.payload.decision)).toEqual(['deny', 'allow']);
     expect(inputs[0].signature).toEqual(inputs[1].signature);
     fireEvent.click(screen.getByRole('button', { name: 'Restart investigation' }));
     expect(screen.getByRole('radio', { name: 'Gateway archive copy' })).toBeChecked();
     expect(screen.queryByRole('radio', { name: /Close the ticket/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'File history evidence' })).not.toBeInTheDocument();
     expect(check).toBeEnabled();
   });
 
