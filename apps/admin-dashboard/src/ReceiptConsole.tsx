@@ -8,9 +8,10 @@ import {
   verifyDemoReceipt,
   type DemoDecision,
 } from './demo';
+import { ReviewCase } from './demo/ReviewCase';
 import './ReceiptConsole.css';
 
-type View = 'decisions' | 'playground' | 'verify' | 'about';
+type View = 'case' | 'technical' | 'decisions' | 'playground' | 'verify' | 'about';
 type IconName =
   | 'grid'
   | 'flask'
@@ -70,14 +71,40 @@ const nav: { id: View; title: string; icon: IconName }[] = [
   { id: 'playground', title: 'Policy playground', icon: 'flask' },
   { id: 'verify', title: 'Receipt verifier', icon: 'shield' },
 ];
+function readView(): View | undefined {
+  const slug = window.location.hash.replace(/^#\/?/, '');
+  if (slug === '' || slug === 'case') return 'case';
+  if (slug === 'technical' || slug === 'decisions' || slug === 'verify' ||
+      slug === 'playground' || slug === 'about') return slug;
+  return undefined;
+}
+
 export default function ReceiptConsole() {
-  const [view, setView] = useState<View>('decisions');
+  const [resetCount, setResetCount] = useState(0);
+  const [view, setView] = useState<View>(() => readView() ?? 'case');
+  const caseRef = useRef<HTMLElement>(null);
+  const guideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const sync = () => {
+      const next = readView();
+      if (next) setView(next);
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, []);
   const mainRef = useRef<HTMLElement>(null);
   const detailRef = useRef<HTMLElement>(null);
   const previousView = useRef(view);
   const [selectionRequest, setSelectionRequest] = useState(0);
   useEffect(() => {
-    if (previousView.current !== view) mainRef.current?.focus();
+    if (previousView.current !== view) {
+      const target = view === 'case' ? caseRef : view === 'technical' ? guideRef : mainRef;
+      target.current?.focus();
+    }
     previousView.current = view;
   }, [view]);
   useEffect(() => {
@@ -108,6 +135,7 @@ export default function ReceiptConsole() {
   );
   const denied = decisions.filter((item) => item.decision === 'deny').length;
   function navigate(next: View) {
+    if (readView() !== next) window.history.pushState(null, '', '#/' + next);
     setView(next);
     setNotice('');
     window.scrollTo({ top: 0 });
@@ -119,6 +147,7 @@ export default function ReceiptConsole() {
     setVerifying(false);
   }
   function inspectReceipt(item: DemoDecision) {
+    setSelected(item);
     editReceipt(receiptJson(item));
     navigate('verify');
   }
@@ -133,6 +162,7 @@ export default function ReceiptConsole() {
     }
   }
   function reset() {
+    setResetCount((count) => count + 1);
     setDecisions(DEMO_DECISIONS);
     setSelected(DEMO_DECISIONS[0]);
     setQuery('');
@@ -142,6 +172,39 @@ export default function ReceiptConsole() {
     setNotice('Demo reset. All sample decisions restored.');
   }
   return (
+    <>
+      {(view === 'case' || view === 'technical') && (
+        <header className="study-header">
+          <a className="study-brand" href="#/case"><Icon name="shield" size={26} />FidusGate</a>
+          <nav aria-label="Case navigation">
+            <a href="#/case" aria-current={view === 'case' ? 'page' : undefined}>Business case</a>
+            <a href="#/technical" aria-current={view === 'technical' ? 'page' : undefined}>Technical guide</a>
+          </nav>
+        </header>
+      )}
+      <main className="study-main" ref={caseRef} tabIndex={-1} hidden={view !== 'case'}>
+        <header className="study-intro">
+          <div className="study-kicker">Platform security · Investment decision</div>
+          <h1>Should every tool decision carry a signed receipt?</h1>
+          <p>A coding agent asked to edit the file that governs its permissions. The gateway denied the request. Decide whether the security team should fund a receipt pilot or keep using decision logs for change reviews.</p>
+        </header>
+        <ReviewCase key={resetCount} record={DEMO_DECISIONS[0]} onVerify={inspectReceipt} />
+        <a className="study-guide-link" href="#/technical">Explore the technical guide</a>
+      </main>
+      {view === 'technical' && (
+        <main className="study-main study-guide" ref={guideRef} tabIndex={-1}>
+          <div className="study-kicker">FidusGate · Technical guide</div>
+          <h1>Inspect the evidence</h1>
+          <p>Use the browser tools to examine the case behind FG-1048. Each example uses synthetic records and a public demo key. No tool calls execute here.</p>
+          <ol>
+            <li><a href="#/decisions">Decision log</a><p>Inspect actors, resources and recorded reasons across the sample workspace.</p></li>
+            <li><button onClick={() => inspectReceipt(DEMO_DECISIONS[0])}>Check the FG-1048 receipt</button><p>Verify its Ed25519 signature, then compare it with an edited payload.</p></li>
+            <li><a href="#/playground">Policy playground</a><p>Replay a recorded scenario and inspect the resulting entry in the log.</p></li>
+          </ol>
+          <a href="https://github.com/SafetyMP/FidusGate/blob/main/docs/getting-started.md">Run the gateway-connected console locally</a>
+        </main>
+      )}
+      {view !== 'case' && view !== 'technical' && (
     <div className="fg-app">
       <a className="skip-link" href="#workspace">
         Skip to workspace
@@ -152,7 +215,7 @@ export default function ReceiptConsole() {
           href="#"
           onClick={(event) => {
             event.preventDefault();
-            navigate('decisions');
+            navigate('case');
           }}
         >
           <span className="brand-mark">
@@ -160,6 +223,7 @@ export default function ReceiptConsole() {
           </span>
           FidusGate<span className="brand-dot">.</span>
         </a>
+        <div className="technical-return"><a href="#/case">Business case</a><a href="#/technical">Technical guide</a></div>
         <div className="workspace-switch">
           <span className="workspace-avatar">F</span>
           <div>
@@ -231,7 +295,7 @@ export default function ReceiptConsole() {
               <div className="eyebrow">MCP TOOL-CALL RECEIPTS</div>
               <h1>
                 {view === 'decisions'
-                  ? 'Every decision. A clear reason.'
+                  ? 'Decision log'
                   : view === 'playground'
                     ? 'Explore the boundary.'
                     : view === 'verify'
@@ -240,7 +304,7 @@ export default function ReceiptConsole() {
               </h1>
               <p>
                 {view === 'decisions'
-                  ? 'Follow an agent’s request from policy decision to signed receipt.'
+                  ? 'Search recorded requests, inspect the reason for a decision and verify its receipt.'
                   : view === 'playground'
                     ? 'Try a sample request and understand why it would be allowed or denied.'
                     : view === 'verify'
@@ -248,16 +312,12 @@ export default function ReceiptConsole() {
                       : 'FidusGate helps people inspect, simulate, and verify MCP tool-call decisions.'}
               </p>
             </div>
-            {view === 'decisions' && (
-              <button className="primary-button" onClick={() => navigate('playground')}>
-                <Icon name="flask" size={17} /> Try a scenario <Icon name="arrow" size={16} />
-              </button>
-            )}
+
           </div>
           <div className="demo-banner">
             <span className="banner-icon">i</span>
             <p>
-              <strong>A safe space to explore.</strong> Synthetic decisions, public demo keys. No
+              <strong>Browser demo.</strong> Synthetic decisions, public demo keys. No
               agent is connected and no tools run.
             </p>
             <button onClick={() => navigate('about')}>
@@ -271,6 +331,9 @@ export default function ReceiptConsole() {
           )}
           {view === 'decisions' && (
             <>
+              <button className="secondary-button scenario-shortcut" onClick={() => navigate('playground')}>
+                <Icon name="flask" size={17} /> Try a scenario
+              </button>
               <section className="metrics" aria-label="Sample decision summary">
                 <div>
                   <span>Total decisions</span>
@@ -733,5 +796,7 @@ export default function ReceiptConsole() {
         </main>
       </div>
     </div>
+      )}
+    </>
   );
 }

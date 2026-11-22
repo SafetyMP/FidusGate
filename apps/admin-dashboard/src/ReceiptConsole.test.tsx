@@ -10,6 +10,7 @@ vi.mock('./demo', async (importOriginal) => {
 });
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '#/decisions');
   vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
   vi.mocked(verifyDemoReceipt).mockReset();
 });
@@ -30,6 +31,26 @@ function receiptValue(element: HTMLElement): string {
 }
 
 describe('ReceiptConsole operator journeys', () => {
+  it('opens the business case by default and carries its record into the verifier', async () => {
+    window.history.replaceState(null, '', '/');
+    render(<ReceiptConsole />);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Inspect the fields in FG-1048'));
+    expect(screen.getByText('$1,200 first-year net time value')).toBeVisible();
+    fireEvent.change(screen.getByRole('slider', { name: /Reviews per month/ }), {target: {value: '0'}});
+    expect(screen.getByText('-$6,000 first-year net time value')).toBeVisible();
+    expect(screen.getByText(/No labor value can cover/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', {name: 'Inspect FG-1048 receipt'}));
+    expect(receiptValue(screen.getByRole('textbox', {name: 'Paste a signed FidusGate receipt'}))).toContain('policy.cedar');
+    fireEvent.click(screen.getByRole('link', {name: 'Business case'}));
+    expect(await screen.findByRole('slider', {name: /Reviews per month/})).toHaveValue('0');
+    expect(screen.getByText('-$6,000 first-year net time value')).toBeVisible();
+    fireEvent.click(screen.getByRole('link', {name: 'Technical guide'}));
+    expect(await screen.findByRole('heading', {name: 'Inspect the evidence'})).toBeVisible();
+    fireEvent.click(screen.getByRole('link', {name: 'Decision log'}));
+    expect(await screen.findByRole('table')).toBeVisible();
+  });
+
   it('combines search and decision filters and recovers from an empty result', () => {
     render(<ReceiptConsole />);
     const search = screen.getByRole('textbox', { name: 'Search decisions' });

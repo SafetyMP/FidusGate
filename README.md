@@ -23,6 +23,8 @@ FidusGate organizes that work into three steps:
 2. **Explore a policy scenario:** compare outcomes without executing a tool. The connected console also retains draft simulation and confirmed administrator policy application.
 3. **Verify the receipt:** check the original signed payload and distinguish signature validity, chain continuity, and issuer trust.
 
+**Try the change-review case.** A coding agent requests a write to the file that governs tool permissions. Inspect the signed reason for denying FG-1048, then estimate how many analyst minutes a receipt would need to save over a decision-log export to cover its first-year cost. [Open the sample case](https://safetymp.github.io/FidusGate/) · [Technical guide and console](https://safetymp.github.io/FidusGate/#/technical)
+
 ## Choose your experience
 
 | | Public demo | Gateway-connected console |
