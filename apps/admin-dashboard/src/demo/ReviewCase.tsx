@@ -23,7 +23,7 @@ function Assumption({ label, value, max, step, onChange }: {
   );
 }
 
-type Packet = 'original' | 'edited';
+type Packet = 'original' | 'received';
 type Disposition = 'record' | 'hold' | 'close';
 
 function ticketOutcome(check: VerificationResult, disposition: Disposition): string {
@@ -48,6 +48,9 @@ function Investigation({ record }: { record: DemoDecision }) {
   const [checking, setChecking] = useState(false);
   const [disposition, setDisposition] = useState<Disposition | null>(null);
   const request = useRef(0);
+  const original = receiptJson(record);
+  const packetJson = packet === 'original' ? original : tamperReceipt(original);
+  const { payload, signature } = JSON.parse(packetJson) as DemoDecision['receipt'];
   function selectPacket(next: Packet) {
     request.current += 1;
     setPacket(next);
@@ -58,8 +61,7 @@ function Investigation({ record }: { record: DemoDecision }) {
   async function checkPacket() {
     const current = ++request.current;
     setChecking(true);
-    const original = receiptJson(record);
-    const checked = await verifyDemoReceipt(packet === 'original' ? original : tamperReceipt(original));
+    const checked = await verifyDemoReceipt(packetJson);
     if (current === request.current) {
       setResult(checked);
       setChecking(false);
@@ -71,16 +73,18 @@ function Investigation({ record }: { record: DemoDecision }) {
       <p>The engineer asks whether the policy file changed. As the investigating analyst, choose a sample packet, check its signature, then decide what the evidence supports.</p>
       <fieldset className="packet-choice">
         <legend>Evidence packet</legend>
-        <label><input type="radio" name="packet" checked={packet === 'original'} onChange={() => selectPacket('original')} />Original signed receipt</label>
-        <label><input type="radio" name="packet" checked={packet === 'edited'} onChange={() => selectPacket('edited')} />Edited training copy</label>
+        <label><input type="radio" name="packet" checked={packet === 'original'} onChange={() => selectPacket('original')} />Gateway archive copy</label>
+        <label><input type="radio" name="packet" checked={packet === 'received'} onChange={() => selectPacket('received')} />Copy received with ticket</label>
       </fieldset>
       <div className="packet-strip">
-        <div><strong>{record.id}</strong> · Payload decision <code>{packet === 'original' ? record.receipt.payload.decision : 'allow'}</code>
-          <small>{packet === 'original' ? 'Intact synthetic packet, signed with the public demo key.' : 'The decision field was changed from deny to allow. The original signature is attached.'}</small></div>
+        <div><strong>{record.id}</strong> · Claimed decision <code>{payload.decision}</code>
+          <small><code>{payload.tool_name}</code> on <code>{String(payload.args?.path)}</code> · Issued <time dateTime={payload.issued_at}>{payload.issued_at.replace('T', ' ').replace('.000Z', ' UTC')}</time></small>
+          <small>Signature excerpt <code>{signature.sig.slice(0, 16)}…</code> · Synthetic packet</small></div>
         <button className="primary-button" onClick={checkPacket} disabled={checking || result !== null}>{checking ? 'Checking packet…' : 'Check packet signature'}</button>
       </div>
       {result && <>
-        <p role="status" className="packet-result"><strong>Signature check</strong> · {result.message}</p>
+        <p role="status" className="packet-result"><strong>Signature check</strong> · {result.message}{' '}
+          {result.status === 'invalid' && packet === 'received' && 'Compare the two packets. The ticket copy claims allow while the archive says deny. Both carry the same signature. This training example changed the decision field. A mismatch alone cannot tell the investigator who changed it.'}</p>
         <fieldset className="ticket-choice">
           <legend>Choose the ticket disposition</legend>
           <label><input type="radio" name="ticket" checked={disposition === 'record'} onChange={() => setDisposition('record')} />Record the stated decision and request file history.</label>
