@@ -24,7 +24,7 @@ Reference: Google's [JavaScript SEO guidance](https://developers.google.com/sear
 
 ## Screenshots and social card
 
-The README shows the redesigned Decisions workspace using synthetic demo records. [Asset provenance](../assets/README.md) distinguishes current captures from retained older screenshots.
+The README opens with the FG-1048 business case using synthetic records. [Asset provenance](../assets/README.md) distinguishes current captures from retained older screenshots.
 
 To capture the static demo locally, first build and preview it using the [Pages guide](../github-pages-demo.md), then run:
 
@@ -32,9 +32,9 @@ To capture the static demo locally, first build and preview it using the [Pages 
 SCREENSHOT_BASE_URL=http://127.0.0.1:4173/FidusGate/ npm run screenshots
 ```
 
-The capture script refuses a gateway-connected console. It captures Decisions, Policy playground, and Receipt verifier without signing in or changing gateway data. Browser screenshots require an installed Chrome or, with `CI=1`, Playwright Chromium. `npm run screenshots:rebuild-gif` rebuilds the animation from existing captures.
+The capture script refuses a gateway-connected console. It captures the FG-1048 case and a technical signature comparison without signing in or changing gateway data. Browser screenshots require an installed Chrome or, with `CI=1`, Playwright Chromium. `npm run screenshots:rebuild-gif` rebuilds the animation from existing captures.
 
-The 1280×640 [social card source](../assets/social-preview.svg) and [PNG](../assets/social-preview.png) reflect the same product description. The Pages build copies the PNG into its artifact. GitHub's repository social preview is a separate upload under **Settings → General → Social preview**; committing the PNG does not update that setting. A maintainer can upload it following [GitHub's guide](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). No third-party social posting is needed to validate the file.
+The Pages build publishes the [case opening](../assets/fg1048-case.png) as its social card. GitHub's repository social preview is a separate upload under **Settings → General → Social preview**; committing the PNG does not update that setting. A maintainer can upload it following [GitHub's guide](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). No third-party social posting is needed to validate the file.
 
 ## Keep the repository usable
 

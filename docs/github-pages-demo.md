@@ -1,8 +1,12 @@
 # GitHub Pages demo
 
-Investigate FG-1048 by checking the ticket attachment and archive against the demo Ed25519 key. Attach or detach records and add an analyst note. The working paper derives findings only from attached evidence and exports the submitted receipts, check results, outstanding evidence requests and note in a JSON file. Selecting another tab preserves the draft in memory. Refresh or Reset case restores the opening state.
+The public route opens the original FG-1048 change-review case. The analyst checks a submitted packet and requests follow-up file history. The platform lead compares three alternatives using adjustable first-year costs, review volumes and analyst time.
 
-The platform-security worksheet is at `#/pilot`. The compact `#/technical` reference maps gateway decisions, signed receipts, synthetic evidence and the connected console to their implementations. Older console bookmarks open that reference. The connected console remains available locally.
+The technical view carries the selected archive or received copy into four stages: request, decision, signature and file history. Compare it with the genuine signed synthetic FG-1047 documentation read or FG-1048 policy-write denial, run both signature checks and download the pair with provenance, check results and optional repository snapshots. The selected packet, comparison fixture and stage are in the URL. Returning to the case within the session preserves the investigation and economics inputs. Reloading reopens the addressed evidence selection and clears transient verification results.
+
+[Business case](https://safetymp.github.io/FidusGate/#/case) · [FG-1048 ticket copy against the archived denial](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature) · [Pilot worksheet](https://safetymp.github.io/FidusGate/#/case?section=economics)
+
+Former public tool bookmarks open the compact technical view. The former pilot bookmark opens the case worksheet. Local gateway-connected tools and their authentication continue to use the documented setup.
 
 **Design basis.** NIST SP 800-61r3 §2.2 distinguishes incident handlers collecting evidence from leadership allocating resources. RS.AN-06 and RS.AN-07 explain the need to preserve evidence integrity and provenance. Those concerns drive the inspectable case file, the limited attribution finding and the pilot comparison with ordinary decision logs. [NIST incident response guidance](https://csrc.nist.gov/pubs/sp/800/61/r3/final)
 
@@ -20,7 +24,7 @@ npm run preview --workspace apps/admin-dashboard -- --host 127.0.0.1
 
 Open the preview server's URL with `/FidusGate/` appended. Vite's base option makes bundled asset URLs work under the repository's Pages path. `VITE_FIDUSGATE_DEMO=true` selects the browser-only demo at build time. Do not publish a normal gateway-connected build to Pages.
 
-The desk uses synthetic records, a mismatched ticket copy and two authored repository snapshots. The decision archive is drawn from the committed signed fixtures. Receipt signature verification is a cryptographic check against the public demo key; it does not establish production issuer identity or prove execution. Keep these distinctions visible when presenting the demo. The note and case file stay in the browser until exported.
+The case uses synthetic records, a mismatched ticket copy and two authored repository snapshots. The decision archive is drawn from the committed signed fixtures. Receipt signature verification is a cryptographic check against the public demo key; it does not establish production issuer identity or prove execution. Keep these distinctions visible when presenting the demo. The evidence comparison stays in the browser until exported.
 
 ## Publication
 
@@ -36,7 +40,7 @@ Only `apps/admin-dashboard/dist` is uploaded. There are no gateway credentials, 
 
 - Open `/FidusGate/` directly and refresh it; JavaScript and stylesheet assets must load under that path.
 - Inspect a denied call and follow the reason and receipt without logging in.
-- Check the ticket and archive signatures, attach both and compare the discrepancy. Attach the file history and inspect the unresolved attribution request. Detach each source and check the exported JSON.
+- Select the received packet in the case. Open its trace, compare it with each fixture and run the checks. Export the selected evidence with snapshots, refresh its direct link and return to the original case.
 - Check narrow and wide layouts and keyboard navigation.
 - Confirm the static demo makes no `/api` requests and sends no receipt input to a server.
 - Check the exact published commit's Actions run and the live URL. A local build does not establish deployment success or user adoption.
