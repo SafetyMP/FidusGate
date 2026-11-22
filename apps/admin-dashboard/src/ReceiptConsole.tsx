@@ -1,809 +1,445 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DEMO_DECISIONS,
-  DEMO_SCENARIOS,
   receiptJson,
-  simulateScenario,
   tamperReceipt,
   verifyDemoReceipt,
-  type DemoDecision,
+  type VerificationResult,
 } from './demo';
-import { ReviewCase } from './demo/ReviewCase';
+import { PilotWorksheet } from './demo/ReviewCase';
 import './ReceiptConsole.css';
 
-type View = 'case' | 'technical' | 'decisions' | 'playground' | 'verify' | 'about';
-type IconName =
-  | 'grid'
-  | 'flask'
-  | 'shield'
-  | 'arrow'
-  | 'search'
-  | 'download'
-  | 'code'
-  | 'book'
-  | 'reset';
-function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
-  const paths: Record<IconName, string> = {
-    grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
-    flask: 'M9 3h6 M10 3v7L4 19q-1 2 2 2h12q3 0 2-2l-6-9V3 M7 15h10',
-    shield: 'M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z M8 12l3 3 5-6',
-    arrow: 'M5 12h14 M14 7l5 5-5 5',
-    search: 'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
-    download: 'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5',
-    code: 'm8 6-6 6 6 6 M16 6l6 6-6 6 M14 3l-4 18',
-    book: 'M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2 M3 17h17 M8 7h7 M8 11h5',
-    reset: 'M3 10a9 9 0 1 1 2 9 M3 3v7h7',
-  };
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={paths[name]} />
-    </svg>
-  );
-}
-function Badge({ decision }: { decision: 'allow' | 'deny' }) {
-  return (
-    <span className={`decision-badge ${decision}`}>
-      <span aria-hidden="true">{decision === 'allow' ? '✓' : '⊘'}</span>{' '}
-      {decision === 'allow' ? 'Allowed' : 'Denied'}
-    </span>
-  );
-}
-function download(value: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([value], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-const nav: { id: View; title: string; icon: IconName }[] = [
-  { id: 'decisions', title: 'Decisions', icon: 'grid' },
-  { id: 'playground', title: 'Policy playground', icon: 'flask' },
-  { id: 'verify', title: 'Receipt verifier', icon: 'shield' },
+const repository = 'https://github.com/SafetyMP/FidusGate/blob/main/';
+const archive = DEMO_DECISIONS.find((item) => item.id === 'FG-1048')!;
+const neighbor = DEMO_DECISIONS.find((item) => item.id === 'FG-1047')!;
+const archiveJson = receiptJson(archive);
+
+const records = [
+  {
+    id: 'ticket',
+    title: 'Ticket attachment',
+    source: 'Change desk',
+    receipt: tamperReceipt(archiveJson),
+  },
+  { id: 'archive', title: 'Gateway original', source: 'Decision archive', receipt: archiveJson },
+  {
+    id: 'neighbor',
+    title: 'Adjacent request',
+    source: 'Decision archive',
+    receipt: receiptJson(neighbor),
+  },
+  { id: 'history', title: 'Policy file history', source: 'Repository export' },
+] as const;
+
+type RecordId = (typeof records)[number]['id'];
+type Checks = Partial<Record<RecordId, VerificationResult>>;
+type View = 'case' | 'technical' | 'pilot';
+const snapshots = [
+  { at: '2026-11-14T14:30:00Z', revision: 807, blob: '9fb23c1' },
+  { at: '2026-11-14T14:38:00Z', revision: 808, blob: 'd9019fa' },
 ];
-function readView(): View | undefined {
+function currentView(): View {
   const slug = window.location.hash.replace(/^#\/?/, '');
-  if (slug === '' || slug === 'case') return 'case';
-  if (slug === 'technical' || slug === 'decisions' || slug === 'verify' ||
-      slug === 'playground' || slug === 'about') return slug;
-  return undefined;
+  if (slug === 'pilot') return 'pilot';
+  if (['technical', 'decisions', 'verify', 'playground', 'about'].includes(slug))
+    return 'technical';
+  return 'case';
+}
+function formatTime(value: string) {
+  return value.slice(11, 19) + ' UTC';
+}
+function Reference() {
+  return (
+    <section className="reference">
+      <p className="kicker">Technical reference</p>
+      <h1>Follow the evidence to its source.</h1>
+      <p>
+        Four components explain what the browser can reproduce and where a live deployment would
+        need independent evidence.
+      </p>
+      <dl>
+        <dt>Gateway decision</dt>
+        <dd>
+          The connected gateway records tool, principal, resource and reason. Cedar authorization
+          evaluates a request. The desk reads pre-recorded examples.{' '}
+          <a href={repository + 'apps/secure-gateway'}>Gateway source</a> ·{' '}
+          <a href="https://docs.cedarpolicy.com/auth/authorization.html">Cedar authorization</a>
+        </dd>
+        <dt>Signed receipt</dt>
+        <dd>
+          The browser checks the serialized payload with Ed25519 and the public fixture key. Custody
+          of an operational issuer’s key needs independent verification.{' '}
+          <a href={repository + 'apps/admin-dashboard/src/demo/index.ts'}>
+            Verifier implementation
+          </a>{' '}
+          · <a href="https://www.rfc-editor.org/rfc/rfc8032">RFC 8032</a>
+        </dd>
+        <dt>Evidence records</dt>
+        <dd>
+          FG-1048 and FG-1047 come from signed synthetic fixtures. The ticket copy and repository
+          snapshots are authored for this dispute. The repository export is unsigned and has no
+          request correlation ID.{' '}
+          <a href={repository + 'apps/admin-dashboard/src/demo/fixtures.ts'}>Signed fixtures</a>
+        </dd>
+        <dt>Connected console</dt>
+        <dd>
+          Operators can inspect their gateway’s ledger, policies and receipts in the separately
+          configured console. <a href={repository + 'docs/getting-started.md'}>Run locally</a>
+        </dd>
+      </dl>
+    </section>
+  );
+}
+function findingList(attached: RecordId[], checks: Checks) {
+  const findings: string[] = [];
+  if (attached.includes('archive') && checks.archive?.status === 'valid') {
+    findings.push('Gateway original · The signed sample records a denied write to policy.cedar.');
+  }
+  if (attached.includes('ticket') && checks.ticket?.status === 'invalid') {
+    findings.push('Ticket attachment · Its claimed decision fails the demo-key signature check.');
+  }
+  if (
+    attached.includes('archive') &&
+    attached.includes('ticket') &&
+    checks.archive?.status === 'valid' &&
+    checks.ticket?.status === 'invalid'
+  ) {
+    findings.push(
+      'Copy discrepancy · The ticket says allow and the archive says deny. They carry the same signature.',
+    );
+  }
+  if (attached.includes('history')) {
+    findings.push(
+      'Repository export · The two revisions show different file contents across the request window. The export contains no link to a writer or request.',
+    );
+  }
+  if (attached.includes('neighbor')) {
+    findings.push(
+      'Adjacent request · FG-1047 concerns a documentation read. Its permission decision cannot explain the policy write.',
+    );
+  }
+  return findings;
+}
+
+function openRequests(attached: RecordId[], checks: Checks) {
+  const outstanding: string[] = [];
+  for (const record of records) {
+    if (!('receipt' in record)) continue;
+    if (!attached.includes(record.id)) {
+      if (record.id === 'ticket') outstanding.push('Attach the disputed ticket copy for comparison.');
+      if (record.id === 'archive') outstanding.push('Obtain and attach the original gateway decision.');
+      continue;
+    }
+    const result = checks[record.id]?.status;
+    if (!result) outstanding.push(`Check the signature on the ${record.title.toLowerCase()}.`);
+    if (result === 'unsupported' || result === 'error') {
+      outstanding.push(`Recheck the ${record.title.toLowerCase()} with a compatible verifier.`);
+    }
+    if (result === 'invalid' && record.id !== 'ticket') {
+      outstanding.push(`Request an intact copy of the ${record.title.toLowerCase()} from its source.`);
+    }
+  }
+  if (attached.includes('archive') && checks.archive?.status === 'valid') {
+    outstanding.push('Establish custody of the operational issuer key independently.');
+  }
+  if (attached.includes('history')) {
+    outstanding.push('Request a correlation record for revision 808 before attributing the write.');
+  } else {
+    outstanding.push('Request the repository revisions bracketing the decision.');
+  }
+  return outstanding;
+}
+
+function EvidenceDesk() {
+  const [active, setActive] = useState<RecordId>('ticket');
+  const [attached, setAttached] = useState<RecordId[]>(['ticket']);
+  const [checks, setChecks] = useState<Checks>({});
+  const [busy, setBusy] = useState<RecordId[]>([]);
+  const [note, setNote] = useState('');
+  const session = useRef(0);
+  const selected = records.find((item) => item.id === active)!;
+  const raw = 'receipt' in selected ? selected.receipt : undefined;
+  const packet = raw ? (JSON.parse(raw) as typeof archive.receipt) : undefined;
+  const findings = findingList(attached, checks);
+  const missing = openRequests(attached, checks);
+  const handoff = {
+    case: 'FG-1048',
+    scope: 'Synthetic browser exercise. No live investigation.',
+    evidence: records
+      .filter((item) => attached.includes(item.id))
+      .map((item) => ({
+        source: item.source,
+        name: item.title,
+        ...('receipt' in item
+          ? {
+              receipt: JSON.parse(item.receipt),
+              verification: checks[item.id]
+                ? { status: checks[item.id]!.status, message: checks[item.id]!.message }
+                : { status: 'unchecked' },
+            }
+          : { path: 'policy.cedar', snapshots, requestCorrelation: null }),
+      })),
+    findings,
+    openRequests: missing,
+    analystNote: note,
+  };
+  async function verify() {
+    if (!raw) return;
+    const id = active;
+    const version = session.current;
+    setBusy((items) => [...items, id]);
+    const outcome = await verifyDemoReceipt(raw);
+    if (session.current !== version) return;
+    setChecks((old) => ({ ...old, [id]: outcome }));
+    setBusy((items) => items.filter((item) => item !== id));
+  }
+  function restart() {
+    session.current += 1;
+    setBusy([]);
+    setChecks({});
+    setAttached(['ticket']);
+    setActive('ticket');
+    setNote('');
+  }
+  function toggle() {
+    setAttached((old) =>
+      old.includes(active) ? old.filter((id) => id !== active) : [...old, active],
+    );
+  }
+  return (
+    <section className="desk" aria-label="Investigation desk">
+      <header className="case-head">
+        <div>
+          <p className="kicker">Change review / FG-1048</p>
+          <h1>Reconcile a disputed policy write.</h1>
+          <p>
+            An engineer’s ticket says the coding agent could edit <code>policy.cedar</code>.
+            Assemble a handoff that explains the gateway decision and whether the agent can be
+            linked to a file change.
+          </p>
+        </div>
+        <dl className="case-stamp">
+          <dt>Request time</dt>
+          <dd>14:32 UTC</dd>
+          <dt>Environment</dt>
+          <dd>Synthetic records</dd>
+          <dt>Case owner</dt>
+          <dd>Platform security</dd>
+        </dl>
+      </header>
+      <div className="bench">
+        <section className="sources" aria-labelledby="sources-title">
+          <h2 id="sources-title">Source records</h2>
+          {records.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              aria-pressed={active === item.id}
+              onClick={() => setActive(item.id)}
+            >
+              <span>{item.source}</span>
+              <strong>{item.title}</strong>
+              <small>{attached.includes(item.id) ? 'Attached to handoff' : 'Available'}</small>
+            </button>
+          ))}
+        </section>
+        <section className="exhibit" aria-labelledby="exhibit-title">
+          <p className="kicker">{selected.source}</p>
+          <h2 id="exhibit-title">{selected.title}</h2>
+          {packet ? (
+            <>
+              <p className="record-caption">Submitted tool-call record</p>
+              <dl className="fields">
+                <dt>Issued</dt>
+                <dd>{formatTime(packet.payload.issued_at)}</dd>
+                <dt>Principal claim</dt>
+                <dd>{packet.payload.issuer_id}</dd>
+                <dt>Tool</dt>
+                <dd>{packet.payload.tool_name}</dd>
+                <dt>Resource</dt>
+                <dd>{String(packet.payload.args?.path)}</dd>
+                <dt>Decision claim</dt>
+                <dd>
+                  <b className={'verdict ' + packet.payload.decision}>{packet.payload.decision}</b>
+                </dd>
+                <dt>Signature</dt>
+                <dd>{packet.signature.sig.slice(0, 18)}…</dd>
+              </dl>
+              <button className="action" disabled={busy.includes(active)} onClick={verify}>
+                {busy.includes(active) ? 'Checking…' : 'Verify signature'}
+              </button>
+              {checks[active] && (
+                <p className="check-result" role="status">
+                  <strong>{checks[active]!.status.toUpperCase()}</strong> {checks[active]!.message}
+                </p>
+              )}
+              {active === 'ticket' && (
+                <details>
+                  <summary>Compare the archive copy</summary>
+                  <dl className="fields">
+                    <dt>Ticket / archive</dt>
+                    <dd>
+                      {packet.payload.decision} / {archive.receipt.payload.decision}
+                    </dd>
+                    <dt>Issued at</dt>
+                    <dd>
+                      {packet.payload.issued_at === archive.receipt.payload.issued_at
+                        ? 'Same timestamp'
+                        : 'Different timestamps'}
+                    </dd>
+                    <dt>Signature bytes</dt>
+                    <dd>
+                      {packet.signature.sig === archive.receipt.signature.sig
+                        ? 'Identical'
+                        : 'Different'}
+                    </dd>
+                  </dl>
+                  <p>Check each signature before relying on its decision.</p>
+                </details>
+              )}
+              <details>
+                <summary>Inspect submitted JSON</summary>
+                <pre>{raw}</pre>
+              </details>
+            </>
+          ) : (
+            <>
+              <p className="record-caption">Two snapshots of main / policy.cedar</p>
+              <ol className="revision-line">
+                <li>
+                  <time>{formatTime(snapshots[0].at)}</time>
+                  <strong>Revision 807</strong>
+                  <code>Blob {snapshots[0].blob}</code>
+                </li>
+                <li>
+                  <time>14:32:00 UTC</time>
+                  <strong>FG-1048 requested</strong>
+                  <span>Gateway timestamp</span>
+                </li>
+                <li>
+                  <time>{formatTime(snapshots[1].at)}</time>
+                  <strong>Revision 808</strong>
+                  <code>Blob {snapshots[1].blob}</code>
+                </li>
+              </ol>
+              <p className="record-caption">
+                The synthetic export includes abbreviated file blob IDs. Its request-correlation
+                field is empty.
+              </p>
+            </>
+          )}
+          <button className="outline" onClick={toggle}>
+            {attached.includes(active) ? 'Detach from handoff' : 'Attach to handoff'}
+          </button>
+        </section>
+        <aside className="handoff" aria-labelledby="handoff-title">
+          <p className="kicker">Investigator’s working paper</p>
+          <h2 id="handoff-title">Evidence handoff</h2>
+          <p>
+            {attached.length} of {records.length} records attached
+          </p>
+          <h3>Supported findings</h3>
+          {findings.length ? (
+            <ul>
+              {findings.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>
+              Verify an attached receipt or attach the repository export to establish a finding.
+            </p>
+          )}
+          <h3>Open evidence requests</h3>
+          <ul>
+            {missing.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <label htmlFor="analyst-note">Analyst note</label>
+          <textarea
+            id="analyst-note"
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Context for the engineer reviewing this ticket"
+          />
+          <div className="handoff-actions">
+            <a
+              className="action"
+              download="FG-1048-handoff.json"
+              href={
+                'data:application/json;charset=utf-8,' +
+                encodeURIComponent(JSON.stringify(handoff, null, 2))
+              }
+            >
+              Download handoff
+            </a>
+            <button className="text-link" onClick={restart}>
+              Reset case
+            </button>
+          </div>
+        </aside>
+      </div>
+      <footer className="case-foot">
+        The handoff stays in this browser until downloaded. The fixture key is public. A matching
+        signature proves integrity against that key. <a href="#/pilot">Evaluate a pilot</a>
+      </footer>
+    </section>
+  );
 }
 
 export default function ReceiptConsole() {
-  const [resetCount, setResetCount] = useState(0);
-  const [view, setView] = useState<View>(() => readView() ?? 'case');
-  const caseRef = useRef<HTMLElement>(null);
-  const guideRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState<View>(currentView);
+  const main = useRef<HTMLElement>(null);
   useEffect(() => {
-    const sync = () => {
-      const next = readView();
-      if (next) setView(next);
+    const onHash = () => {
+      setView(currentView());
+      main.current?.focus();
+      window.scrollTo({ top: 0 });
     };
-    window.addEventListener('hashchange', sync);
-    window.addEventListener('popstate', sync);
-    return () => {
-      window.removeEventListener('hashchange', sync);
-      window.removeEventListener('popstate', sync);
-    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const mainRef = useRef<HTMLElement>(null);
-  const detailRef = useRef<HTMLElement>(null);
-  const previousView = useRef(view);
-  const [selectionRequest, setSelectionRequest] = useState(0);
-  useEffect(() => {
-    if (previousView.current !== view) {
-      const target = view === 'case' ? caseRef : view === 'technical' ? guideRef : mainRef;
-      target.current?.focus();
-    }
-    previousView.current = view;
-  }, [view]);
-  useEffect(() => {
-    if (selectionRequest > 0 && window.matchMedia?.('(max-width: 1000px)').matches) {
-      detailRef.current?.focus();
-    }
-  }, [selectionRequest]);
-  const [decisions, setDecisions] = useState(DEMO_DECISIONS);
-  const [selected, setSelected] = useState<DemoDecision>(DEMO_DECISIONS[0]);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [scenario, setScenario] = useState(DEMO_SCENARIOS[0].id);
-  const [result, setResult] = useState<DemoDecision | null>(null);
-  const [input, setInput] = useState('');
-  const [verification, setVerification] = useState<Awaited<
-    ReturnType<typeof verifyDemoReceipt>
-  > | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const verificationVersion = useRef(0);
-  const [notice, setNotice] = useState('');
-  const title = view === 'about' ? 'About this demo' : nav.find((item) => item.id === view)?.title;
-  const filtered = decisions.filter(
-    (item) =>
-      (filter === 'all' || item.decision === filter) &&
-      `${item.id} ${item.tool} ${item.agentName} ${item.principal} ${item.resource}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
-  const denied = decisions.filter((item) => item.decision === 'deny').length;
-  function navigate(next: View) {
-    if (readView() !== next) window.history.pushState(null, '', '#/' + next);
-    setView(next);
-    setNotice('');
-    window.scrollTo({ top: 0 });
-  }
-  function editReceipt(value: string) {
-    verificationVersion.current += 1;
-    setInput(value);
-    setVerification(null);
-    setVerifying(false);
-  }
-  function inspectReceipt(item: DemoDecision) {
-    setSelected(item);
-    editReceipt(receiptJson(item));
-    navigate('verify');
-  }
-  async function verify() {
-    const version = ++verificationVersion.current;
-    setVerifying(true);
-    setVerification(null);
-    const outcome = await verifyDemoReceipt(input);
-    if (version === verificationVersion.current) {
-      setVerification(outcome);
-      setVerifying(false);
-    }
-  }
-  function reset() {
-    setResetCount((count) => count + 1);
-    setDecisions(DEMO_DECISIONS);
-    setSelected(DEMO_DECISIONS[0]);
-    setQuery('');
-    setFilter('all');
-    setResult(null);
-    editReceipt('');
-    setNotice('Demo reset. All sample decisions restored.');
-  }
   return (
     <>
-      {(view === 'case' || view === 'technical') && (
-        <header className="study-header">
-          <a className="study-brand" href="#/case"><Icon name="shield" size={26} />FidusGate</a>
-          <nav aria-label="Case navigation">
-            <a href="#/case" aria-current={view === 'case' ? 'page' : undefined}>Business case</a>
-            <a href="#/technical" aria-current={view === 'technical' ? 'page' : undefined}>Technical guide</a>
-          </nav>
-        </header>
-      )}
-      <main className="study-main" ref={caseRef} tabIndex={-1} hidden={view !== 'case'}>
-        <header className="study-intro">
-          <div className="study-kicker">Platform security · Investment decision</div>
-          <h1>Should every tool decision carry a signed receipt?</h1>
-          <p>A coding agent asked to edit the file that governs its permissions. The gateway denied the request. Decide whether the security team should fund a receipt pilot or keep using decision logs for change reviews.</p>
-        </header>
-        <ReviewCase key={resetCount} record={DEMO_DECISIONS[0]} onVerify={inspectReceipt} />
-        <a className="study-guide-link" href="#/technical">Explore the technical guide</a>
-      </main>
-      {view === 'technical' && (
-        <main className="study-main study-guide" ref={guideRef} tabIndex={-1}>
-          <div className="study-kicker">FidusGate · Technical guide</div>
-          <h1>Inspect the evidence</h1>
-          <p>Use the browser tools to examine the case behind FG-1048. Each example uses synthetic records and a public demo key. No tool calls execute here.</p>
-          <ol>
-            <li><a href="#/decisions">Decision log</a><p>Inspect actors, resources and recorded reasons across the sample workspace.</p></li>
-            <li><button onClick={() => inspectReceipt(DEMO_DECISIONS[0])}>Check the FG-1048 receipt</button><p>Verify its Ed25519 signature, then compare it with an edited payload.</p></li>
-            <li><a href="#/playground">Policy playground</a><p>Replay a recorded scenario and inspect the resulting entry in the log.</p></li>
-          </ol>
-          <a href="https://github.com/SafetyMP/FidusGate/blob/main/docs/getting-started.md">Run the gateway-connected console locally</a>
-        </main>
-      )}
-      {view !== 'case' && view !== 'technical' && (
-    <div className="fg-app">
       <a
-        className="skip-link"
-        href="#workspace"
-        onClick={(event) => {
-          event.preventDefault();
-          mainRef.current?.focus();
+        className="skip"
+        href="#desk-main"
+        onClick={(e) => {
+          e.preventDefault();
+          main.current?.focus();
         }}
       >
-        Skip to workspace
+        Skip to content
       </a>
-      <aside className="sidebar">
-        <a
-          className="brand"
-          href="#"
-          onClick={(event) => {
-            event.preventDefault();
-            navigate('case');
-          }}
-        >
-          <span className="brand-mark">
-            <Icon name="shield" size={24} />
-          </span>
-          FidusGate<span className="brand-dot">.</span>
+      <header className="mast">
+        <a href="#/case" className="brand">
+          <span aria-hidden="true">◇</span> FidusGate
         </a>
-        <div className="technical-return"><a href="#/case">Business case</a><a href="#/technical">Technical guide</a></div>
-        <div className="workspace-switch">
-          <span className="workspace-avatar">F</span>
-          <div>
-            <strong>Demo workspace</strong>
-            <span>Explore with sample data</span>
-          </div>
-          <span className="workspace-chevron">⌄</span>
-        </div>
-        <p className="nav-label">WORKSPACE</p>
         <nav aria-label="Main navigation">
-          {nav.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item ${view === item.id ? 'active' : ''}`}
-              onClick={() => navigate(item.id)}
-              aria-current={view === item.id ? 'page' : undefined}
-            >
-              <Icon name={item.icon} />
-              {item.title}
-              {item.id === 'decisions' && <span className="nav-count">{decisions.length}</span>}
-            </button>
+          {(
+            [
+              ['case', 'Investigation desk'],
+              ['pilot', 'Pilot economics'],
+              ['technical', 'Technical reference'],
+            ] as const
+          ).map(([route, title]) => (
+            <a key={route} href={'#/' + route} aria-current={route === view ? 'page' : undefined}>
+              {title}
+            </a>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <span className="tiny-label">A RECEIPT FOR EVERY DECISION</span>
-            <p>Understand what your agent requested. See why it was allowed or denied.</p>
-            <button onClick={() => navigate('about')}>
-              How FidusGate works <Icon name="arrow" size={15} />
-            </button>
-          </div>
-          <a className="nav-item source-link" href="https://github.com/SafetyMP/FidusGate">
-            <Icon name="code" /> View source <span>↗</span>
-          </a>
-          <div className="sidebar-footer">
-            <span className="avatar">D</span>
-            <div>
-              <strong>Demo visitor</strong>
-              <span>No account needed</span>
-            </div>
-            <span className="visitor-dot" />
-          </div>
+      </header>
+      <main id="desk-main" ref={main} tabIndex={-1}>
+        <div hidden={view !== 'case'}>
+          <EvidenceDesk />
         </div>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <div>
-            <span className="breadcrumb">Workspace</span>
-            <span className="breadcrumb-divider">/</span>
-            <strong>{title}</strong>
-          </div>
-          <div className="topbar-right">
-            <span className="demo-pill">
-              <span /> Interactive demo
-            </span>
-            <button
-              className="icon-button"
-              aria-label="Reset demo"
-              title="Reset demo"
-              onClick={reset}
-            >
-              <Icon name="reset" size={17} />
-            </button>
-          </div>
-        </header>
-        <main ref={mainRef} id="workspace" tabIndex={-1}>
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">MCP TOOL-CALL RECEIPTS</div>
-              <h1>
-                {view === 'decisions'
-                  ? 'Decision log'
-                  : view === 'playground'
-                    ? 'Explore the boundary.'
-                    : view === 'verify'
-                      ? 'Check the signature. Inspect the detail.'
-                      : 'A clearer view of agent activity.'}
-              </h1>
-              <p>
-                {view === 'decisions'
-                  ? 'Search recorded requests, inspect the reason for a decision and verify its receipt.'
-                  : view === 'playground'
-                    ? 'Try a sample request and understand why it would be allowed or denied.'
-                    : view === 'verify'
-                      ? 'Check that a receipt’s payload matches its Ed25519 signature.'
-                      : 'FidusGate helps people inspect, simulate, and verify MCP tool-call decisions.'}
-              </p>
-            </div>
-
-          </div>
-          <div className="demo-banner">
-            <span className="banner-icon">i</span>
-            <p>
-              <strong>Browser demo.</strong> Synthetic decisions, public demo keys. No
-              agent is connected and no tools run.
-            </p>
-            <button onClick={() => navigate('about')}>
-              Demo details <span aria-hidden="true">↗</span>
-            </button>
-          </div>
-          {notice && (
-            <p className="notice" role="status">
-              {notice}
-            </p>
-          )}
-          {view === 'decisions' && (
-            <>
-              <button className="secondary-button scenario-shortcut" onClick={() => navigate('playground')}>
-                <Icon name="flask" size={17} /> Try a scenario
-              </button>
-              <section className="metrics" aria-label="Sample decision summary">
-                <div>
-                  <span>Total decisions</span>
-                  <strong>
-                    {decisions.length}
-                    <small>sample records</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>
-                    <i className="metric-dot green" /> Allowed
-                  </span>
-                  <strong>
-                    {decisions.length - denied}
-                    <small>within sample policy</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>
-                    <i className="metric-dot orange" /> Denied
-                  </span>
-                  <strong>
-                    {denied}
-                    <small>boundary held in scenario</small>
-                  </strong>
-                </div>
-                <div className="receipt-metric">
-                  <span>
-                    <Icon name="shield" size={17} /> Signed receipts
-                  </span>
-                  <strong>
-                    {decisions.length}
-                    <small>ready to inspect</small>
-                  </strong>
-                </div>
-              </section>
-              <section className="decision-workspace">
-                <div className="decision-list">
-                  <div className="section-heading">
-                    <h2>
-                      Decision log <span>{decisions.length}</span>
-                    </h2>
-                    <span className="subtle">Sample session</span>
-                  </div>
-                  <div className="list-controls">
-                    <label className="search-field">
-                      <Icon name="search" size={16} />
-                      <input
-                        aria-label="Search decisions"
-                        placeholder="Search tools, agents, or resources…"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                      />
-                    </label>
-                    <select
-                      aria-label="Filter decisions"
-                      value={filter}
-                      onChange={(event) => setFilter(event.target.value)}
-                    >
-                      <option value="all">All decisions</option>
-                      <option value="allow">Allowed</option>
-                      <option value="deny">Denied</option>
-                    </select>
-                  </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Tool / resource</th>
-                          <th>Agent</th>
-                          <th>Decision</th>
-                          <th>Recorded UTC</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((item) => (
-                          <tr
-                            key={item.id}
-                            className={selected.id === item.id ? 'selected-row' : ''}
-                          >
-                            <td>
-                              <button
-                                className="row-select"
-                                aria-label={`Inspect ${item.tool} ${item.id}`}
-                                aria-pressed={selected.id === item.id}
-                                onClick={() => {
-                                  setSelected(item);
-                                  setSelectionRequest((current) => current + 1);
-                                }}
-                              >
-                                <span className={`tool-icon ${item.decision}`}>
-                                  <Icon
-                                    name={item.tool === 'execute_command' ? 'code' : 'book'}
-                                    size={16}
-                                  />
-                                </span>
-                                <span>
-                                  <strong>{item.tool}</strong>
-                                  {item.replay && (
-                                    <span className="replay-tag">Recorded replay</span>
-                                  )}
-                                  <code title={item.resource}>{item.resource}</code>
-                                </span>
-                              </button>
-                            </td>
-                            <td>
-                              <span className="agent-name">{item.agentName}</span>
-                            </td>
-                            <td>
-                              <Badge decision={item.decision} />
-                            </td>
-                            <td className="time-cell">{item.timestamp.slice(11, 19)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {filtered.length === 0 && (
-                    <div className="empty-state">
-                      <Icon name="search" size={28} />
-                      <h3>No matching decisions</h3>
-                      <p>Try a tool name, agent, or resource.</p>
-                      <button
-                        className="secondary-button"
-                        onClick={() => {
-                          setQuery('');
-                          setFilter('all');
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    </div>
-                  )}
-                  <div className="list-footer">
-                    <span>
-                      Showing {filtered.length} of {decisions.length} decisions
-                    </span>
-                    <span>Times in UTC · synthetic session</span>
-                  </div>
-                </div>
-                <aside
-                  ref={detailRef}
-                  tabIndex={-1}
-                  className="decision-detail"
-                  aria-label="Selected decision"
-                >
-                  <div className="detail-heading">
-                    <span className="eyebrow">DECISION DETAIL</span>
-                    <Badge decision={selected.decision} />
-                  </div>
-                  <h2>{selected.tool}</h2>
-                  <code className="detail-id">{selected.id}</code>
-                  {selected.replay && (
-                    <span className="replay-tag">
-                      Recorded scenario replay · original timestamp
-                    </span>
-                  )}
-                  <div className={`reason-box ${selected.decision}`}>
-                    <strong>
-                      {selected.decision === 'deny'
-                        ? 'Why was this denied?'
-                        : 'Why was this allowed?'}
-                    </strong>
-                    <p>{selected.reason}</p>
-                  </div>
-                  <dl className="detail-fields">
-                    <div>
-                      <dt>Agent</dt>
-                      <dd>
-                        {selected.agentName}
-                        <code>{selected.principal}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Resource</dt>
-                      <dd>
-                        <code>{selected.resource}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Policy rule</dt>
-                      <dd>
-                        {selected.ruleLabel}
-                        <code>{selected.ruleId}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Recorded</dt>
-                      <dd>{selected.timestamp.replace('T', ' ').replace('Z', ' UTC')}</dd>
-                    </div>
-                  </dl>
-                  <div className="next-step">
-                    <span className="eyebrow">WHAT TO DO NEXT</span>
-                    <p>{selected.nextStep}</p>
-                  </div>
-                  <button
-                    className="primary-button full-width"
-                    onClick={() => inspectReceipt(selected)}
-                  >
-                    <Icon name="shield" size={17} /> Verify this receipt{' '}
-                    <Icon name="arrow" size={16} />
-                  </button>
-                  <button
-                    className="text-button full-width"
-                    onClick={() => download(receiptJson(selected), `${selected.id}.json`)}
-                  >
-                    <Icon name="download" size={16} /> Download receipt
-                  </button>
-                  <details className="raw-receipt">
-                    <summary>View signed payload</summary>
-                    <pre>{receiptJson(selected)}</pre>
-                  </details>
-                </aside>
-              </section>
-              <div className="bottom-hint">
-                <Icon name="shield" size={16} />
-                <span>
-                  A decision explains the boundary. A signature lets you check that the receipt has
-                  not changed.
-                </span>
-              </div>
-            </>
-          )}
-          {view === 'playground' && (
-            <section className="playground-grid">
-              <div className="surface scenario-panel">
-                <div className="section-heading">
-                  <h2>Choose a request</h2>
-                  <span className="step-label">01 / EXPLORE</span>
-                </div>
-                <p className="panel-description">
-                  Start with a common agent action. Each example has a fixed, inspectable outcome.
-                </p>
-                <div className="scenario-options">
-                  {DEMO_SCENARIOS.map((item) => (
-                    <label
-                      key={item.id}
-                      className={`scenario-option ${scenario === item.id ? 'chosen' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="scenario"
-                        value={item.id}
-                        checked={scenario === item.id}
-                        onChange={() => {
-                          setScenario(item.id);
-                          setResult(null);
-                        }}
-                      />
-                      <span>
-                        <strong>{item.title}</strong>
-                        <span>{item.description}</span>
-                        <code>
-                          {item.tool} · {item.resource}
-                        </code>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <button
-                  className="primary-button"
-                  onClick={() => {
-                    const next = simulateScenario(scenario);
-                    setResult(next);
-                    setDecisions((current) => [next, ...current]);
-                    setSelected(next);
-                  }}
-                >
-                  <Icon name="flask" size={17} /> Run sample scenario{' '}
-                  <Icon name="arrow" size={16} />
-                </button>
-                <p className="fine-print">
-                  Replays a pre-signed fixture. It does not evaluate Cedar or execute the request.
-                </p>
-              </div>
-              <div className="surface scenario-result">
-                <div className="section-heading">
-                  <h2>Understand the outcome</h2>
-                  <span className="step-label">02 / INSPECT</span>
-                </div>
-                {result ? (
-                  <>
-                    <div className={`outcome-mark ${result.decision}`}>
-                      <Icon name="shield" size={34} />
-                    </div>
-                    <span className="eyebrow">Recorded scenario replay</span>
-                    <br />
-                    <Badge decision={result.decision} />
-                    <h3>{result.ruleLabel}</h3>
-                    <p>{result.reason}</p>
-                    <div className="next-step">
-                      <span className="eyebrow">NEXT STEP</span>
-                      <p>{result.nextStep}</p>
-                    </div>
-                    <button className="primary-button" onClick={() => inspectReceipt(result)}>
-                      Verify sample receipt <Icon name="arrow" size={16} />
-                    </button>
-                    <button className="text-button" onClick={() => navigate('decisions')}>
-                      Find it in the decision log
-                    </button>
-                    <p className="fine-print">
-                      The original signed timestamp is preserved when the fixture is replayed.
-                    </p>
-                  </>
-                ) : (
-                  <div className="outcome-empty">
-                    <div className="outcome-mark">
-                      <Icon name="flask" size={34} />
-                    </div>
-                    <h3>What happens at the gate?</h3>
-                    <p>
-                      Run a scenario to see its decision, the reason behind it, and a signed sample
-                      receipt.
-                    </p>
-                    <div className="flow-labels">
-                      <span>Request</span>
-                      <Icon name="arrow" size={16} />
-                      <span>Decision</span>
-                      <Icon name="arrow" size={16} />
-                      <span>Receipt</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-          {view === 'verify' && (
-            <section className="verify-grid">
-              <div className="surface verifier-input">
-                <div className="section-heading">
-                  <h2>Receipt JSON</h2>
-                  <button
-                    className="text-button"
-                    onClick={() => editReceipt(receiptJson(selected))}
-                  >
-                    Load selected sample
-                  </button>
-                </div>
-                <label className="input-label" htmlFor="receipt-json">
-                  Paste a signed FidusGate receipt
-                </label>
-                <textarea
-                  id="receipt-json"
-                  value={input}
-                  onChange={(event) => editReceipt(event.target.value)}
-                  spellCheck={false}
-                  placeholder={'{\n  "payload": { … },\n  "signature": { … }\n}'}
-                />
-                <div className="verify-actions">
-                  <button
-                    className="primary-button"
-                    onClick={verify}
-                    disabled={!input.trim() || verifying}
-                  >
-                    <Icon name="shield" size={17} />
-                    {verifying ? 'Checking signature…' : 'Verify signature'}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    onClick={() => editReceipt(tamperReceipt(receiptJson(selected)))}
-                  >
-                    Try a tampered sample
-                  </button>
-                </div>
-                <p className="fine-print">
-                  Verification runs in your browser. Receipt contents are not uploaded.
-                </p>
-              </div>
-              <div className="surface verification-explainer">
-                <div className="section-heading">
-                  <h2>Verification result</h2>
-                </div>
-                <div role="status" aria-live="polite">
-                  {verification ? (
-                    <div className={`verification-result ${verification.status}`}>
-                      <Icon name="shield" size={30} />
-                      <h3>
-                        {verification.status === 'valid'
-                          ? 'Signature matches'
-                          : verification.status === 'invalid'
-                            ? 'Signature does not match'
-                            : verification.status === 'unsupported'
-                              ? 'Verification unavailable'
-                              : 'Unable to read receipt'}
-                      </h3>
-                      <p>{verification.message}</p>
-                    </div>
-                  ) : (
-                    <div className="verification-waiting">
-                      <Icon name="shield" size={32} />
-                      <h3>Ready when you are</h3>
-                      <p>Load a sample or paste a receipt, then check its signature.</p>
-                    </div>
-                  )}
-                </div>
-                <div className="verification-scope">
-                  <h3>What this check tells you</h3>
-                  <p>
-                    A valid signature shows that the payload matches a signature from the demo key.
-                  </p>
-                  <h3>What it doesn’t establish</h3>
-                  <p>
-                    It does not prove the issuer is trustworthy, the policy is correct, or a tool
-                    actually ran. These public keys are for demonstration only.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-          {view === 'about' && (
-            <section className="surface about-panel">
-              <span className="eyebrow">THE OPERATOR LOOP</span>
-              <h2>From “what happened?” to a receipt you can inspect.</h2>
-              <div className="about-steps">
-                <div>
-                  <span>01</span>
-                  <h3>Inspect the decision</h3>
-                  <p>
-                    See the requested tool, agent, resource, and reason together. Find a denied
-                    request without piecing together unrelated dashboards.
-                  </p>
-                </div>
-                <div>
-                  <span>02</span>
-                  <h3>Explore the policy</h3>
-                  <p>
-                    Replay named allow and deny scenarios. This static demo uses fixed examples; the
-                    gateway-connected application uses Cedar.
-                  </p>
-                </div>
-                <div>
-                  <span>03</span>
-                  <h3>Verify the receipt</h3>
-                  <p>
-                    Check a real Ed25519 signature locally, then alter a sample to see why a changed
-                    payload no longer verifies.
-                  </p>
-                </div>
-              </div>
-              <div className="about-boundary">
-                <h3>Built for exploration</h3>
-                <p>
-                  This GitHub Pages demo uses synthetic records and a public demo key. It has no
-                  gateway, identity provider, live agent, persistent datastore, or policy
-                  enforcement. Reloading or resetting restores the samples. FidusGate is a reference
-                  implementation, not a production-hardened security product.
-                </p>
-              </div>
-              <a className="primary-button" href="https://github.com/SafetyMP/FidusGate#readme">
-                Explore the project <Icon name="arrow" size={16} />
-              </a>
-            </section>
-          )}
-          <footer className="page-footer">
-            <span>
-              FidusGate <span className="footer-separator">/</span> Clarity at the boundary.
-            </span>
-            <span>Reference implementation · Demo data</span>
-          </footer>
-        </main>
-      </div>
-    </div>
-      )}
+        <div hidden={view !== 'pilot'}>
+          <PilotWorksheet />
+        </div>
+        {view === 'technical' && <Reference />}
+      </main>
     </>
   );
 }

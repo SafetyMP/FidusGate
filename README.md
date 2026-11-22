@@ -11,7 +11,7 @@ FidusGate is a reference **Model Context Protocol (MCP) policy gateway and opera
 [![Pages demo](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-![FidusGate public demo Decisions workspace with synthetic records, reasons, and receipt detail](docs/assets/decisions.png)
+![FidusGate investigation desk with source records, the submitted receipt, and an evidence handoff](docs/assets/investigation-desk.png)
 
 ## Why FidusGate
 
@@ -23,19 +23,19 @@ FidusGate organizes that work into three steps:
 2. **Explore a policy scenario:** compare outcomes without executing a tool. The connected console also retains draft simulation and confirmed administrator policy application.
 3. **Verify the receipt:** check the original signed payload and distinguish signature validity, chain continuity, and issuer trust.
 
-**Try the change-review case.** A coding agent requests a write to the file that governs tool permissions. Inspect the signed reason for denying FG-1048, then estimate how many analyst minutes a receipt would need to save over a decision-log export to cover its first-year cost. [Open the sample case](https://safetymp.github.io/FidusGate/) · [Technical guide and console](https://safetymp.github.io/FidusGate/#/technical)
+**Try the change-review case.** A coding agent requests a write to the file that governs tool permissions. A ticket and the gateway archive disagree about FG-1048. Check both signatures, compare the repository revisions, and export a handoff containing the original evidence, supported findings and follow-up requests. The pilot worksheet estimates the analyst time required to cover incremental cost. [Open the sample case](https://safetymp.github.io/FidusGate/) · [Technical reference](https://safetymp.github.io/FidusGate/#/technical)
 
 ## Choose your experience
 
 | | Public demo | Gateway-connected console |
 | --- | --- | --- |
 | Start | [Open GitHub Pages](https://safetymp.github.io/FidusGate/) | [Local setup](docs/getting-started.md) |
-| Data | Synthetic examples and replayed pre-signed scenario receipts | Records from your configured gateway; fresh local stores include labeled development examples |
-| Policy scenarios | Deterministic illustrations, not Cedar evaluation | Active/draft simulation through the gateway; enforcement uses the separately running Cedar daemon |
+| Data | Two synthetic signed gateway records, a disputed copy and an illustrative file-history export | Records from your configured gateway; fresh local stores include labeled development examples |
+| Policy review | Compare a ticket claim with the archived decision and repository chronology | Active/draft simulation through the gateway; enforcement uses the separately running Cedar daemon |
 | Receipt verification | Real Ed25519 checks against a public demo key, entirely in the browser | Original receipt JSON submitted to the configured gateway verifier |
 | Operations | No login, backend, agent connection, or tool execution | Development role-scoped sessions; Decisions, Policy playground, Receipt verifier, Transactions, Governance, Forensics, and Sandbox |
 
-The public demo sends no pasted receipts to a server. The connected console can perform real operations through its gateway; role checks, confirmations, and server-side controls remain in place.
+The public desk builds the downloadable case file in the browser. The connected console can perform real operations through its gateway; role checks, confirmations, and server-side controls remain in place.
 
 ## Scope and trust
 

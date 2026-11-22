@@ -37,6 +37,7 @@ describe('mode-specific discovery HTML', () => {
     const document = documentFor(true);
     const root = document.getElementById('root');
     expect(root?.querySelector('h1')?.textContent).toContain('MCP decisions');
+    expect(root?.textContent).toContain('evidence handoff for FG-1048');
     expect(root?.textContent).toContain(
       'does not connect an agent, evaluate Cedar, or execute tools',
     );
