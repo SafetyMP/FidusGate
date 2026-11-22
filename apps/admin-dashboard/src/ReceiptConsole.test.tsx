@@ -61,6 +61,28 @@ describe('FG-1048 evidence handoff', () => {
     expect(exported().findings).not.toContainEqual(expect.stringMatching(/two revisions/));
   });
 
+  it('keeps the disputed copy outstanding while limiting follow-ups to attached evidence', async () => {
+    vi.mocked(verifyDemoReceipt).mockResolvedValueOnce({status: 'valid', message: 'Matches'});
+    render(<ReceiptConsole />);
+    const initial = exported().openRequests;
+    expect(initial).toContain('Check the signature on the ticket attachment.');
+    expect(initial.join(' ')).not.toMatch(/custody|correlation|revision 808/i);
+    fireEvent.click(screen.getByRole('button', {name: /Decision archive Gateway original/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Attach to handoff'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Verify signature'}));
+    await screen.findByText('VALID');
+    fireEvent.click(screen.getByRole('button', {name: /Repository export Policy file history/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Attach to handoff'}));
+    const requests = exported().openRequests;
+    expect(requests).toContain('Check the signature on the ticket attachment.');
+    expect(requests).toContainEqual(expect.stringMatching(/correlation record for revision 808/));
+    fireEvent.click(screen.getByRole('button', {name: 'Detach from handoff'}));
+    expect(exported().openRequests.join(' ')).not.toMatch(/correlation|revision 808/i);
+    fireEvent.click(screen.getByRole('button', {name: /Change desk Ticket attachment/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Detach from handoff'}));
+    expect(exported().openRequests).toContain('Attach the disputed ticket copy for comparison.');
+  });
+
   it('discards a pending signature check when the case is reset', async () => {
     let finish: ((result: VerificationResult) => void) | undefined;
     vi.mocked(verifyDemoReceipt).mockImplementation(

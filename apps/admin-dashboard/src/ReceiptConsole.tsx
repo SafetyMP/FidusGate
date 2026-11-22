@@ -121,6 +121,35 @@ function findingList(attached: RecordId[], checks: Checks) {
   return findings;
 }
 
+function openRequests(attached: RecordId[], checks: Checks) {
+  const outstanding: string[] = [];
+  for (const record of records) {
+    if (!('receipt' in record)) continue;
+    if (!attached.includes(record.id)) {
+      if (record.id === 'ticket') outstanding.push('Attach the disputed ticket copy for comparison.');
+      if (record.id === 'archive') outstanding.push('Obtain and attach the original gateway decision.');
+      continue;
+    }
+    const result = checks[record.id]?.status;
+    if (!result) outstanding.push(`Check the signature on the ${record.title.toLowerCase()}.`);
+    if (result === 'unsupported' || result === 'error') {
+      outstanding.push(`Recheck the ${record.title.toLowerCase()} with a compatible verifier.`);
+    }
+    if (result === 'invalid' && record.id !== 'ticket') {
+      outstanding.push(`Request an intact copy of the ${record.title.toLowerCase()} from its source.`);
+    }
+  }
+  if (attached.includes('archive') && checks.archive?.status === 'valid') {
+    outstanding.push('Establish custody of the operational issuer key independently.');
+  }
+  if (attached.includes('history')) {
+    outstanding.push('Request a correlation record for revision 808 before attributing the write.');
+  } else {
+    outstanding.push('Request the repository revisions bracketing the decision.');
+  }
+  return outstanding;
+}
+
 function EvidenceDesk() {
   const [active, setActive] = useState<RecordId>('ticket');
   const [attached, setAttached] = useState<RecordId[]>(['ticket']);
@@ -132,15 +161,7 @@ function EvidenceDesk() {
   const raw = 'receipt' in selected ? selected.receipt : undefined;
   const packet = raw ? (JSON.parse(raw) as typeof archive.receipt) : undefined;
   const findings = findingList(attached, checks);
-  const missing = [
-    ...(!attached.includes('archive') || checks.archive?.status !== 'valid'
-      ? ['Obtain and verify the original gateway decision.']
-      : []),
-    ...(!attached.includes('history')
-      ? ['Request the repository revisions bracketing the decision.']
-      : []),
-    'Obtain independent issuer-key custody evidence and a request-to-revision correlation record before attributing the write.',
-  ];
+  const missing = openRequests(attached, checks);
   const handoff = {
     case: 'FG-1048',
     scope: 'Synthetic browser exercise. No live investigation.',
