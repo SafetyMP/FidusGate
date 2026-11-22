@@ -745,3 +745,146 @@ pre {
 .trace-main .case-comparison .primary-button {
   margin: 0.6rem 0;
 }
+.request-flow li > strong {
+  display: block;
+  font-size: 1.45rem;
+  margin: 0.35rem 0;
+}
+.opening-ticket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  border-block: 1px solid #c9b8d5;
+  margin: 1.6rem 0 1rem;
+  padding: 1.5rem 0;
+}
+.opening-ticket p {
+  max-width: 72ch;
+}
+.opening-ticket h2 {
+  margin: 0.4rem 0 0.65rem;
+}
+.opening-ticket .primary-button,
+.case-debrief .primary-button {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1rem;
+}
+.case-desk {
+  border-top: 4px solid #593487;
+  border-radius: 0.45rem;
+}
+.case-desk h1,
+.trace-main h1 {
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  max-width: 26ch;
+}
+.record-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 1.3rem 0;
+}
+.record-picker button {
+  display: grid;
+  justify-content: start;
+  align-content: center;
+  gap: 0.1rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  background: #faf8fc;
+  border: 1px solid #ccbdd6;
+  border-radius: 4px;
+  color: #452858;
+  font-weight: 700;
+}
+.record-picker small {
+  font-weight: 400;
+}
+.record-picker [aria-pressed="true"] {
+  background: #432955;
+  color: white;
+  border-color: #432955;
+}
+.desk-columns {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.exhibit-card,
+.handoff-card {
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid #d9cedf;
+  border-radius: 5px;
+}
+.handoff-card {
+  background: #f6f1fa;
+}
+.exhibit-card > *,
+.handoff-card > * {
+  margin-bottom: 0.65rem;
+}
+.desk-columns h2,
+.case-debrief h2 {
+  font-size: 1.45rem;
+}
+.exhibit-card .receipt-fields {
+  font-size: 1rem;
+  margin: 0.8rem 0;
+}
+.investigation .attach-record {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #d9cedf;
+  margin: 0.8rem 0 0.3rem;
+  padding: 0.7rem 0 0.2rem;
+}
+.case-desk details summary,
+.pilot-assumptions summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.case-desk ul,
+.snapshot-list {
+  padding-left: 1.25rem;
+}
+.snapshot-list li > * {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+.handoff-card a,
+.exhibit-card a {
+  font-size: 1rem;
+}
+.case-debrief {
+  border-top: 1px solid #d9cedf;
+  padding: 1.2rem 0;
+}
+.case-debrief p,
+.pilot-assumptions {
+  margin: 0.6rem 0 1rem;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .opening-ticket {
+    display: grid;
+    gap: 1rem;
+  }
+  .opening-ticket a {
+    justify-self: start;
+  }
+  .desk-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .record-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .exhibit-card .receipt-fields {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}

@@ -1,8 +1,8 @@
 # GitHub Pages demo
 
-The public route opens the original FG-1048 change-review case. The analyst checks a submitted packet and requests follow-up file history. The platform lead compares three alternatives using adjustable first-year costs, review volumes and analyst time.
+The case opens at a release handoff. Engineering, platform security and the release lead each hold a different record about a disputed change to the permissions file. Open FG-1048 to inspect the ticket copy, original gateway decision, adjacent documentation read and file history. Verify and attach records to change the release lead’s findings and open requests. A separate worksheet compares today’s log search, a standard export and a signed-receipt shadow pilot under illustrative cost assumptions.
 
-The technical view carries the selected archive or received copy into four stages: request, decision, signature and file history. Compare it with the genuine signed synthetic FG-1047 documentation read or FG-1048 policy-write denial, run both signature checks and download the pair with provenance, check results and optional repository snapshots. The selected packet, comparison fixture and stage are in the URL. Returning to the case within the session preserves the investigation and economics inputs. Reloading reopens the addressed evidence selection and clears transient verification results.
+The compact technical guide follows the selected evidence through the request, decision, signature and file history. Check both envelopes in Signature, then attach snapshots and download the comparison in File history. Stage and fixture links are shareable. The case handoff and economics choices persist while navigating the demo. A reload restores the addressed document and clears local checks and attachments back to the starting state.
 
 [Business case](https://safetymp.github.io/FidusGate/#/case) · [FG-1048 ticket copy against the archived denial](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature) · [Pilot worksheet](https://safetymp.github.io/FidusGate/#/case?section=economics)
 

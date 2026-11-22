@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEMO_DECISIONS } from './demo';
-import { ReviewCase } from './demo/ReviewCase';
+import { PilotWorksheet } from './demo/ReviewCase';
+import { EvidenceDesk, type CaseDocument } from './demo/EvidenceDesk';
 import type { Packet } from './demo/caseRecords';
 import { CaseEvidence, stages, type Stage } from './demo/CaseEvidence';
 import './ReceiptConsole.css';
@@ -12,6 +13,7 @@ type Route = {
   fixture: 'FG-1048' | 'FG-1047';
   stage: Stage;
   section: string;
+  document: CaseDocument;
 };
 function readRoute(): Route {
   const [slug, query] = location.hash.replace(/^#\/?/, '').split('?');
@@ -20,12 +22,20 @@ function readRoute(): Route {
   const stage =
     stages.find((item) => item.id === rawStage)?.id ??
     (slug === 'verify' ? 'signature' : 'request');
+  const packet =
+    params.get('packet') === 'original'
+      ? 'original'
+      : params.get('packet') === 'received' || !slug || slug === 'case'
+        ? 'received'
+        : 'original';
+  const doc = params.get('doc');
   return {
+    document: doc === 'history' || doc === 'neighbor' ? doc : packet,
     page: ['technical', 'decisions', 'playground', 'verify', 'about'].includes(slug)
       ? 'technical'
       : 'case',
-    packet: params.get('packet') === 'received' ? 'received' : 'original',
-    fixture: params.get('fixture') === 'FG-1048' ? 'FG-1048' : 'FG-1047',
+    packet,
+    fixture: params.get('fixture') === 'FG-1047' ? 'FG-1047' : 'FG-1048',
     stage,
     section:
       slug === 'pilot' || params.get('section') === 'economics'
@@ -41,6 +51,8 @@ function href(route: Route) {
     fixture: route.fixture,
     stage: route.stage,
   });
+  if (route.document === 'history' || route.document === 'neighbor')
+    params.set('doc', route.document);
   if (route.page === 'case' && route.section) params.set('section', route.section);
   return '#/' + route.page + '?' + params.toString();
 }
@@ -67,6 +79,16 @@ export default function ReceiptConsole() {
     setRoute(next);
   }
   const caseHref = href({ ...route, page: 'case', section: 'investigation' });
+  const pilotHref = href({ ...route, page: 'case', section: 'economics' });
+  function chooseDocument(document: CaseDocument) {
+    const packet = document === 'original' || document === 'received' ? document : route.packet;
+    replace({
+      document,
+      packet,
+      fixture: document === 'neighbor' ? 'FG-1047' : 'FG-1048',
+      stage: document === 'history' ? 'effect' : 'signature',
+    });
+  }
   const technicalHref = href({ ...route, page: 'technical' });
   return (
     <>
@@ -98,27 +120,88 @@ export default function ReceiptConsole() {
       </header>
       <main ref={main} id="content" tabIndex={-1} className="study-main">
         <div hidden={route.page !== 'case'}>
-          <header className="study-intro">
-            <div className="study-kicker">Platform security · Investment decision</div>
-            <h1>Should every tool decision carry a signed receipt?</h1>
-            <p>
-              A coding agent asked to edit the file that governs its permissions. The gateway denied
-              the request. Decide whether the security team should fund a receipt pilot or keep
-              using decision logs for change reviews.
-            </p>
-          </header>
-          <ReviewCase
-            record={archive}
-            packet={route.packet}
-            onPacket={(packet) => replace({ packet })}
-            technicalHref={technicalHref}
-          />
+          <div hidden={Boolean(route.section)}>
+            <header className="study-intro">
+              <p className="study-kicker">Release engineering · Change review</p>
+              <h1>Who changed the rules before release?</h1>
+              <p>
+                A software team uses a coding agent to help prepare releases. One file sets the
+                permissions for its tools. A change to that file can affect every engineer who
+                relies on those rules.
+              </p>
+            </header>
+            <section className="study-body" aria-labelledby="handover">
+              <h2 id="handover">Three teams see different parts of the change</h2>
+              <ol className="request-flow">
+                <li>
+                  <span>Engineering</span>
+                  <strong>Requests work</strong>
+                  <p>
+                    An engineer gives the agent a task. A change ticket captures the team’s account
+                    of what happened.
+                  </p>
+                </li>
+                <li>
+                  <span>Platform security</span>
+                  <strong>Checks permission</strong>
+                  <p>
+                    The gateway evaluates the requested tool and file. Its decision lives in a
+                    separate archive.
+                  </p>
+                </li>
+                <li>
+                  <span>Release engineering</span>
+                  <strong>Reviews the file</strong>
+                  <p>
+                    The release lead sees repository revisions and needs to know who can account for
+                    the change.
+                  </p>
+                </li>
+              </ol>
+              <div className="opening-ticket">
+                <div>
+                  <p className="study-kicker">FG-1048 · Release handoff</p>
+                  <h2>One ticket, two unanswered questions</h2>
+                  <p>
+                    At 14:32 an agent requested a write to the permissions file. The engineer
+                    forwarded a copy of the decision. The release lead needs to know what the
+                    gateway permitted and whether anyone can link that request to a file change.
+                    Holding the release costs engineering time. Closing the ticket too soon could
+                    leave a change to everyone’s permissions unexplained.
+                  </p>
+                </div>
+                <a className="primary-button" href={caseHref}>
+                  Open the change ticket
+                </a>
+              </div>
+              <p className="study-scope">
+                Fictional release review · Synthetic records · Browser-only investigation
+              </p>
+            </section>
+          </div>
+          <div hidden={route.section !== 'investigation'}>
+            <EvidenceDesk
+              active={route.document}
+              onSelect={chooseDocument}
+              technicalHref={href({
+                ...route,
+                page: 'technical',
+                stage: route.document === 'history' ? 'effect' : 'signature',
+                fixture: route.document === 'neighbor' ? 'FG-1047' : 'FG-1048',
+              })}
+              pilotHref={pilotHref}
+            />
+          </div>
+          <div hidden={route.section !== 'economics'}>
+            <PilotWorksheet caseHref={caseHref} />
+          </div>
         </div>
         {route.page === 'technical' && (
           <CaseEvidence
             key={route.packet + route.fixture}
             record={archive}
             packet={route.packet}
+            document={route.document}
             fixtureId={route.fixture}
             stage={route.stage}
             onFixture={(fixture) => replace({ fixture })}

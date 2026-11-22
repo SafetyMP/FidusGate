@@ -11,7 +11,7 @@ FidusGate is a reference **Model Context Protocol (MCP) policy gateway and opera
 [![Pages demo](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/pages.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-![FG-1048 business case showing the disputed policy write and its denied decision](docs/assets/fg1048-case.png)
+![FG-1048 business case showing the release handoff and three teams’ evidence](docs/assets/fg1048-case.png)
 
 ## Why FidusGate
 
@@ -23,7 +23,7 @@ FidusGate organizes that work into three steps:
 2. **Explore a policy scenario:** compare outcomes without executing a tool. The connected console also retains draft simulation and confirmed administrator policy application.
 3. **Verify the receipt:** check the original signed payload and distinguish signature validity, chain continuity, and issuer trust.
 
-**Try the FG-1048 change-review case.** A coding agent asks to edit the file that governs its permissions. Check either the archive original or the received ticket copy, decide what goes into the ticket, and request repository revisions. Then weigh ordinary log search, a standardized export and a shadow pilot against review time and first-year cost. The technical evidence view carries the selected copy into a staged trace and comparison against signed fixtures. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Compare the received copy with the archive](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
+**Try the FG-1048 change-review case.** A release lead needs to account for a change to the file that governs agent permissions. Inspect the ticket copy, gateway original, neighboring request and repository history. Verify and attach what supports your handoff, then see how the release lead can act on it. Then weigh ordinary log search, a standardized export and a shadow pilot against review time and first-year cost. The technical evidence view carries the selected copy into a staged trace and comparison against signed fixtures. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Compare the received copy with the archive](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
 
 ## Choose your experience
 
