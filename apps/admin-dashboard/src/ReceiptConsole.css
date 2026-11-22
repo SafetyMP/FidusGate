@@ -729,6 +729,9 @@ pre {
   top: 0;
 }
 @media (max-width: 600px) {
+  .case-comparison th:first-child {
+    width: 5.4rem;
+  }
   .case-comparison th,
   .case-comparison td {
     font-size: 1rem;
