@@ -1,10 +1,10 @@
 # FidusGate
 
-**Understand an AI agent’s tool-call decision. Inspect the evidence. Verify the receipt.**
+Harbor Dispatch has a fix for duplicate appointments, but the release is on hold. A coding assistant requested an edit to its own permissions file. Maya, the release lead, has an engineer’s copy of the decision. While the team checks what happened, dispatchers have to call crews to confirm which visits to make.
 
-FidusGate is a reference **Model Context Protocol (MCP) policy gateway and operator console**. It combines Cedar authorization, Ed25519-signed decision receipts, and a workspace for investigating why a call was allowed or denied.
+FidusGate is a reference **Model Context Protocol (MCP) policy gateway and operator console**. Cedar evaluates the assistant’s tool request, and the gateway can sign a receipt recording its decision and the policy used. That gives Maya a way to check the copy attached to her ticket. The repository owner can supply the file history if she also needs to establish whether the file changed.
 
-[**Try the interactive demo**](https://safetymp.github.io/FidusGate/) · [Run locally](docs/getting-started.md) · [Documentation](docs/README.md) · [Project direction](docs/DESIGN-PIVOT.md)
+[**Investigate Maya’s release ticket**](https://safetymp.github.io/FidusGate/#/case) · [Run locally](docs/getting-started.md) · [Documentation](docs/README.md) · [Project direction](docs/DESIGN-PIVOT.md)
 
 [![CI](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/SafetyMP/FidusGate/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/SafetyMP/FidusGate/actions/workflows/codeql.yml)
@@ -15,15 +15,9 @@ FidusGate is a reference **Model Context Protocol (MCP) policy gateway and opera
 
 ## Why FidusGate
 
-An allow/deny result is useful only when someone can understand it. Developers integrating agent tools need to see the request and policy outcome; operators need to follow the decision’s evidence; reviewers need to check a receipt without confusing a valid signature with proof of execution.
+In the synthetic case, decide what Maya can tell the release team from the forwarded ticket. Then compare the archived receipt and the file history. The browser checks the receipt signature against the public demo key. Maya still has to decide what belongs in the change ticket and who should investigate any remaining gap. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Inspect the signature evidence](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
 
-FidusGate organizes that work into three steps:
-
-1. **Inspect a decision:** search and filter receipts, select a tool call, and read its reason, arguments, issuer, and policy digest.
-2. **Explore a policy scenario:** compare outcomes without executing a tool. The connected console also retains draft simulation and confirmed administrator policy application.
-3. **Verify the receipt:** check the original signed payload and distinguish signature validity, chain continuity, and issuer trust.
-
-**Try the FG-1048 change-review case.** Harbor Dispatch has a fix for duplicate appointments. The release lead needs to understand a coding assistant’s request to edit its permissions before shipping. Try using the forwarded ticket or comparing it with the signed original. Then send the decision record or check the file history to see what the release team can establish. A compact technical guide explains the gateway, Cedar policy, signatures and file history. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Compare the received copy with the archive](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
+A platform security lead can test whether signed receipts improve an investigation. Give reviewers the same disputed changes with ordinary decision logs and with signed receipts. Compare time to a defensible handoff, count conclusions the evidence cannot support, and include the effort to maintain trusted signing keys.
 
 ### Follow Maya’s evidence through the code
 
