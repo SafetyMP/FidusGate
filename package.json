@@ -47,7 +47,7 @@
     "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
     "semantic-release": "^25.0.8",
-    "turbo": "^2.10.5",
+    "turbo": "^2.11.11",
     "typescript": "^5.9.3"
   },
   "description": "Reference MCP policy gateway and receipt-first console with Cedar authorization and Ed25519-signed receipts.",
