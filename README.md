@@ -25,6 +25,12 @@ FidusGate organizes that work into three steps:
 
 **Try the FG-1048 change-review case.** Harbor Dispatch has a fix for duplicate appointments. The release lead needs to understand a coding assistant’s request to edit its permissions before shipping. Try using the forwarded ticket or comparing it with the signed original. Then send the decision record or check the file history to see what the release team can establish. A compact technical guide explains the gateway, Cedar policy, signatures and file history. [Open the business case](https://safetymp.github.io/FidusGate/#/case) · [Compare the received copy with the archive](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature)
 
+### Follow Maya’s evidence through the code
+
+1. **What did the assistant ask to do?** The case opens a saved tool request and its recorded policy decision. In a connected deployment, the MCP server evaluates a tool call against the active Cedar policy before it can proceed. [Case fixtures](apps/admin-dashboard/src/demo/fixtures.ts) · [MCP request handler](apps/secure-gateway/src/mcp-server.ts) · [Cedar policy](policy.cedar)
+2. **Is the forwarded decision intact?** The gateway constructs a receipt payload containing the decision and policy digest. In the demo, the browser verifies the serialized payload with Ed25519 and the public demo key. In the technical guide, run the signature check on the forwarded copy and the archive, then inspect the two submitted envelopes. [Receipt payload](apps/secure-gateway/src/tool-call-receipt.ts) · [Browser verifier](apps/admin-dashboard/src/demo/index.ts) · [Verification tests](apps/admin-dashboard/src/demo/index.test.ts)
+3. **What happened to the file?** The guide lets Maya inspect two recorded revisions alongside the receipt. The fixture supplies the file history independently. The release team still needs a trusted source for the key and evidence connecting any file change to an actor. [File-history records](apps/admin-dashboard/src/demo/caseRecords.ts) · [Technical guide implementation](apps/admin-dashboard/src/demo/CaseEvidence.tsx)
+
 ## Choose your experience
 
 | | Public demo | Gateway-connected console |
