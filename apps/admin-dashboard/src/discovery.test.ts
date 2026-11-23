@@ -36,7 +36,7 @@ describe('mode-specific discovery HTML', () => {
   it('offers honest text and navigable links before JavaScript runs', () => {
     const document = documentFor(true);
     const root = document.getElementById('root');
-    expect(root?.querySelector('h1')?.textContent).toContain('Should every tool decision carry');
+    expect(root?.querySelector('h1')?.textContent).toContain('Can the customer fix ship today');
     expect(root?.textContent).toContain(
       'choose between existing logs, a standard export and a signed-receipt pilot',
     );

@@ -45,7 +45,7 @@ function launchOptions() {
 
 async function waitForDashboard(page) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Should every tool decision carry a signed receipt?" }).waitFor();
+  await page.getByRole("heading", { name: "Can the customer fix ship today?" }).waitFor();
 
 }
 
@@ -96,8 +96,8 @@ async function captureLive() {
       await page.getByRole("button", { name: "Check both signatures" }).click();
       await page.getByRole("cell", { name: "invalid", exact: true }).waitFor();
       await page.getByRole("cell", { name: "valid", exact: true }).waitFor();
-      await page.getByRole("checkbox", { name: /Attach repository snapshots/ }).check();
-      await page.getByRole("heading", { name: "Compare the recorded outcomes" }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
+
+      await page.getByRole("heading", { level: 1 }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
     }
     await page.evaluate(() => document.fonts.ready);
     const buffer = await page.screenshot({ fullPage: false });

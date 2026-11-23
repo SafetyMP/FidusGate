@@ -729,6 +729,9 @@ pre {
   top: 0;
 }
 @media (max-width: 600px) {
+  .case-comparison th:first-child {
+    width: 5.4rem;
+  }
   .case-comparison th,
   .case-comparison td {
     font-size: 1rem;
@@ -744,4 +747,250 @@ pre {
 }
 .trace-main .case-comparison .primary-button {
   margin: 0.6rem 0;
+}
+.request-flow li > strong {
+  display: block;
+  font-size: 1.45rem;
+  margin: 0.35rem 0;
+}
+.opening-ticket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  border-block: 1px solid #c9b8d5;
+  margin: 1.6rem 0 1rem;
+  padding: 1.5rem 0;
+}
+.opening-ticket p {
+  max-width: 72ch;
+}
+.opening-ticket h2 {
+  margin: 0.4rem 0 0.65rem;
+}
+.opening-ticket .primary-button,
+.case-debrief .primary-button {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1rem;
+}
+.case-desk {
+  border-top: 4px solid #593487;
+  border-radius: 0.45rem;
+}
+.case-desk h1,
+.trace-main h1 {
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  max-width: 26ch;
+}
+.record-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 1.3rem 0;
+}
+.record-picker button {
+  display: grid;
+  justify-content: start;
+  align-content: center;
+  gap: 0.1rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  background: #faf8fc;
+  border: 1px solid #ccbdd6;
+  border-radius: 4px;
+  color: #452858;
+  font-weight: 700;
+}
+.record-picker small {
+  font-weight: 400;
+}
+.record-picker [aria-pressed="true"] {
+  background: #432955;
+  color: white;
+  border-color: #432955;
+}
+.desk-columns {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.exhibit-card,
+.handoff-card {
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid #d9cedf;
+  border-radius: 5px;
+}
+.handoff-card {
+  background: #f6f1fa;
+}
+.exhibit-card > *,
+.handoff-card > * {
+  margin-bottom: 0.65rem;
+}
+.desk-columns h2,
+.case-debrief h2 {
+  font-size: 1.45rem;
+}
+.exhibit-card .receipt-fields {
+  font-size: 1rem;
+  margin: 0.8rem 0;
+}
+.investigation .attach-record {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #d9cedf;
+  margin: 0.8rem 0 0.3rem;
+  padding: 0.7rem 0 0.2rem;
+}
+.case-desk details summary,
+.pilot-assumptions summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.case-desk ul,
+.snapshot-list {
+  padding-left: 1.25rem;
+}
+.snapshot-list li > * {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+.handoff-card a,
+.exhibit-card a {
+  font-size: 1rem;
+}
+.case-debrief {
+  border-top: 1px solid #d9cedf;
+  padding: 1.2rem 0;
+}
+.case-debrief p,
+.pilot-assumptions {
+  margin: 0.6rem 0 1rem;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .opening-ticket {
+    display: grid;
+    gap: 1rem;
+  }
+  .opening-ticket a {
+    justify-self: start;
+  }
+  .desk-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .record-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .exhibit-card .receipt-fields {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+.case-context {
+  max-width: 72ch;
+  margin: 0.75rem 0;
+}
+.release-memo,
+.forwarded-note {
+  border-left: 3px solid #835b9b;
+  background: #f0e9f6;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  max-width: 76ch;
+}
+.release-memo p + p,
+.forwarded-note p + p {
+  margin-top: 0.35rem;
+}
+.framework-heading {
+  margin-top: 1.8rem;
+}
+.guided-review {
+  max-width: 54rem;
+  margin-inline: auto;
+}
+.guided-review h2 {
+  font-size: 1.45rem;
+  margin: 0.7rem 0 0.4rem;
+  line-height: 1.25;
+}
+.guided-question {
+  margin: 1.35rem 0;
+}
+.guided-review .case-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 1rem 0;
+}
+.guided-review button {
+  font-size: 1rem;
+  white-space: normal;
+}
+.comparison-slip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: #cfbed9;
+  border: 1px solid #cfbed9;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+.comparison-slip div {
+  background: #faf8fc;
+  padding: 0.85rem 1rem;
+}
+.comparison-slip dt {
+  font-weight: 600;
+  color: #584064;
+}
+.comparison-slip dd {
+  margin: 0.2rem 0 0;
+}
+.comparison-slip strong,
+.comparison-slip span {
+  display: block;
+}
+.comparison-slip strong {
+  font-size: 1.4rem;
+}
+.release-result {
+  border-top: 2px solid #86669a;
+  margin-top: 1.25rem;
+  padding-top: 0.5rem;
+}
+.release-result p + p,
+.release-result button {
+  margin-top: 0.6rem;
+}
+.case-sources {
+  border-top: 1px solid #d7cadd;
+  padding: 0.8rem 0;
+}
+.case-sources p,
+.case-sources label {
+  margin: 0.5rem 0;
+}
+.case-sources select {
+  max-width: 100%;
+  padding: 0.35rem;
+}
+.replay-case {
+  margin-top: 0.6rem;
+}
+@media (max-width: 440px) {
+  .comparison-slip div {
+    padding: 0.6rem;
+  }
+  .guided-review .case-actions button {
+    width: 100%;
+  }
 }

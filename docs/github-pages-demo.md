@@ -1,8 +1,10 @@
 # GitHub Pages demo
 
-The public route opens the original FG-1048 change-review case. The analyst checks a submitted packet and requests follow-up file history. The platform lead compares three alternatives using adjustable first-year costs, review volumes and analyst time.
+Harbor Dispatch is a fictional scheduling software company. Dispatchers are checking duplicate appointments by hand while the release lead investigates a request to edit the assistant’s permissions. The opening shows how FidusGate checks permission, signs a decision and lets a second reviewer verify a copy.
 
-The technical view carries the selected archive or received copy into four stages: request, decision, signature and file history. Compare it with the genuine signed synthetic FG-1047 documentation read or FG-1048 policy-write denial, run both signature checks and download the pair with provenance, check results and optional repository snapshots. The selected packet, comparison fixture and stage are in the URL. Returning to the case within the session preserves the investigation and economics inputs. Reloading reopens the addressed evidence selection and clears transient verification results.
+In FG-1048, try forwarding the claim or comparing it with the archived decision. The comparison performs both signature checks in the browser. Send the decision record or check the file history to see how the next owner and open question change. The handoff includes the records used on that path. “Inspect the source records” offers all four documents and an optional adjacent request. The pilot worksheet compares ordinary logs, a standard export and signed receipts using illustrative costs.
+
+The compact technical guide follows the selected evidence through the request, decision, signature and file history. Check both envelopes in Signature, then attach snapshots and download the comparison in File history. Stage and fixture links are shareable. The case handoff and economics choices persist while navigating the demo. A reload restores the addressed document and clears local checks and attachments back to the starting state.
 
 [Business case](https://safetymp.github.io/FidusGate/#/case) · [FG-1048 ticket copy against the archived denial](https://safetymp.github.io/FidusGate/#/technical?packet=received&fixture=FG-1048&stage=signature) · [Pilot worksheet](https://safetymp.github.io/FidusGate/#/case?section=economics)
 
@@ -40,7 +42,7 @@ Only `apps/admin-dashboard/dist` is uploaded. There are no gateway credentials, 
 
 - Open `/FidusGate/` directly and refresh it; JavaScript and stylesheet assets must load under that path.
 - Inspect a denied call and follow the reason and receipt without logging in.
-- Select the received packet in the case. Open its trace, compare it with each fixture and run the checks. Export the selected evidence with snapshots, refresh its direct link and return to the original case.
+- Expand “Inspect the source records” and select the ticket copy. Open its trace, compare it with each fixture and run the checks. Export the selected evidence with snapshots, refresh its direct link and return to the original case.
 - Check narrow and wide layouts and keyboard navigation.
 - Confirm the static demo makes no `/api` requests and sends no receipt input to a server.
 - Check the exact published commit's Actions run and the live URL. A local build does not establish deployment success or user adoption.

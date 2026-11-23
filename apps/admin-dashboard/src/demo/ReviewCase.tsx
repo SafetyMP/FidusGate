@@ -1,6 +1,4 @@
-import { casePacket, snapshots, type Packet } from './caseRecords';
-import { useRef, useState } from 'react';
-import { verifyDemoReceipt, type DemoDecision, type VerificationResult } from './index';
+import { useState } from 'react';
 
 const dollars = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -39,240 +37,7 @@ function Assumption({
   );
 }
 
-type Disposition = 'record' | 'hold' | 'close';
-
-function ticketOutcome(check: VerificationResult, disposition: Disposition): string {
-  if (disposition === 'close') {
-    return 'Reopen the ticket. Even a matching signature cannot establish what happened to the file. Request repository history before closing the execution question.';
-  }
-  if (disposition === 'hold') {
-    if (check.status === 'valid') {
-      return 'Keep the file-change question open. The original already matches the demo key. Record that limited finding, then request file history and independent issuer evidence.';
-    }
-    return 'Keep the decision unresolved. Preserve the submitted copy, request the original gateway record and trusted key information, and repeat verification before relying on its contents.';
-  }
-  if (check.status === 'valid') {
-    return 'Record the sample denial. Attach the signed packet and verification result. Leave file execution and operational issuer identity open pending file history and trusted key records.';
-  }
-  return 'Withdraw the proposed finding. This check did not authenticate the submitted payload against the demo key. Reconcile it with the original gateway record before recording a decision.';
-}
-
-function FileHistoryFinding() {
-  const [opened, setOpened] = useState(false);
-  const [finding, setFinding] = useState('');
-  if (!opened) {
-    return (
-      <button className="secondary-button" onClick={() => setOpened(true)}>
-        Request repository history
-      </button>
-    );
-  }
-  return (
-    <section aria-label="File history evidence">
-      <h3>Repository response</h3>
-      <p>
-        The platform engineer returned two snapshots of <code>main/policy.cedar</code> from the same
-        day as FG-1048. Compare their file blob IDs with the gateway’s 14:32 UTC decision.
-      </p>
-      <dl className="receipt-fields" aria-label="Illustrative repository snapshots">
-        {snapshots.map((snapshot) => (
-          <div className="snapshot-row" key={snapshot.revision}>
-            <dt>{snapshot.at}</dt>
-            <dd>
-              Blob <code>{snapshot.blob}</code> · revision {snapshot.revision}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <p className="study-scope">
-        Synthetic repository export · abbreviated file blob IDs · request correlation field empty
-      </p>
-      <fieldset className="ticket-choice">
-        <legend>Which finding can you add?</legend>
-        <label>
-          <input
-            type="radio"
-            name="history-finding"
-            checked={finding === 'unchanged'}
-            onChange={() => setFinding('unchanged')}
-          />
-          The policy content stayed the same.
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="history-finding"
-            checked={finding === 'changed'}
-            onChange={() => setFinding('changed')}
-          />
-          The policy content changed between snapshots.
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="history-finding"
-            checked={finding === 'agent'}
-            onChange={() => setFinding('agent')}
-          />
-          The coding agent made the change through FG-1048.
-        </label>
-      </fieldset>
-      {finding && (
-        <p className="ticket-consequence" aria-live="polite">
-          <strong>Updated finding</strong> ·{' '}
-          {finding === 'changed'
-            ? 'Attach both snapshots. Different blob IDs establish different file contents at the two revisions. To attribute the write, request a change record that links the writer and request to revision 808.'
-            : finding === 'unchanged'
-              ? 'Revise the finding. Revision 808 names a different file blob. The gateway decision concerns one request, while the snapshots show the policy contents before and after it.'
-              : 'Leave attribution open. The timestamps bracket the request, but the export contains no link between FG-1048 and revision 808. A receipt signature cannot supply that link.'}
-        </p>
-      )}
-    </section>
-  );
-}
-
-interface CaseSelection {
-  record: DemoDecision;
-  packet: Packet;
-  onPacket: (next: Packet) => void;
-  technicalHref: string;
-}
-
-function Investigation({ record, packet, onPacket, technicalHref }: CaseSelection) {
-  const [result, setResult] = useState<VerificationResult | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [disposition, setDisposition] = useState<Disposition | null>(null);
-  const request = useRef(0);
-  const packetJson = casePacket(record, packet);
-  const { payload, signature } = JSON.parse(packetJson) as DemoDecision['receipt'];
-  function selectPacket(next: Packet) {
-    request.current += 1;
-    onPacket(next);
-    setResult(null);
-    setDisposition(null);
-    setChecking(false);
-  }
-  async function checkPacket() {
-    const current = ++request.current;
-    setChecking(true);
-    const checked = await verifyDemoReceipt(packetJson);
-    if (current === request.current) {
-      setResult(checked);
-      setChecking(false);
-    }
-  }
-  return (
-    <section
-      id="case-investigation"
-      tabIndex={-1}
-      className="investigation"
-      aria-labelledby="investigation-title"
-    >
-      <h2 id="investigation-title">What goes in the change ticket?</h2>
-      <p>
-        The engineer asks whether the policy file changed. As the investigating analyst, choose a
-        sample packet, check its signature, then decide what the evidence supports.
-      </p>
-      <fieldset className="packet-choice">
-        <legend>Evidence packet</legend>
-        <label>
-          <input
-            type="radio"
-            name="packet"
-            checked={packet === 'original'}
-            onChange={() => selectPacket('original')}
-          />
-          Gateway archive copy
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="packet"
-            checked={packet === 'received'}
-            onChange={() => selectPacket('received')}
-          />
-          Copy received with ticket
-        </label>
-      </fieldset>
-      <div className="packet-strip">
-        <div>
-          <strong>{record.id}</strong> · Claimed decision <code>{payload.decision}</code>
-          <small>
-            <code>{payload.tool_name}</code> on <code>{String(payload.args?.path)}</code> · Issued{' '}
-            <time dateTime={payload.issued_at}>
-              {payload.issued_at.replace('T', ' ').replace('.000Z', ' UTC')}
-            </time>
-          </small>
-          <small>
-            Signature excerpt <code>{signature.sig.slice(0, 16)}…</code> · Synthetic packet
-          </small>
-        </div>
-        <button
-          className="primary-button"
-          onClick={checkPacket}
-          disabled={checking || result !== null}
-        >
-          {checking ? 'Checking packet…' : 'Check packet signature'}
-        </button>
-      </div>
-      {result && (
-        <>
-          <p role="status" className="packet-result">
-            <strong>Signature check</strong> · {result.message}{' '}
-            {result.status === 'invalid' &&
-              packet === 'received' &&
-              'Compare the two packets. The ticket copy claims allow while the archive says deny. Both carry the same signature. This training example changed the decision field. A mismatch alone cannot tell the investigator who changed it.'}
-          </p>
-          <fieldset className="ticket-choice">
-            <legend>Choose the ticket disposition</legend>
-            <label>
-              <input
-                type="radio"
-                name="ticket"
-                checked={disposition === 'record'}
-                onChange={() => setDisposition('record')}
-              />
-              Record the stated decision and request file history.
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="ticket"
-                checked={disposition === 'hold'}
-                onChange={() => setDisposition('hold')}
-              />
-              Hold the finding and request the original packet.
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="ticket"
-                checked={disposition === 'close'}
-                onChange={() => setDisposition('close')}
-              />
-              Close the ticket as proof that no write occurred.
-            </label>
-          </fieldset>
-          {disposition && (
-            <p className="ticket-consequence" aria-live="polite">
-              <strong>Ticket consequence</strong> · {ticketOutcome(result, disposition)}
-            </p>
-          )}
-          {disposition && <FileHistoryFinding />}
-          <button className="secondary-button" onClick={() => selectPacket('original')}>
-            Restart investigation
-          </button>
-        </>
-      )}
-      <p>
-        <a href={technicalHref}>Trace this packet in the technical evidence</a>
-      </p>
-    </section>
-  );
-}
-
-export function ReviewCase({ record, packet, onPacket, technicalHref }: CaseSelection) {
-  const { payload, signature } = record.receipt;
+export function PilotWorksheet({ caseHref }: { caseHref: string }) {
   const [reviews, setReviews] = useState(120);
   const [minutes, setMinutes] = useState(4);
   const [rate, setRate] = useState(75);
@@ -284,119 +49,38 @@ export function ReviewCase({ record, packet, onPacket, technicalHref }: CaseSele
   const netValue = annualCapacity - cost;
   const minutesNeeded = reviews > 0 && rate > 0 ? (cost * 60) / (reviews * 12 * rate) : null;
   return (
-    <div className="study-body">
-      <section className="study-story" aria-labelledby="case-flow-title">
-        <h2 id="case-flow-title">Follow the disputed change</h2>
-        <ol className="request-flow">
-          <li>
-            <span>Request</span>
-            <code>{payload.tool_name}</code>
-            <p>
-              Agent asks to write to <code>{String(payload.args?.path)}</code>.
-            </p>
-          </li>
-          <li>
-            <span>Policy decision</span>
-            <strong className="flow-outcome">Denied</strong>
-            <p>The recorded rule protects the file that controls authorization.</p>
-          </li>
-          <li>
-            <span>Evidence for review</span>
-            <code>{record.id}</code>
-            <p>The analyst can check the signed decision before sharing it with the engineer.</p>
-          </li>
-        </ol>
-        <p className="study-scope">
-          Synthetic case · The browser replays recorded decisions. No agent connects or executes a
-          tool.
-        </p>
-      </section>
-      <Investigation
-        key={packet}
-        record={record}
-        packet={packet}
-        onPacket={onPacket}
-        technicalHref={technicalHref}
-      />
-      <section className="study-evidence">
-        <h2>What can the analyst establish?</h2>
-        <dl className="evidence-boundary">
-          <div>
-            <dt>Decision</dt>
-            <dd>The receipt records the denied action, its target and the stated reason.</dd>
-          </div>
-          <div>
-            <dt>Integrity</dt>
-            <dd>
-              Check the signature against the public demo key to see whether the payload matches.
-            </dd>
-          </div>
-          <div>
-            <dt>Still to establish</dt>
-            <dd>
-              Confirm the issuer through a trusted key inventory and check file history for any
-              actual change.
-            </dd>
-          </div>
-        </dl>
-        <details className="study-receipt">
-          <summary>Inspect the fields in {record.id}</summary>
-          <article className="review-record">
-            <header className="receipt-mast">
-              <div>
-                <span className="review-caption">Synthetic gateway record</span>
-                <h2 id="case-record">
-                  Decision receipt <code>{record.id}</code>
-                </h2>
-              </div>
-              <time dateTime={payload.issued_at}>
-                {payload.issued_at.replace('T', ' ').replace('.000Z', ' UTC')}
-              </time>
-            </header>
-            <div className="receipt-inspection">
-              <dl className="receipt-fields" aria-label="Signed payload excerpt">
-                <dt>issuer_id</dt>
-                <dd>{payload.issuer_id}</dd>
-                <dt>tool_name</dt>
-                <dd>{payload.tool_name}</dd>
-                <dt>args.path</dt>
-                <dd>{String(payload.args?.path)}</dd>
-                <dt>decision</dt>
-                <dd>
-                  <span className={`decision-badge ${payload.decision}`}>{payload.decision}</span>
-                </dd>
-              </dl>
-              <div className="review-exhibit">
-                <h3>Recorded reason</h3>
-                <p>{payload.reason}</p>
-                <p>
-                  The analyst can attach the verified denial to the change ticket. To determine
-                  whether the file changed, check its repository history.
-                </p>
-              </div>
-            </div>
-            <footer className="receipt-signature">
-              <div>
-                <span>Signature excerpt · {signature.alg}</span>
-                <code>
-                  {signature.sig.slice(0, 18)}…{signature.sig.slice(-12)}
-                </code>
-              </div>
-              <a className="primary-button" href={technicalHref}>
-                Compare the selected packet with signed fixtures
-              </a>
-            </footer>
-          </article>
-        </details>
-      </section>
-      <section id="case-economics" tabIndex={-1} className="review-worksheet">
-        <h2>Would signed receipts earn their place in change review?</h2>
-        <p>
-          Compare the existing log search with a standard decision-log export and a shadow pilot
-          that adds signed receipts. An export may already answer who requested what. A receipt also
-          lets another reviewer check the signed payload against a known key.
-        </p>
-        <h3>Price the extra evidence</h3>
+    <section id="case-economics" tabIndex={-1} className="review-worksheet">
+      <p className="study-kicker">Platform lead · Pilot worksheet</p>
+      <h1>Would receipts save a second investigation?</h1>
+      <p>
+        <a href={caseHref}>Reopen the evidence desk</a>
+      </p>
+      <p>
+        Compare the existing log search with a standard decision-log export and a shadow pilot that
+        adds signed receipts. An export may already answer who requested what. A receipt also lets
+        another reviewer check the signed payload against a known key.
+      </p>
+      <fieldset className="fixture-options">
+        <legend>Try a monthly review volume</legend>
+        {(
+          [
+            ['Occasional disputes', 30],
+            ['Busy release desk', 120],
+          ] as const
+        ).map(([label, volume]) => (
+          <button
+            type="button"
+            className="secondary-button"
+            key={volume}
+            aria-pressed={reviews === volume}
+            onClick={() => setReviews(volume)}
+          >
+            {label} · {volume}
+          </button>
+        ))}
+      </fieldset>
+      <details className="pilot-assumptions">
+        <summary>Change the pilot assumptions</summary>
         <p>
           Use the better of the two logging options as the baseline. These illustrative inputs count
           only reviews that need an evidence check. Include key custody, integration, storage and
@@ -432,77 +116,79 @@ export function ReviewCase({ record, packet, onPacket, technicalHref }: CaseSele
             onChange={setCost}
           />
         </div>
-        <figure className="funding-chart">
-          <figcaption>First-year cost and analyst capacity at these assumptions</figcaption>
-          <div>
-            <span>
-              Recovered review time <strong>{dollars.format(annualCapacity)}</strong>
-            </span>
-            <div className="chart-track">
-              <i style={{ width: (annualCapacity / scale) * 100 + '%' }} />
-            </div>
+      </details>
+      <figure className="funding-chart">
+        <figcaption>First-year cost and analyst capacity at these assumptions</figcaption>
+        <div>
+          <span>
+            Recovered review time <strong>{dollars.format(annualCapacity)}</strong>
+          </span>
+          <div className="chart-track">
+            <i style={{ width: (annualCapacity / scale) * 100 + '%' }} />
           </div>
-          <div>
-            <span>
-              Incremental cost <strong>{dollars.format(cost)}</strong>
-            </span>
-            <div className="chart-track cost">
-              <i style={{ width: (cost / scale) * 100 + '%' }} />
-            </div>
-          </div>
-        </figure>
-        <div className="review-estimate" aria-live="polite">
-          <strong>{dollars.format(netValue)} first-year net time value</strong>
-          <p>
-            {annualHours.toLocaleString('en-US', { maximumFractionDigits: 1 })} hours ×{' '}
-            {dollars.format(rate)} per hour, less {dollars.format(cost)}.{' '}
-            {cost === 0
-              ? 'There is no modeled cost to recover.'
-              : minutesNeeded === null
-                ? 'No labor value can cover the cost at this volume and rate.'
-                : `Break-even requires ${(Math.ceil(minutesNeeded * 10) / 10).toFixed(1)} minutes saved per review.`}
-          </p>
         </div>
-        <fieldset className="funding-options">
-          <legend>What would you fund?</legend>
-          <label>
-            <input
-              type="radio"
-              name="funding"
-              checked={option === 'logs'}
-              onChange={() => setOption('logs')}
-            />
-            Keep the existing log search
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="funding"
-              checked={option === 'export'}
-              onChange={() => setOption('export')}
-            />
-            Standardize the decision-log export
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="funding"
-              checked={option === 'pilot'}
-              onChange={() => setOption('pilot')}
-            />
-            Run a signed-receipt shadow pilot
-          </label>
-        </fieldset>
-        {option && (
-          <p className="ticket-consequence" aria-live="polite">
-            {option === 'logs'
-              ? 'Time a change review using today’s tools. Track requests whose decision or issuer the analyst cannot reconstruct.'
-              : option === 'export'
-                ? 'Give reviewers the same fields and request IDs in every export. Measure how often they still need independent payload verification.'
-                : `At these assumptions the pilot produces ${dollars.format(netValue)} in first-year net time value. ${netValue > 0 ? 'Test the modeled surplus against measured review time, coverage and custody cost.' : 'Identify a lower-cost design or a larger measurable benefit before expanding.'}`}
-          </p>
-        )}
-        <h3>What would justify a wider rollout?</h3>
+        <div>
+          <span>
+            Incremental cost <strong>{dollars.format(cost)}</strong>
+          </span>
+          <div className="chart-track cost">
+            <i style={{ width: (cost / scale) * 100 + '%' }} />
+          </div>
+        </div>
+      </figure>
+      <div className="review-estimate" aria-live="polite">
+        <strong>{dollars.format(netValue)} first-year net time value</strong>
+        <p>
+          {annualHours.toLocaleString('en-US', { maximumFractionDigits: 1 })} hours ×{' '}
+          {dollars.format(rate)} per hour, less {dollars.format(cost)}.{' '}
+          {cost === 0
+            ? 'There is no modeled cost to recover.'
+            : minutesNeeded === null
+              ? 'No labor value can cover the cost at this volume and rate.'
+              : `Break-even requires ${(Math.ceil(minutesNeeded * 10) / 10).toFixed(1)} minutes saved per review.`}
+        </p>
+      </div>
+      <fieldset className="funding-options">
+        <legend>What would you fund?</legend>
+        <label>
+          <input
+            type="radio"
+            name="funding"
+            checked={option === 'logs'}
+            onChange={() => setOption('logs')}
+          />
+          Keep the existing log search
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="funding"
+            checked={option === 'export'}
+            onChange={() => setOption('export')}
+          />
+          Standardize the decision-log export
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="funding"
+            checked={option === 'pilot'}
+            onChange={() => setOption('pilot')}
+          />
+          Run a signed-receipt shadow pilot
+        </label>
+      </fieldset>
+      {option && (
+        <p className="ticket-consequence" aria-live="polite">
+          {option === 'logs'
+            ? 'Time a change review using today’s tools. Track requests whose decision or issuer the analyst cannot reconstruct.'
+            : option === 'export'
+              ? 'Give reviewers the same fields and request IDs in every export. Measure how often they still need independent payload verification.'
+              : `At these assumptions the pilot produces ${dollars.format(netValue)} in first-year net time value. ${netValue > 0 ? 'Test the modeled surplus against measured review time, coverage and custody cost.' : 'Identify a lower-cost design or a larger measurable benefit before expanding.'}`}
+        </p>
+      )}
+      <details className="pilot-assumptions">
+        <summary>How to measure the pilot</summary>
         <p>
           The platform security lead owns the pilot budget. Draw the sample from the gateway request
           log so that missing receipts stay visible. Have analysts review the same requests with the
@@ -529,21 +215,21 @@ export function ReviewCase({ record, packet, onPacket, technicalHref }: CaseSele
           The public key in this demo is shared for illustration. An operational pilot would need
           its own trusted key inventory.
         </p>
-        <footer>
-          <p>
-            NIST’s incident response guide assigns funding to leadership and evidence collection to
-            incident handlers. Its RS.AN-06 and RS.AN-07 recommendations explain why the analyst
-            checks record integrity and provenance. Cedar documents what its authorization decision
-            answers. RFC 8032 specifies the signature check used here.
-          </p>
-          <a href="https://csrc.nist.gov/pubs/sp/800/61/r3/final">
-            NIST incident response roles and evidence
-          </a>
-          <a href="https://csrc.nist.gov/pubs/sp/800/92/final">NIST log management guide</a>
-          <a href="https://docs.cedarpolicy.com/auth/authorization.html">Cedar authorization</a>
-          <a href="https://www.rfc-editor.org/rfc/rfc8032">RFC 8032</a>
-        </footer>
-      </section>
-    </div>
+      </details>
+      <footer>
+        <p>
+          NIST’s incident response guide assigns funding to leadership and evidence collection to
+          incident handlers. Its RS.AN-06 and RS.AN-07 recommendations explain why the analyst
+          checks record integrity and provenance. Cedar documents what its authorization decision
+          answers. RFC 8032 specifies the signature check used here.
+        </p>
+        <a href="https://csrc.nist.gov/pubs/sp/800/61/r3/final">
+          NIST incident response roles and evidence
+        </a>
+        <a href="https://csrc.nist.gov/pubs/sp/800/92/final">NIST log management guide</a>
+        <a href="https://docs.cedarpolicy.com/auth/authorization.html">Cedar authorization</a>
+        <a href="https://www.rfc-editor.org/rfc/rfc8032">RFC 8032</a>
+      </footer>
+    </section>
   );
 }
